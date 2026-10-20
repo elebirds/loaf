@@ -1,0 +1,6 @@
+# Local design documents and notes are not part of the Git repository.
+/docs/
+/.cache/
+/dist/
+/internal/bundle/assets/
+/coverage.out

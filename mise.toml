@@ -1,0 +1,14 @@
+[tools]
+go = "1.27.1"
+
+[tasks.fmt]
+description = "Format Go source with four-space indentation"
+run = "go run ./scripts/format.go"
+
+[tasks.check]
+description = "Run formatting, unit, static, and race checks"
+run = "bash scripts/check.sh"
+
+[tasks.build]
+description = "Build the local CLI archive"
+run = "bash scripts/build.sh"

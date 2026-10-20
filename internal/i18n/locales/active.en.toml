@@ -1,0 +1,42 @@
+[root_short]
+other = "Connect research projects to existing SSH machines."
+[version_short]
+other = "Show build and protocol versions."
+[help_short]
+other = "Show help for a command."
+[usage]
+other = "Usage:"
+[commands]
+other = "Commands:"
+[flags]
+other = "Options:"
+[value]
+other = "value"
+[default_value]
+other = "default: {{.Value}}"
+[command_arg]
+other = "[command]"
+[options_arg]
+other = "[options]"
+[flag_help]
+other = "Show help."
+[flag_lang]
+other = "Interface language: auto, en, or zh-Hans."
+[flag_json]
+other = "Write a structured JSON result without interaction."
+[invalid_flags]
+other = "Cannot parse command options. Check option names and values."
+[invalid_command]
+other = "Unknown command."
+[argument_count]
+other = "Incorrect arguments for {{.Command}}."
+[help_hint]
+other = "Use loaf help or loaf <command> --help."
+[language_invalid]
+other = "Unsupported interface language. Available: {{.Languages}}."
+[config_read]
+other = "Cannot read Loaf configuration or state. Check file permissions and TOML/JSON syntax."
+[unknown_format]
+other = "Unsupported data format version. The original file was left unchanged."
+[internal_error]
+other = "The operation failed. Check file access and retry."

@@ -1,0 +1,42 @@
+[root_short]
+other = "连接科研项目与已有的 SSH 机器。"
+[version_short]
+other = "显示构建与协议版本。"
+[help_short]
+other = "显示命令帮助。"
+[usage]
+other = "用法："
+[commands]
+other = "命令："
+[flags]
+other = "选项："
+[value]
+other = "值"
+[default_value]
+other = "默认：{{.Value}}"
+[command_arg]
+other = "[命令]"
+[options_arg]
+other = "[选项]"
+[flag_help]
+other = "显示帮助。"
+[flag_lang]
+other = "界面语言：auto、en 或 zh-Hans。"
+[flag_json]
+other = "输出结构化 JSON，不进行交互。"
+[invalid_flags]
+other = "无法解析命令选项，请检查选项名称及取值。"
+[invalid_command]
+other = "未知命令。"
+[argument_count]
+other = "{{.Command}} 的参数数量不正确。"
+[help_hint]
+other = "请使用 loaf help 或 loaf <命令> --help。"
+[language_invalid]
+other = "不支持该界面语言。可用语言：{{.Languages}}。"
+[config_read]
+other = "无法读取 Loaf 配置或状态，请检查文件权限及 TOML/JSON 语法。"
+[unknown_format]
+other = "不支持该数据格式版本，原文件保持不变。"
+[internal_error]
+other = "操作失败，请检查文件访问权限后重试。"

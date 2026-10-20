@@ -4,9 +4,9 @@
 
 **Write code locally. Use your existing SSH research machines.**
 
-Loaf keeps remote machine addresses, project selections, and environment checks close to your code. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
+Loaf remembers your SSH machines and synchronizes working code to a dedicated remote source directory. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: `add`, `use`, `check`, and `version` are available from source. Local source previews are available with sync --dry-run. Remote source transfer, the background-run CLI, logs, and result downloads are still being built.
+> Early development: `add`, `use`, `check`, `sync`, and `version` are available from source. The background-run CLI, logs, and result downloads are still being built.
 
 ## Build from source
 
@@ -47,32 +47,67 @@ Normal `check` only observes the remote environment. `--runner` additionally upl
 
 Python, uv, and GPU tools are optional observations. Their absence does not make a CPU-capable machine fail the check. Missing rsync, unsupported platforms, or an unwritable remote location do.
 
-## Preview working sources
+## Sync working code
+
+From the project directory, preview the selected files before uploading:
 
 ```bash
 loaf sync --dry-run
-loaf sync --dry-run --mode update --respect-gitignore=false --exclude 'scratch/'
-loaf sync --dry-run --json
+loaf sync
 ```
 
-This command selects local working files and reports policy and exclusions. It requires no target, connection, or runner and creates no project state. File transfer is not available yet; --dry-run is required.
+The preview is local-only: it needs no configured target, SSH connection, or runner and creates no project state. A real sync checks the target, deploys the matching bundled runner, and invokes system rsync over OpenSSH. It does not install experiment dependencies or start training.
 
-Git projects include tracked working files and nonignored new files, preserving nested ignore and negation rules. Non-Git projects read nested .gitignore files. Loaf additionally excludes virtual environments, caches, weights, private-key names, .env files, and output paths, even when tracked. Safe relative links to selected paths are preserved; absolute, escaping, broken, or excluded-target links are reported and skipped.
+Sources go to `<remote_dir>/cache/`. The first sync requires a new or empty project directory; subsequent syncs verify its project marker. Do not select an existing research directory containing data or environments. Keep those beside `cache/`, not inside it.
 
-Optional project and user [sync] settings support mode = "mirror" or "update", respect_gitignore = true or false, and exclude = ["data/"]. Flags override project settings, then user settings, then built-ins (mirror and true); each scalar inherits separately. Exclusions append and cannot negate built-in exclusions. The preview displays the effective policy. Update mode retains removed/newly excluded remote files when transfer is added; mirror selects exact source-set convergence.
+The default **mirror** mode removes deleted and newly excluded source paths from `cache/` only. Other project directories and existing run copies are untouched. A project lock prevents overlapping source updates and run-copy preparation. Failed or canceled transfers leave the cache unavailable for new runs until an explicit sync succeeds; they do not stop existing runs. The cache is updated incrementally, not as an atomic directory swap.
+
+### Choose what to upload
+
+- In Git projects, native Git selects tracked working files and nonignored untracked files, including uncommitted edits. Git tracking and nested ignore/negation rules are preserved. Non-Git projects read nested `.gitignore` files.
+- Loaf additionally excludes virtual environments, common caches, `.git`, `.env`/`.env.*`, common private-key names, `*.pem`, `*.key`, `*.pt`, `*.pth`, `*.ckpt`, `*.safetensors`, and `loaf-results/`, even when tracked. Configured output paths are excluded; the default is `outputs/`.
+- Safe relative symlinks to selected project files/directories are preserved without following directory links. Absolute, escaping, broken, and excluded-target links are skipped and reported. Nested repositories/submodules are not expanded; synchronize them separately.
+- `sync.exclude` adds positive Gitignore-style patterns. It cannot reinclude default exclusions with `!`. The preview lists exclusions and their reasons. Defaults are name-based safeguards, not a secret scanner.
+
+`selected_bytes` counts selected regular-file sizes, not network traffic. `changed_files` counts transferred file contents and changed link targets, excluding deletions and timestamp/permission-only updates. The preview selects current working paths; it does not freeze local files while you edit them.
 
 ## Project configuration
 
-Projects are detected from the nearest `loaf.toml`, then the Git worktree root, then the current directory. No `init` is required. An optional project file can select a machine and remote directory:
+Projects are detected from the nearest `loaf.toml`, then the Git worktree root, then the current directory. No `init` is required. An optional project file can select a machine, directory, and sync policy:
 
 ```toml
 target = "autodl"
 remote_dir = "~/projects/my-research"
+
+[sync]
+mode = "mirror"            # Or "update" to keep removed/excluded remote files
+respect_gitignore = true
+exclude = ["data/", "checkpoints/"]
+
+[outputs]
+paths = ["outputs", "checkpoints"]
 ```
 
 Target selection follows `--target`, the current project's `loaf use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf add ... --remote-dir '~/projects'`.
 
 User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
+
+To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
+
+```toml
+[sync]
+mode = "mirror"
+respect_gitignore = true
+exclude = ["scratch/"]
+```
+
+For sync strategies, explicit flags override project settings, then user defaults, then built-ins (`mirror` and `respect_gitignore = true`). Each scalar inherits independently; exclusions append across all scopes and never replace built-in safeguards. Setting `respect_gitignore = false` disables Git tracking/ignore selection, not Loaf's own exclusions. `update` leaves removed and newly excluded remote files in place and reports that warning in human output. JSON includes the effective `policy` and selection/exclusion results.
+
+```bash
+loaf sync --dry-run --mode update
+loaf sync --respect-gitignore=false --exclude 'scratch/' --exclude '*.tmp'
+loaf sync --json
+```
 
 ## Languages and structured output
 
@@ -95,7 +130,7 @@ bash scripts/check.sh        # Unit, static, race, format, and vulnerability che
 bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
 ```
 
-The integration fixture uses temporary keys and CPU scripts. It tests packaged runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, and stopping child processes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
+The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, and stopping child processes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
 Loaf does not provision machines, schedule GPUs, automatically repair environments, or replace experiment tracking.
 

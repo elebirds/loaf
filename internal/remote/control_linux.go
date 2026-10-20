@@ -128,6 +128,24 @@ func start(req wire.Request, dir string) (*wire.RunRecord, error) {
     if len(req.Args) == 0 || req.Args[0] == "" {
         return nil, errors.New("BAD_COMMAND")
     }
+    if _, err := os.Lstat(dir); err == nil {
+        return existingStart(dir)
+    }
+    projectLock, err := lockProject(req.Root)
+    if err != nil {
+        if _, statErr := os.Lstat(dir); statErr == nil {
+            return existingStart(dir)
+        }
+        return nil, err
+    }
+    defer projectLock.Close()
+    state, err := loadCacheState(req.Root)
+    if err != nil {
+        return nil, err
+    }
+    if state != nil && !state.Complete {
+        return nil, errors.New("SYNC_INCOMPLETE")
+    }
     if err := os.Mkdir(dir, 0700); err != nil {
         if errors.Is(err, os.ErrExist) {
             existing, err := status(dir)
@@ -161,6 +179,10 @@ func start(req wire.Request, dir string) (*wire.RunRecord, error) {
     if err := save(dir, r); err != nil {
         return r, err
     }
+    // The source copy is now independent; training never holds the cache lock.
+    if err := projectLock.Close(); err != nil {
+        return r, errors.New("WRITE_FAILED")
+    }
     exe, err := os.Executable()
     if err != nil {
         return r, errors.New("START_FAILED")
@@ -191,6 +213,14 @@ func start(req wire.Request, dir string) (*wire.RunRecord, error) {
         time.Sleep(10 * time.Millisecond)
     }
     return r, errors.New("SUBMISSION_UNKNOWN")
+}
+
+func existingStart(dir string) (*wire.RunRecord, error) {
+    r, err := status(dir)
+    if err != nil && err.Error() == "RUN_NOT_FOUND" {
+        return nil, errors.New("SUBMISSION_UNKNOWN")
+    }
+    return r, err
 }
 
 func terminal(s string) bool { return s == "succeeded" || s == "failed" || s == "stopped" }

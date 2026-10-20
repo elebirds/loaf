@@ -61,7 +61,7 @@ func TestConnectionWorkflowJSON(t *testing.T) {
 }
 
 func TestLocalizedHelpAndParserErrors(t *testing.T) {
-    for _, args := range [][]string{{"--help"}, {"add", "--help"}, {"check", "--help"}, {"help", "use"}, {"add"}, {"check", "--bad"}, {"check", "--timeout", "bad"}, {"bogus"}} {
+    for _, args := range [][]string{{"--help"}, {"add", "--help"}, {"check", "--help"}, {"sync", "--help"}, {"help", "use"}, {"add"}, {"check", "--bad"}, {"check", "--timeout", "bad"}, {"bogus"}} {
         for _, lang := range []string{"en", "zh-Hans"} {
             o := fixture(t)
             code, out, stderr := run(t, o, append([]string{"--lang", lang}, args...)...)

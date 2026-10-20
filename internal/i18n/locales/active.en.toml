@@ -171,7 +171,7 @@ other = "Cannot update the remote cache. Check directory permissions and availab
 [sync_directory_hint]
 other = "Choose a separate empty remote_dir or the directory already owned by this project. Loaf will not take over existing files."
 [sync_short]
-other = "Preview selected working sources."
+other = "Synchronize working sources to the managed remote cache."
 [flag_dry_run]
 other = "Preview local selection and exclusion reasons, without connecting or saving state."
 [sync_start]

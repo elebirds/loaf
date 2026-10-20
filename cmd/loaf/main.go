@@ -12,6 +12,7 @@ import (
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    sources "github.com/elebirds/loaf/internal/sync"
     "golang.org/x/term"
 )
 
@@ -36,13 +37,20 @@ func main() {
     }
     var checker cli.Checker = unavailableSSH{}
     var runner cli.RunnerVerifier
+    var syncer cli.Synchronizer
     if binary, err := exec.LookPath("ssh"); err == nil {
         client := &ssh.Client{Binary: binary}
         checker = client
-        runner = execution.Bootstrap{Remote: client}
+        bootstrap := execution.Bootstrap{Remote: client}
+        runner = bootstrap
+        rsync, _ := exec.LookPath("rsync")
+        syncer = sources.Service{Check: client, Runner: func(ctx context.Context, target config.Target, arch string, batch bool) (string, error) {
+            info, err := bootstrap.Verify(ctx, target, arch, batch)
+            return info.Path, err
+        }, Send: ssh.Rsync{Client: client, Binary: rsync}}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME")), Checker: checker, Runner: runner, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME")), Checker: checker, Runner: runner, Syncer: syncer, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
 }

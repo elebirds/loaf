@@ -171,7 +171,7 @@ other = "无法更新远端缓存，请检查目录权限及可用磁盘空间�
 [sync_directory_hint]
 other = "请设置独立的空 remote_dir，或使用已属于当前项目的目录；Loaf 不会接管已有文件。"
 [sync_short]
-other = "预览选中的工作源码。"
+other = "将当前工作源码同步到受管远端缓存。"
 [flag_dry_run]
 other = "预览本地文件选择及排除原因，不建立连接或保存状态。"
 [sync_start]

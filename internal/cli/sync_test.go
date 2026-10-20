@@ -8,7 +8,26 @@ import (
     "path/filepath"
     "strings"
     "testing"
+
+    "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/fault"
+    sources "github.com/elebirds/loaf/internal/sync"
 )
+
+type fakeSyncer struct {
+    Calls      int
+    Target     config.Target
+    ID, Remote string
+    Plan       sources.Plan
+    Batch      bool
+    Err        error
+}
+
+func (f *fakeSyncer) Sync(_ context.Context, target config.Target, id, remote string, plan sources.Plan, batch bool) (sources.Result, error) {
+    f.Calls++
+    f.Target, f.ID, f.Remote, f.Plan, f.Batch = target, id, remote, plan, batch
+    return sources.Result{RemoteDir: "/home/researcher/project", ChangedFiles: 1}, f.Err
+}
 
 func TestSyncDryRunDoesNotConnectOrCreateState(t *testing.T) {
     o := fixture(t)
@@ -58,6 +77,88 @@ func TestCanceledPreviewReportsCancellationRatherThanSourceFailure(t *testing.T)
     }
 }
 
+func TestSyncTargetPrecedenceAndStableProjectIdentity(t *testing.T) {
+    o := fixture(t)
+    syncer := &fakeSyncer{}
+    o.Syncer = syncer
+    for _, alias := range []string{"shared", "personal", "explicit"} {
+        if code, out, stderr := run(t, o, "add", alias, "--ssh", alias, "--json"); code != 0 {
+            t.Fatal(code, out, stderr)
+        }
+    }
+    text := "target='shared'\nremote_dir='~/project space'\n[sync]\nexclude=['data/']\n[outputs]\npaths=['results']\n"
+    if err := os.WriteFile(filepath.Join(o.CWD, "loaf.toml"), []byte(text), 0600); err != nil {
+        t.Fatal(err)
+    }
+    for _, name := range []string{"train.py", "data/skip.csv", "results/output.txt"} {
+        file := filepath.Join(o.CWD, name)
+        if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+            t.Fatal(err)
+        }
+        if err := os.WriteFile(file, []byte("data"), 0600); err != nil {
+            t.Fatal(err)
+        }
+    }
+    originalID := ""
+    for _, alias := range []string{"shared", "personal", "explicit"} {
+        args := []string{"sync", "--json"}
+        if alias == "personal" {
+            if code, out, stderr := run(t, o, "use", alias, "--json"); code != 0 {
+                t.Fatal(code, out, stderr)
+            }
+        }
+        if alias == "explicit" {
+            args = append(args, "--target", alias)
+        }
+        code, out, stderr := run(t, o, args...)
+        if code != 0 || stderr != "" || syncer.Target.Destination != alias || !syncer.Batch || syncer.Remote != "~/project space" {
+            t.Fatal(code, out, stderr, syncer)
+        }
+        if originalID == "" {
+            originalID = syncer.ID
+        }
+        if syncer.ID != originalID || len(syncer.Plan.Files) != 2 {
+            t.Fatal(syncer)
+        }
+    }
+    root, _, err := config.Discover(context.Background(), o.CWD)
+    if err != nil {
+        t.Fatal(err)
+    }
+    project, err := o.Store.Existing(root)
+    if err != nil || project.Target != "personal" {
+        t.Fatal(project, err)
+    }
+    actual, err := os.ReadFile(filepath.Join(o.CWD, "loaf.toml"))
+    if err != nil || string(actual) != text {
+        t.Fatal("changed shared TOML", err)
+    }
+}
+
+func TestSyncErrorsDoNotRenderSuccess(t *testing.T) {
+    o := fixture(t)
+    syncer := &fakeSyncer{Err: fault.New("PROJECT_BUSY", "sync_busy", nil)}
+    o.Syncer = syncer
+    if code, out, stderr := run(t, o, "add", "lab", "--ssh", "lab", "--json"); code != 0 {
+        t.Fatal(code, out, stderr)
+    }
+    if code, out, stderr := run(t, o, "use", "lab", "--json"); code != 0 {
+        t.Fatal(code, out, stderr)
+    }
+    for _, lang := range []string{"en", "zh-Hans"} {
+        code, out, stderr := run(t, o, "--lang", lang, "sync", "--json")
+        if code != 1 || stderr != "" || !strings.Contains(out, `"ok":false`) || !strings.Contains(out, `"code":"PROJECT_BUSY"`) || strings.Contains(out, "Source cache synchronized") {
+            t.Fatal(code, out, stderr)
+        }
+    }
+    for _, args := range [][]string{{"sync", "extra", "--json"}, {"sync", "--dry-run=bad", "--json"}, {"sync", "--bad", "--json"}} {
+        code, out, stderr := run(t, o, args...)
+        if code != 2 || stderr != "" || !json.Valid([]byte(out)) {
+            t.Fatal(code, out, stderr)
+        }
+    }
+}
+
 func TestSyncPolicyPrecedenceAndAppendOnlyExclusions(t *testing.T) {
     o := fixture(t)
     if err := os.MkdirAll(filepath.Dir(o.Store.ConfigFile), 0700); err != nil {
@@ -101,16 +202,6 @@ func TestSyncPolicyPrecedenceAndAppendOnlyExclusions(t *testing.T) {
         }
         code, out, stderr = run(t, o, "--lang", lang, "sync", "--dry-run", "--mode", "typo", "--json")
         if code != 2 || stderr != "" || !strings.Contains(out, `"code":"BAD_CONFIG"`) {
-            t.Fatal(code, out, stderr)
-        }
-    }
-}
-
-func TestSourcePreviewRequiresExplicitDryRun(t *testing.T) {
-    o := fixture(t)
-    for _, args := range [][]string{{"sync", "--json"}, {"sync", "--dry-run=false", "--json"}} {
-        code, out, stderr := run(t, o, args...)
-        if code != 2 || stderr != "" || !strings.Contains(out, "BAD_CONFIG") {
             t.Fatal(code, out, stderr)
         }
     }

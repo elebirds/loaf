@@ -20,13 +20,7 @@ func (c *Client) Execute(ctx context.Context, target config.Target, command stri
     if err := Validate(target); err != nil {
         return nil, err
     }
-    args := []string{"-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1", "-T"}
-    if noninteractive {
-        args = append(args, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes")
-    }
-    args = append(args, target.Args...)
-    args = append(args, "--", target.Destination, command)
-    cmd := exec.CommandContext(ctx, c.Binary, args...)
+    cmd := exec.CommandContext(ctx, c.Binary, arguments(target, command, noninteractive)...)
     cmd.Stdin = input
     var stderr bytes.Buffer
     cmd.Stderr = &stderr
@@ -39,6 +33,18 @@ func (c *Client) Execute(ctx context.Context, target config.Target, command stri
         return output, f
     }
     return output, nil
+}
+
+func arguments(target config.Target, command string, noninteractive bool) []string {
+    return append(options(target, noninteractive), "--", target.Destination, command)
+}
+
+func options(target config.Target, noninteractive bool) []string {
+    args := []string{"-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1", "-T"}
+    if noninteractive {
+        args = append(args, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes")
+    }
+    return append(args, target.Args...)
 }
 
 // Tool is an observed executable and its original version output.

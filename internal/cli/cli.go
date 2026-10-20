@@ -40,6 +40,7 @@ type Options struct {
     Store       *config.Store
     Checker     Checker
     Runner      RunnerVerifier
+    Syncer      Synchronizer
     CWD         string
     Env         map[string]string
     In          io.Reader

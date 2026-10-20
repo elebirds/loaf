@@ -92,20 +92,7 @@ func Handle(req wire.Request) (*wire.RunRecord, error) {
     case "status":
         return status(dir)
     case "stop":
-        r, err := status(dir)
-        if err != nil {
-            return nil, err
-        }
-        if terminal(r.Status) {
-            return r, nil
-        }
-        if r.Status == "unknown" {
-            return r, errors.New("STOP_UNCONFIRMED")
-        }
-        if err := atomicfile.Write(filepath.Join(dir, "stop.request"), []byte("stop\n")); err != nil {
-            return r, errors.New("WRITE_FAILED")
-        }
-        return status(dir)
+        return stop(req, dir)
     default:
         return nil, errors.New("BAD_ACTION")
     }
@@ -348,7 +335,7 @@ func status(dir string) (*wire.RunRecord, error) {
     if err != nil {
         return nil, err
     }
-    if terminal(r.Status) {
+    if terminal(r.Status) || r.Status == "unknown" {
         return r, nil
     }
     if r.SupervisorPID == 0 {
@@ -357,7 +344,7 @@ func status(dir string) (*wire.RunRecord, error) {
     }
     identity, err := process(r.SupervisorPID)
     boot, _ := os.ReadFile("/proc/sys/kernel/random/boot_id")
-    f, lockErr := os.OpenFile(filepath.Join(dir, "owner.lock"), os.O_RDWR, 0)
+    f, lockErr := os.OpenFile(filepath.Join(dir, "owner.lock"), os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
     owned := false
     if lockErr == nil {
         defer f.Close()
@@ -367,7 +354,7 @@ func status(dir string) (*wire.RunRecord, error) {
             _ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
         }
     }
-    if err != nil || identity.start != r.SupervisorStart || strings.TrimSpace(string(boot)) != r.BootID || !owned {
+    if err != nil || identity.uid != uint32(os.Geteuid()) || identity.start != r.SupervisorStart || strings.TrimSpace(string(boot)) != r.BootID || !owned {
         r.Status = "unknown"
         r.Reason = "SUPERVISOR_LOST"
     }
@@ -377,9 +364,14 @@ func status(dir string) (*wire.RunRecord, error) {
 type processInfo struct {
     state, start string
     group        int
+    uid          uint32
 }
 
 func process(pid int) (processInfo, error) {
+    var owner unix.Stat_t
+    if err := unix.Stat(fmt.Sprintf("/proc/%d", pid), &owner); err != nil {
+        return processInfo{}, err
+    }
     data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
     if err != nil {
         return processInfo{}, err
@@ -396,5 +388,5 @@ func process(pid int) (processInfo, error) {
     if _, err := fmt.Sscan(fields[2], &group); err != nil {
         return processInfo{}, err
     }
-    return processInfo{fields[0], fields[19], group}, nil
+    return processInfo{fields[0], fields[19], group, owner.Uid}, nil
 }

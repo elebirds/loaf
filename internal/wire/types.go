@@ -6,6 +6,12 @@ import "time"
 // FormatVersion is the current internal request and record format.
 const FormatVersion = 1
 
+// Stop defaults apply to new supervisors; existing runs keep their bound runner.
+const (
+    DefaultStopGrace = 10 * time.Second
+    MaxStopGrace     = 5 * time.Minute
+)
+
 // Version is set identically in both executables by the build script.
 var Version = "dev"
 
@@ -22,6 +28,7 @@ type Request struct {
     Env           map[string]string `json:"env,omitempty"`
     WaitMillis    int64             `json:"wait_millis,omitempty"`
     Tail          int               `json:"tail,omitempty"`
+    GraceMillis   *int64            `json:"grace_millis,omitempty"`
 }
 
 // RunRecord is persisted by the remote execution owner.
@@ -40,6 +47,7 @@ type RunRecord struct {
     Signal          string     `json:"signal,omitempty"`
     Reason          string     `json:"reason,omitempty"`
     CopyMillis      int64      `json:"copy_millis"`
+    StopGraceMillis *int64     `json:"stop_grace_millis,omitempty"`
 }
 
 // Error is machine-readable; only the local CLI chooses explanatory language.

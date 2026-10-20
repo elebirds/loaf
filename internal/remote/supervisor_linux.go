@@ -52,11 +52,17 @@ func Supervise(dir string) error {
     r.SupervisorPID = os.Getpid()
     r.SupervisorStart = self.start
     r.BootID = strings.TrimSpace(string(boot))
-    finish := func() error { now := time.Now().UTC(); r.CompletedAt = &now; return save(dir, r) }
-    if requestedStop(dir) {
-        r.Status = "stopped"
-        r.Reason = "STOP_BEFORE_START"
-        return finish()
+    finish := func() error {
+        lock, err := lockRun(dir)
+        if err != nil {
+            return err
+        }
+        defer lock.Close()
+        if terminal(r.Status) {
+            now := time.Now().UTC()
+            r.CompletedAt = &now
+        }
+        return save(dir, r)
     }
     log, err := os.OpenFile(filepath.Join(dir, "output.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
     if err != nil {
@@ -78,13 +84,7 @@ func Supervise(dir string) error {
         args []string
     }{"command", r.Request.Args})
     for _, phase := range phases {
-        if requestedStop(dir) {
-            r.Status = "stopped"
-            r.Reason = "STOP_BEFORE_START"
-            return finish()
-        }
-        r.Phase = phase.name
-        if err := executePhase(dir, r, phase.args, log); err != nil {
+        if err := executePhase(dir, r, phase.name, phase.args, log); err != nil {
             return err
         }
         if r.Status != "succeeded" {
@@ -97,13 +97,45 @@ func Supervise(dir string) error {
     return finish()
 }
 
-func executePhase(dir string, r *wire.RunRecord, args []string, log *os.File) error {
+func executePhase(dir string, r *wire.RunRecord, phase string, args []string, log *os.File) error {
+    // A stop accepted before this lock cannot slip through phase admission.
+    lock, err := lockRun(dir)
+    if err != nil {
+        return err
+    }
+    request, err := readStop(dir)
+    if err != nil {
+        lock.Close()
+        r.Status = "unknown"
+        r.Reason = "STOP_REQUEST_INVALID"
+        return nil
+    }
+    if request != nil {
+        lock.Close()
+        r.Status = "stopped"
+        r.Reason = "STOP_BEFORE_START"
+        r.ExitCode = nil
+        r.Signal = ""
+        r.ChildPID = 0
+        r.StopGraceMillis = &request.GraceMillis
+        return nil
+    }
+    command, err := startPhase(dir, r, phase, args, log)
+    lock.Close()
+    if err != nil || command == nil {
+        return err
+    }
+    return waitPhase(dir, r, command)
+}
+
+func startPhase(dir string, r *wire.RunRecord, phase string, args []string, log *os.File) (*exec.Cmd, error) {
+    r.Phase = phase
     r.ExitCode = nil
     r.Signal = ""
     r.ChildPID = 0
     r.Status = "running"
     if err := save(dir, r); err != nil {
-        return err
+        return nil, err
     }
     work := filepath.Join(dir, "work")
     program, err := executable(args[0], work, r.Request.Env)
@@ -111,7 +143,7 @@ func executePhase(dir string, r *wire.RunRecord, args []string, log *os.File) er
         fmt.Fprintf(log, "%s: %v\n", args[0], err)
         r.Status = "failed"
         r.Reason = "EXEC_FAILED"
-        return nil
+        return nil, nil
     }
     command := exec.Command(program, args[1:]...)
     command.Dir = work
@@ -123,16 +155,21 @@ func executePhase(dir string, r *wire.RunRecord, args []string, log *os.File) er
         fmt.Fprintln(log, err)
         r.Status = "failed"
         r.Reason = "EXEC_FAILED"
-        return nil
+        return nil, nil
     }
     r.ChildPID = command.Process.Pid
     if err := save(dir, r); err != nil {
         _ = unix.Kill(-r.ChildPID, unix.SIGKILL)
         _ = command.Wait()
-        return err
+        return nil, err
     }
+    return command, nil
+}
+
+func waitPhase(dir string, r *wire.RunRecord, command *exec.Cmd) error {
     stopped := false
-    var stopTime time.Time
+    var deadline time.Time
+    killed := false
     for {
         var info unix.Siginfo
         err := unix.Waitid(unix.P_PID, r.ChildPID, &info, unix.WEXITED|unix.WNOHANG|unix.WNOWAIT, nil)
@@ -144,28 +181,54 @@ func executePhase(dir string, r *wire.RunRecord, args []string, log *os.File) er
         if info.Signo != 0 {
             break
         }
-        if !stopped && requestedStop(dir) {
-            stopped = true
-            stopTime = time.Now()
-            _ = unix.Kill(-r.ChildPID, unix.SIGTERM)
+        if !stopped {
+            request, err := readStop(dir)
+            if err != nil {
+                // Leave ownership intact and keep waiting rather than guessing
+                // a stop policy from a damaged request.
+                time.Sleep(20 * time.Millisecond)
+                continue
+            }
+            if request != nil {
+                stopped = true
+                r.StopGraceMillis = &request.GraceMillis
+                deadline = time.Now().Add(time.Duration(request.GraceMillis) * time.Millisecond)
+                _ = unix.Kill(-r.ChildPID, unix.SIGTERM)
+            }
         }
-        if stopped && time.Since(stopTime) > 300*time.Millisecond {
+        if stopped && !killed && !time.Now().Before(deadline) {
             _ = unix.Kill(-r.ChildPID, unix.SIGKILL)
+            killed = true
         }
         time.Sleep(20 * time.Millisecond)
     }
     // Keep the unreaped group leader as an identity anchor until the last signal.
+    unconfirmed := false
     if groupAlive(r.ChildPID) {
-        _ = unix.Kill(-r.ChildPID, unix.SIGTERM)
-        deadline := time.Now().Add(300 * time.Millisecond)
+        if deadline.IsZero() {
+            _ = unix.Kill(-r.ChildPID, unix.SIGTERM)
+            deadline = time.Now().Add(wire.DefaultStopGrace)
+        }
+        for groupAlive(r.ChildPID) && time.Now().Before(deadline) {
+            time.Sleep(10 * time.Millisecond)
+        }
+        if groupAlive(r.ChildPID) && !killed {
+            _ = unix.Kill(-r.ChildPID, unix.SIGKILL)
+        }
+        deadline = time.Now().Add(5 * time.Second)
         for groupAlive(r.ChildPID) && time.Now().Before(deadline) {
             time.Sleep(10 * time.Millisecond)
         }
         if groupAlive(r.ChildPID) {
-            _ = unix.Kill(-r.ChildPID, unix.SIGKILL)
+            unconfirmed = true
         }
     }
     _ = command.Wait()
+    if command.ProcessState == nil {
+        r.Status = "unknown"
+        r.Reason = "WAIT_FAILED"
+        return nil
+    }
     wait := command.ProcessState.Sys().(syscall.WaitStatus)
     r.Status = "failed"
     if wait.Exited() {
@@ -181,12 +244,11 @@ func executePhase(dir string, r *wire.RunRecord, args []string, log *os.File) er
     if stopped {
         r.Status = "stopped"
     }
+    if unconfirmed {
+        r.Status = "unknown"
+        r.Reason = "GROUP_TERMINATION_UNCONFIRMED"
+    }
     return nil
-}
-
-func requestedStop(dir string) bool {
-    _, err := os.Stat(filepath.Join(dir, "stop.request"))
-    return err == nil
 }
 
 func groupAlive(group int) bool {

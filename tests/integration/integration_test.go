@@ -233,7 +233,12 @@ func TestSSHAndDetachedRunner(t *testing.T) {
     control := func(action, id string, args ...string) (*wire.RunRecord, error) {
         ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
         defer cancel()
-        return f.client.Control(ctx, f.target, runner, wire.Request{FormatVersion: 1, Version: wire.Version, Action: action, Root: root, ProjectID: "project", RunID: id, Args: args}, true)
+        req := wire.Request{FormatVersion: 1, Version: wire.Version, Action: action, Root: root, ProjectID: "project", RunID: id, Args: args}
+        if action == "stop" {
+            grace := int64(50)
+            req.GraceMillis = &grace
+        }
+        return f.client.Control(ctx, f.target, runner, req, true)
     }
     record, err := control("start", "completed", "/bin/sh", "train.sh")
     if err != nil || record.Status != "running" {

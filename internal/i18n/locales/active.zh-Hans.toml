@@ -375,3 +375,9 @@ other = "源码目录不安全"
 
 [run_reason_SUPERVISOR_START_FAILED]
 other = "监督进程无法启动"
+
+[run_reason_STOP_REQUEST_INVALID]
+other = "无法安全读取停止请求"
+
+[run_reason_GROUP_TERMINATION_UNCONFIRMED]
+other = "进程组终止尚未确认"

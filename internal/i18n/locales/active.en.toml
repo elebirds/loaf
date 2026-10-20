@@ -375,3 +375,9 @@ other = "unsafe source directory"
 
 [run_reason_SUPERVISOR_START_FAILED]
 other = "supervisor could not start"
+
+[run_reason_STOP_REQUEST_INVALID]
+other = "stop request could not be read safely"
+
+[run_reason_GROUP_TERMINATION_UNCONFIRMED]
+other = "process-group termination not confirmed"

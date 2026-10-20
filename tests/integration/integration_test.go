@@ -49,12 +49,20 @@ func newFixture(t *testing.T) *fixture {
     f.config = filepath.Join(f.dir, "config")
     f.known = filepath.Join(keyDir, "known_hosts")
     command(t, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", f.key)
-    f.id = command(t, "docker", "run", "-d", "--init", "--rm", "-p", "127.0.0.1::22", "--mount", "type=bind,source="+f.key+".pub,target=/home/researcher/.ssh/authorized_keys,readonly", "loaf-sshd-test:local")
+    f.id = command(t, "docker", "run", "-d", "--init", "--rm", "-p", "127.0.0.1::22", "loaf-sshd-test:local")
     t.Cleanup(func() {
+        if t.Failed() {
+            out, err := exec.Command("docker", "logs", f.id).CombinedOutput()
+            t.Logf("fixture sshd logs (%v):\n%s", err, out)
+        }
         if out, err := exec.Command("docker", "rm", "-f", f.id).CombinedOutput(); err != nil {
             t.Errorf("fixture cleanup: %v %s", err, out)
         }
     })
+    // Linux bind mounts preserve host UIDs, which may fail sshd's StrictModes.
+    command(t, "docker", "cp", f.key+".pub", f.id+":/home/researcher/.ssh/authorized_keys")
+    command(t, "docker", "exec", f.id, "chown", "researcher:researcher", "/home/researcher/.ssh/authorized_keys")
+    command(t, "docker", "exec", f.id, "chmod", "0600", "/home/researcher/.ssh/authorized_keys")
     address := command(t, "docker", "port", f.id, "22/tcp")
     _, port, err := net.SplitHostPort(address)
     if err != nil {
@@ -125,6 +133,46 @@ func cli(t *testing.T, dir string, args ...string) (int, []byte) {
         t.Fatalf("invalid JSON (%d): %s", code, out)
     }
     return code, out
+}
+
+func TestSSHFixtureKeyOwnership(t *testing.T) {
+    if os.Getenv("LOAF_INTEGRATION") != "1" {
+        t.Skip("run bash scripts/integration.sh for isolated SSH tests")
+    }
+    f := newFixture(t)
+    const authorizedKeys = "/home/researcher/.ssh/authorized_keys"
+    uid := command(t, "docker", "exec", f.id, "id", "-u", "researcher")
+    if got := command(t, "docker", "exec", f.id, "stat", "-c", "%u:%a", authorizedKeys); got != uid+":600" {
+        t.Fatalf("authorized_keys ownership and mode = %s, want %s:600", got, uid)
+    }
+    connect := func() error {
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        _, err := f.client.Execute(ctx, f.target, "true", nil, true)
+        return err
+    }
+    if err := connect(); err != nil {
+        t.Fatalf("fixture authentication: %v", err)
+    }
+
+    // A Linux bind mount can retain a host UID that differs from the SSH user.
+    // Keep the key readable to isolate StrictModes' ownership check.
+    command(t, "docker", "exec", f.id, "chmod", "0644", authorizedKeys)
+    command(t, "docker", "exec", f.id, "chown", "65534:65534", authorizedKeys)
+    err := connect()
+    var denied *fault.Error
+    if !errors.As(err, &denied) || denied.Code != "SSH_FAILED" || !strings.Contains(fmt.Sprint(denied.Params["Detail"]), "Permission denied") {
+        t.Fatalf("foreign-owned authorized_keys must reject authentication: %v", err)
+    }
+    logs := command(t, "docker", "logs", f.id)
+    if !strings.Contains(logs, "bad ownership or modes for file "+authorizedKeys) {
+        t.Fatalf("missing sshd ownership diagnostic:\n%s", logs)
+    }
+    command(t, "docker", "exec", f.id, "chown", "researcher:researcher", authorizedKeys)
+    command(t, "docker", "exec", f.id, "chmod", "0600", authorizedKeys)
+    if err := connect(); err != nil {
+        t.Fatalf("restored fixture authentication: %v", err)
+    }
 }
 
 func TestSSHAndDetachedRunner(t *testing.T) {

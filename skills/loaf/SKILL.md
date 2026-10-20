@@ -1,6 +1,6 @@
 ---
 name: loaf
-description: Run and stop local project experiments on existing SSH machines with Loaf, and retrieve their status and logs across sessions. Use for Loaf-managed execution, not machine rental or resource scheduling.
+description: Run and stop local project experiments on existing SSH machines with Loaf, inspect status and logs, and collect outputs across sessions. Use for Loaf-managed execution, not machine rental or resource scheduling.
 ---
 
 # Run experiments with Loaf
@@ -46,4 +46,16 @@ Loaf requests process-group cleanup and waits for a confirmed result. Do not loo
 
 `STOP_UNCONFIRMED` (operation exit 3) means query the same ID with `ps`; do not report the task as stopped. Canceling the client does not withdraw an accepted stop request. Repeating stop does not reset or replace its first grace policy. `STOP_OPTIONS_UNSUPPORTED` (exit 2) means the saved older runner cannot honor the configured grace; report that incompatibility rather than silently discarding the policy.
 
-Choose data, dependencies, smoke tests and scientific acceptance for the actual experiment. Loaf does not assess metrics or automatically repair environments. Public `pull`, `exec`, scheduling and provisioning are not available in this version.
+## Collect the outputs
+
+```bash
+loaf pull <run-id> --json
+```
+
+The default uses output paths saved at submission and downloads to `loaf-results/<run-id>/` under the project. Changing the current target or project outputs does not redirect that task. Repeat `--path` to override the selection for one download; `--to` is the exact destination, relative to the current directory when not absolute.
+
+`OUTPUT_MISSING` (exit 1) can still include useful files: inspect `data.downloaded_paths` and `data.missing_paths`. A failed transfer does not claim a completed `changed_files` count. Retry the same pull after a download error; do not restart the experiment to retrieve files. Downloads retain local extras, and canceling pull does not stop training.
+
+Running tasks may be pulled, but the result is a live copy, not a consistent checkpoint snapshot. Choose completion or atomically published checkpoint files when needed. `--checksum` detects same-size, same-time content changes with extra disk reads; it is not normally required.
+
+Choose data, dependencies, smoke tests and scientific acceptance for the actual experiment. Loaf does not assess metrics or automatically repair environments. Public `exec`, interactive SSH, port forwarding, scheduling and provisioning are not available in this version.

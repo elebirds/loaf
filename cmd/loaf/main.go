@@ -38,6 +38,7 @@ func main() {
     var checker cli.Checker = unavailableSSH{}
     var runner cli.RunnerVerifier
     var syncer cli.Synchronizer
+    var puller cli.OutputPuller
     var runs *execution.Service
     store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
     if binary, err := exec.LookPath("ssh"); err == nil {
@@ -53,10 +54,11 @@ func main() {
         sender := ssh.Rsync{Client: client, Binary: rsync}
         runs = &execution.Service{Index: store, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
         syncer = sources.Service{Check: client, Runner: prepare, Send: sender}
+        puller = sources.PullService{Remote: client, Runner: prepare, Receive: sender}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
 }
 

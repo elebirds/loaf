@@ -19,6 +19,7 @@ import (
     "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    sources "github.com/elebirds/loaf/internal/sync"
     "github.com/elebirds/loaf/internal/wire"
     "github.com/spf13/cobra"
     "github.com/spf13/pflag"
@@ -41,6 +42,7 @@ type Options struct {
     Checker     Checker
     Runner      RunnerVerifier
     Syncer      Synchronizer
+    Puller      OutputPuller
     Runs        *execution.Service
     CWD         string
     Env         map[string]string
@@ -230,6 +232,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.SetHelpCommand(help)
     root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
+    root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     err := earlyErr
     if err == nil {
         err = langErr
@@ -301,7 +304,7 @@ func earlyOptions(args []string) (bool, string, error) {
         if a == "--" {
             break
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" {
             i++
             continue
         }
@@ -359,7 +362,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs" || c.Name() == "stop") {
+        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull") {
             return
         }
         name := "--" + f.Name
@@ -398,6 +401,8 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         fmt.Fprintln(out, l.Text("selected", map[string]any{"Root": r.Root, "Target": r.Target}))
     case syncResult:
         printSync(out, r, l)
+    case sources.PullResult:
+        printPull(out, r, l, ok)
     case execution.View:
         printRun(out, r, l)
     case runList:

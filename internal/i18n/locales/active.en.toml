@@ -459,3 +459,33 @@ other = "Another download is writing this destination. Wait for it to finish or 
 
 [sync_reason_results]
 other = "local downloaded results"
+
+[pull_short]
+other = "Download selected outputs from a saved run."
+
+[flag_pull_path]
+other = "Literal work-relative output path; repeat to override the saved selection."
+
+[flag_pull_to]
+other = "Exact local destination; relative paths use the current directory."
+
+[flag_pull_checksum]
+other = "Compare same-size files by checksum instead of modification time (extra disk I/O)."
+
+[pull_progress]
+other = "Downloading outputs for {{.ID}} from {{.Target}}…"
+
+[pull_done]
+other = "Outputs downloaded for {{.ID}}."
+
+[pull_incomplete]
+other = "Output retrieval is incomplete for {{.ID}}."
+
+[pull_location]
+other = "Destination: {{.Path}}"
+
+[pull_changes]
+other = "Transferred file contents or link targets: {{.Count}}"
+
+[pull_missing_paths]
+other = "Missing output paths:"

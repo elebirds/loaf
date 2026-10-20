@@ -11,6 +11,7 @@ import (
     "regexp"
     "strings"
     "syscall"
+    "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
@@ -117,8 +118,11 @@ func (r Rsync) Pull(ctx context.Context, target config.Target, runner, destinati
     diagnostic := &diagnosticTail{}
     cmd.Stdout, cmd.Stderr = &changes, diagnostic
     cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+    cmd.WaitDelay = 2 * time.Second
     cmd.Cancel = func() error {
-        err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+        // Let native rsync remove its current temporary file before resorting
+        // to os/exec's bounded wait/kill. Completed destination files stay put.
+        err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
         if errors.Is(err, syscall.ESRCH) {
             return os.ErrProcessDone
         }

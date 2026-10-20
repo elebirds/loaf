@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 早期开发版本：目前可从源码使用 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop` 和 `version`。结果下载命令尚未提供。
+> 早期开发版本：目前可从源码使用 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop`、`pull` 和 `version`。
 
 ## 从源码构建
 
@@ -105,7 +105,7 @@ tail = 100
 
 设置默认命令后可直接 `loaf run`。`run --` 后的显式 argv 替换默认命令，不再经过额外 Shell 解释；TOML 的 `run.command`、`run.setup` 是 `/bin/sh -c` 命令。setup 每个任务执行一次，失败则不启动训练；其 `cd`、导出变量和环境激活不会延续到独立的训练进程，应使用明确解释器或 `uv run`。项目 `run.env` 同时作用于二者，Loaf 查询不回显变量值，程序自身仍可能打印它们。
 
-Loaf 不自动安装 Python、uv，不猜测环境激活，也不上传数据集，请显式准备。数据和共享环境可放在 `cache/` 旁边，并通过绝对路径引用，因为执行目录是 `<remote_dir>/runs/<run-id>/work/`。本阶段输出仍保存在其中，由原生工具取回；提交时保存输出路径选择，供后续下载命令使用。
+Loaf 不自动安装 Python、uv，不猜测环境激活，也不上传数据集，请显式准备。数据和共享环境可放在 `cache/` 旁边，并通过绝对路径引用，因为执行目录是 `<remote_dir>/runs/<run-id>/work/`。提交时保存输出路径选择，之后可以用 `loaf pull` 取回。
 
 可先运行[无依赖 CPU 示例](examples/cpu/)或[显式准备示例](examples/setup/)。Agent 可使用简短的 [Loaf Skill](skills/loaf/SKILL.md)，不需要读取内部文件、PID 或锁。
 
@@ -135,6 +135,34 @@ loaf stop <任务ID> --grace 30s
 
 已有任务保留原封装及其默认宽限期。旧封装不支持显式宽限设置时，返回 `STOP_OPTIONS_UNSUPPORTED`（退出码 2）；移除 `--grace` 及项目或用户 `stop.grace` 设置后，可以使用其原默认策略。客户端不会替换仍在运行的监督进程。
 
+## 取回实验输出
+
+```bash
+loaf pull                    # 当前项目最近一次提交的任务
+loaf pull <任务ID> --json
+loaf pull <任务ID> --path outputs --path checkpoints --to ./export
+```
+
+默认下载 `outputs/`，或该任务提交时保存的 `[outputs].paths`。之后修改项目输出配置或默认机器，不会改变已有任务的下载来源。重复指定 `--path` 可仅覆盖本次选择；路径是工作目录内的字面相对子路径，不展开 Shell 通配符。无须先检查或停止任务。
+
+默认下载到 `<项目>/loaf-results/<run-id>/`，保留输出子路径。`--to` 指定准确的目的地，不再追加任务 ID；相对路径以当前目录为基准。根目录、主目录及包含项目源码的目录不能作为目的地。重复下载更新变更文件，不删除本地额外文件或远端输出。文件传输完成后才替换原文件，不原地覆盖；取消或失败后，对同一任务重新执行 pull 即可。取消下载不会停止训练。
+
+项目和用户配置均支持以下独立偏好：
+
+```toml
+[pull]
+base_dir = "loaf-results"
+checksum = false
+```
+
+相对 `base_dir` 以项目根目录为基准，Loaf 在其下追加任务 ID。结果根目录应独立于源码，不能是项目根目录或其上级。配置在项目内的结果根目录会排除出源码上传，即使已被 Git 跟踪。临时 `--to` 若位于项目内且不应上传，请将其加入 `.gitignore` 或 `sync.exclude`。
+
+默认按大小和修改时间判断文件变化。`--checksum` 可识别同大小、同时间戳的内容变化，代价是两端读取文件。按显式参数、项目偏好、用户偏好顺序覆盖；`--checksum=false` 可以关闭已启用的偏好，`--to` 覆盖默认目的地。
+
+路径缺失时返回 `OUTPUT_MISSING`（退出码 1），存在的选定输出会尽可能下载。JSON 在错误旁保留 `data`，包含 `paths`、`downloaded_paths`、`missing_paths`、目的地及生效策略；只有 rsync 成功完成传输后才提供 `changed_files`。全部缺失不会被当成空下载成功。不安全路径或特殊文件会在传输前拒绝整组选择；相对链接的实际目标必须在选定输出范围内，本地已有链接也不能将写入导向结果目录之外。
+
+运行中、失败、停止的任务都可以取回已有输出。运行中下载是当前内容的拷贝，不是完整 checkpoint 的一致快照；需要一致性时，应等待结束，或让训练脚本原子发布 checkpoint。支持的旧任务记录可由独立版本的读取封装访问，不替换原监督进程或改写记录。两个下载写入同一目的地时返回 `PULL_BUSY`；下载期间不占用远端源码同步锁或执行控制锁。
+
 ## 同步工作代码
 
 在项目目录中，先预览选中的文件，再上传：
@@ -153,7 +181,7 @@ loaf sync
 ### 选择上传内容
 
 - Git 项目通过原生 Git 选择已跟踪的工作文件及未被忽略的新文件，包括未提交修改，保留 Git 跟踪以及嵌套忽略、否定规则的语义。非 Git 项目读取嵌套 `.gitignore`。
-- Loaf 还会排除虚拟环境、常见缓存、`.git`、`.env`/`.env.*`、常见私钥名称、`*.pem`、`*.key`、`*.pt`、`*.pth`、`*.ckpt`、`*.safetensors` 和 `loaf-results/`，即使它们已被 Git 跟踪。配置的输出路径也被排除，默认是 `outputs/`。
+- Loaf 还会排除虚拟环境、常见缓存、`.git`、`.env`/`.env.*`、常见私钥名称、`*.pem`、`*.key`、`*.pt`、`*.pth`、`*.ckpt`、`*.safetensors` 和 `loaf-results/`，即使它们已被 Git 跟踪。配置的输出路径及当前本地结果根目录也被排除，默认输出是 `outputs/`。
 - 保留指向已选项目文件或目录的安全相对符号链接，不遍历目录链接。绝对、越界、失效及目标未选中的链接会跳过并报告。嵌套仓库与子模块不展开，请单独同步。
 - `sync.exclude` 追加 Gitignore 风格的正向排除规则，不接受用 `!` 恢复默认排除项。预览显示排除结果和原因。默认规则按名称匹配，不是凭据扫描器。
 
@@ -223,9 +251,11 @@ bash scripts/integration.sh  # 真实 SSH 与 Linux 进程测试，需要 Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 # 可选：验证旧版宿主客户端提交的任务
 LOAF_PREVIOUS_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerStopCompatibility
+# 可选：取回旧版客户端提交任务的输出
+LOAF_PREVIOUS_PULL_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerPullCompatibility
 ```
 
-集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、配置覆盖、镜像删除边界、中断恢复、并发启动保护、封装部署、跳板连接、断线执行、退出结果、重复提交、子进程停止、有界等待、setup 失败、日志取消及回执丢失恢复，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。
+集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、配置覆盖、镜像删除边界、中断恢复、并发启动保护、封装部署、跳板连接、断线执行、退出结果、重复提交、子进程停止、有界等待、setup 失败、日志取消、回执丢失恢复和增量输出下载。下载场景覆盖缺失/不安全路径、磁盘满、取消、重试、目的地隔离及旧任务兼容，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。
 
 Loaf 不负责租用机器、分配 GPU、自动修复环境或替代实验追踪工具。
 

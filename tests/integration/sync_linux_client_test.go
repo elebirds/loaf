@@ -53,7 +53,7 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
         t.Fatal(string(out))
     }
     f.shell(`test -f "$1/cache/中文 space.py"; test -f "$1/cache/back\slash[1]*?.py"; test ! -e "$1/cache/.env"; test "$(readlink "$1/cache/linked.py")" = '中文 space.py'`, root)
-    out = invoke("run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", "printf 'linux 中文\\n'; exit 7")
+    out = invoke("run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", "mkdir outputs; printf result >outputs/result.txt; printf 'linux 中文\\n'; exit 7")
     var ran struct {
         Data execution.View `json:"data"`
     }
@@ -62,6 +62,32 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     }
     invoke("ps", ran.Data.ID, "--json")
     invoke("logs", ran.Data.ID, "--json")
+    for _, want := range []int{1, 0} {
+        out = invoke("pull", ran.Data.ID, "--json")
+        var downloaded struct {
+            Data struct {
+                Destination  string `json:"destination"`
+                ChangedFiles *int   `json:"changed_files"`
+            } `json:"data"`
+        }
+        if json.Unmarshal(out, &downloaded) != nil || downloaded.Data.ChangedFiles == nil || *downloaded.Data.ChangedFiles != want {
+            t.Fatal(string(out))
+        }
+        f.shell(`test "$(cat "$1/outputs/result.txt")" = result`, downloaded.Data.Destination)
+    }
+    // The fixture's separate 1 MiB tmpfs creates real ENOSPC without filling a
+    // host disk. The previous completed file must survive the failed update.
+    f.shell(`dd if=/dev/urandom of="$1/runs/$2/work/outputs/result.txt" bs=1048576 count=2 2>/dev/null; mkdir -p /tmp/loaf-full/result/outputs; printf previous >/tmp/loaf-full/result/outputs/result.txt`, ran.Data.RemoteDir, ran.Data.ID)
+    failure := f.shell(`set -eu; cd /tmp/linux-project; if XDG_CONFIG_HOME=/tmp/linux-config XDG_STATE_HOME=/tmp/linux-state /tmp/linux-client/loaf pull "$1" --to /tmp/loaf-full/result --json >/tmp/disk-full.json; then exit 1; else test "$?" -eq 1; fi; test "$(cat /tmp/loaf-full/result/outputs/result.txt)" = previous; cat /tmp/disk-full.json`, ran.Data.ID)
+    if !strings.Contains(failure, `"code":"PULL_FAILED"`) || !strings.Contains(failure, "No space left on device") {
+        t.Fatal("disk-full error not retained", failure)
+    }
+    // Retry to another destination without restarting the failed experiment.
+    out = invoke("pull", ran.Data.ID, "--to", "/tmp/linux-retry", "--json")
+    if !json.Valid(out) {
+        t.Fatal(string(out))
+    }
+    f.shell(`test "$(wc -c </tmp/linux-retry/outputs/result.txt)" -eq 2097152`)
     out = invoke("run", "--json", "--", "/bin/sh", "-c", `trap '' TERM; echo ready >ready; while :; do sleep .05; done`)
     if err := json.Unmarshal(out, &ran); err != nil {
         t.Fatal(err)

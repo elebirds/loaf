@@ -54,7 +54,15 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
         if err != nil {
             return err
         }
-        plan, err := sources.Select(cmd.Context(), root, sources.SelectOptions{Mode: policy.Mode, RespectGitignore: &policy.RespectGitignore, Exclude: policy.Exclude, Outputs: file.Outputs.Paths, PrivatePaths: []string{filepath.Dir(o.Store.ConfigFile), filepath.Dir(o.Store.IndexFile)}})
+        pullPolicy, err := config.ResolvePull(cfg.Pull, file.Pull)
+        if err != nil {
+            return err
+        }
+        resultsDir, err := config.PullBase(root, pullPolicy)
+        if err != nil {
+            return err
+        }
+        plan, err := sources.Select(cmd.Context(), root, sources.SelectOptions{Mode: policy.Mode, RespectGitignore: &policy.RespectGitignore, Exclude: policy.Exclude, Outputs: file.Outputs.Paths, ResultsDir: resultsDir, PrivatePaths: []string{filepath.Dir(o.Store.ConfigFile), filepath.Dir(o.Store.IndexFile)}})
         if err != nil {
             return err
         }

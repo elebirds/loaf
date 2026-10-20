@@ -48,8 +48,8 @@ type PullResult struct {
     Policy          config.PullPolicy `json:"policy"`
 }
 
-// OutputPaths normalizes optional trailing slashes and rejects work-root/glob
-// interpretation. Metacharacters remain literal filename characters.
+// OutputPaths normalizes optional trailing slashes and validates work-relative
+// subpaths. Metacharacters remain literal filename characters.
 func OutputPaths(paths []string) ([]string, error) {
     result := []string{}
     for _, name := range paths {

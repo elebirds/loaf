@@ -49,7 +49,7 @@ func newFixture(t *testing.T) *fixture {
     f.config = filepath.Join(f.dir, "config")
     f.known = filepath.Join(keyDir, "known_hosts")
     command(t, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", f.key)
-    f.id = command(t, "docker", "run", "-d", "--init", "--rm", "-p", "127.0.0.1::22", "loaf-sshd-test:local")
+    f.id = command(t, "docker", "run", "-d", "--init", "--rm", "--tmpfs", "/tmp/loaf-full:rw,size=1m,mode=0777", "-p", "127.0.0.1::22", "loaf-sshd-test:local")
     t.Cleanup(func() {
         if t.Failed() {
             out, err := exec.Command("docker", "logs", f.id).CombinedOutput()

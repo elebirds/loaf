@@ -459,3 +459,33 @@ other = "另一次下载正在写入同一目的地，请等待其完成或用 -
 
 [sync_reason_results]
 other = "本地已下载的结果"
+
+[pull_short]
+other = "下载已保存任务的选定输出。"
+
+[flag_pull_path]
+other = "工作目录内的字面相对输出路径，可重复指定以覆盖已保存的选择。"
+
+[flag_pull_to]
+other = "准确的本地目的地，相对路径以当前目录为基准。"
+
+[flag_pull_checksum]
+other = "对同大小文件使用校验和而非修改时间判断变化，会增加磁盘读取。"
+
+[pull_progress]
+other = "正在从 {{.Target}} 下载任务 {{.ID}} 的输出…"
+
+[pull_done]
+other = "已下载任务 {{.ID}} 的输出。"
+
+[pull_incomplete]
+other = "任务 {{.ID}} 的输出取回不完整。"
+
+[pull_location]
+other = "目的地：{{.Path}}"
+
+[pull_changes]
+other = "传输的文件内容或链接目标：{{.Count}}"
+
+[pull_missing_paths]
+other = "缺失的输出路径："

@@ -277,6 +277,14 @@ func TestPackagedCPUExamples(t *testing.T) {
             t.Fatalf("example %s: %+v", example, ran)
         }
         f.shell(`test -d "$1/runs/$2/work/outputs"`, ran.RemoteDir, ran.ID)
+        pulled := pullCLI(t, project, 0, ran.ID, "--json")
+        name, want := "result.txt", "result=42\n"
+        if example == "setup" {
+            name, want = "experiment.txt", "baseline\n"
+        }
+        if data, err := os.ReadFile(filepath.Join(pulled.Destination, "outputs", name)); err != nil || string(data) != want {
+            t.Fatal("packaged example output unusable", string(data), err)
+        }
         if example == "cpu" {
             human := exec.Command(os.Getenv("LOAF_BIN"), "--lang", "zh-Hans", "run")
             human.Dir = project

@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, and `version` are available from source. Output downloads are not available yet.
+> Early development: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, `pull`, and `version` are available from source.
 
 ## Build from source
 
@@ -105,7 +105,7 @@ tail = 100
 
 With a configured command, use `loaf run`. Explicit argv after `run --` replaces the configured command and receives no extra Shell interpretation. TOML `run.command` and `run.setup` are `/bin/sh -c` commands. Setup runs once per task, and failure prevents training. Its `cd`, exports, and environment activation do not persist into the separate command process; use an explicit interpreter or `uv run`. Project `run.env` applies to both processes and is not echoed in Loaf's observations; the program itself can still print it.
 
-Loaf does not install Python or uv, guess environment activation, or upload datasets. Provision those explicitly. Data/shared environments can live beside `cache/`; refer to them by absolute paths because execution happens in `<remote_dir>/runs/<run-id>/work/`. Outputs currently remain there until collected with native tools. Output paths are frozen at submission for the future download command.
+Loaf does not install Python or uv, guess environment activation, or upload datasets. Provision those explicitly. Data/shared environments can live beside `cache/`; refer to them by absolute paths because execution happens in `<remote_dir>/runs/<run-id>/work/`. Output paths are frozen at submission and can be collected with `loaf pull`.
 
 Try the [dependency-free CPU example](examples/cpu/) or the [explicit setup example](examples/setup/). Agents can use the short [Loaf Skill](skills/loaf/SKILL.md); they do not need to inspect internal files, PIDs, or locks.
 
@@ -135,6 +135,34 @@ Confirmation waits for up to grace plus 5 seconds, capped at 5 minutes, in addit
 
 Existing runs keep their original runner and default grace. If that runner cannot honor an explicit grace setting, stop returns `STOP_OPTIONS_UNSUPPORTED` (exit 2). Remove `--grace` and project/user `stop.grace` settings to use its original default; the client does not replace active supervisors.
 
+## Retrieve experiment outputs
+
+```bash
+loaf pull                    # Latest submitted run in this project
+loaf pull <run-id> --json
+loaf pull <run-id> --path outputs --path checkpoints --to ./export
+```
+
+Default outputs are `outputs/`, or the `[outputs].paths` saved when that run was submitted. Later edits to project outputs or the default machine do not redirect an existing run. Repeat `--path` to replace the selection for this invocation; paths are literal work-relative subpaths, not Shell globs. No separate check or stop is required.
+
+Downloads go to `<project>/loaf-results/<run-id>/` and preserve output subpaths. `--to` names the exact destination without an extra run-ID directory; relative paths use the current directory. Root, home, and directories containing the project are rejected as destinations. Repeating pull updates changed files without deleting local extras or remote outputs. Files are replaced after transfer, not written in place; after cancellation or failure, retry the same pull. Canceling pull does not stop training.
+
+Project and user configuration support these independent preferences:
+
+```toml
+[pull]
+base_dir = "loaf-results"
+checksum = false
+```
+
+Relative `base_dir` values use the project root, and Loaf appends the run ID. Choose a separate result base, not the project root or an ancestor. The configured base inside the project is excluded from source uploads, even when tracked. For a one-off `--to` inside the project, add that destination to `.gitignore` or `sync.exclude` if it should not be uploaded.
+
+Default change detection compares size and modification time. Enable `--checksum` to detect content changes with the same size and timestamp, at the cost of reading files on both ends. Explicit flags override project preferences, then user preferences; `--checksum=false` overrides an enabled preference. `--to` overrides the default destination.
+
+Missing paths produce `OUTPUT_MISSING` (exit 1). Existing selections are downloaded when possible; JSON retains `paths`, `downloaded_paths`, `missing_paths`, destination, and effective policy in `data` alongside the error. `changed_files` is present only after a successful rsync transfer. An all-missing selection is never an empty success. Unsafe paths or special files reject the selection before transfer; relative links must resolve within the selected trees. Existing destination links cannot redirect writes outside the result directory.
+
+Running, failed, and stopped tasks can all have useful outputs. A running pull copies current contents, not a consistent checkpoint snapshot; wait for completion or have training publish checkpoints atomically when consistency matters. Older supported task records can be read using a separately versioned helper without replacing their supervisor or rewriting their records. Two downloads to the same destination are rejected with `PULL_BUSY`; downloads do not hold the remote source-sync or execution-control locks.
+
 ## Sync working code
 
 From the project directory, preview the selected files before uploading:
@@ -153,7 +181,7 @@ The default **mirror** mode removes deleted and newly excluded source paths from
 ### Choose what to upload
 
 - In Git projects, native Git selects tracked working files and nonignored untracked files, including uncommitted edits. Git tracking and nested ignore/negation rules are preserved. Non-Git projects read nested `.gitignore` files.
-- Loaf additionally excludes virtual environments, common caches, `.git`, `.env`/`.env.*`, common private-key names, `*.pem`, `*.key`, `*.pt`, `*.pth`, `*.ckpt`, `*.safetensors`, and `loaf-results/`, even when tracked. Configured output paths are excluded; the default is `outputs/`.
+- Loaf additionally excludes virtual environments, common caches, `.git`, `.env`/`.env.*`, common private-key names, `*.pem`, `*.key`, `*.pt`, `*.pth`, `*.ckpt`, `*.safetensors`, and `loaf-results/`, even when tracked. Configured output paths and the current local result base are excluded; default outputs are `outputs/`.
 - Safe relative symlinks to selected project files/directories are preserved without following directory links. Absolute, escaping, broken, and excluded-target links are skipped and reported. Nested repositories/submodules are not expanded; synchronize them separately.
 - `sync.exclude` adds positive Gitignore-style patterns. It cannot reinclude default exclusions with `!`. The preview lists exclusions and their reasons. Defaults are name-based safeguards, not a secret scanner.
 
@@ -223,9 +251,11 @@ bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 # Optional: test runs submitted by an older packaged host CLI
 LOAF_PREVIOUS_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerStopCompatibility
+# Optional: retrieve outputs from a task submitted by a previous packaged CLI
+LOAF_PREVIOUS_PULL_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerPullCompatibility
 ```
 
-The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, stopping child processes, bounded waits, setup failures, log cancellation, and lost-confirmation recovery without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
+The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, stopping child processes, bounded waits, setup failures, log cancellation, lost-confirmation recovery, and incremental output retrieval. Download cases include missing/unsafe paths, disk full, cancellation, retry, destination isolation, and old-run compatibility without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
 Loaf does not provision machines, schedule GPUs, automatically repair environments, or replace experiment tracking.
 

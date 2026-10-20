@@ -15,7 +15,7 @@ other = "Select the default machine for this project."
 [check_short]
 other = "Inspect connectivity and the remote environment."
 [version_short]
-other = "Show build and protocol versions."
+other = "Show build and protocol versions, source revision, and platform."
 [help_short]
 other = "Show help for a command."
 [usage]
@@ -97,7 +97,7 @@ other = "System OpenSSH is unavailable. Install it and make ssh available on PAT
 [ssh_failed]
 other = "SSH connection or remote operation failed."
 [ssh_hint]
-other = "Use native ssh with the saved connection to check the address, authentication, and host key; then retry. JSON mode cannot ask for credentials or trust."
+other = "Check the saved connection and host key with native ssh. JSON/non-TTY commands need a key, SSH agent, or shared SSH connection; a one-off password login does not authenticate later commands."
 [probe_failed]
 other = "The remote environment returned an invalid probe response. Check login scripts for unexpected stdout."
 [check_failed]

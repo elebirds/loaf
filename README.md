@@ -18,7 +18,30 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-The build embeds Linux amd64 and arm64 runners and produces a local executable plus a compressed archive with the Agent Skill and examples in `dist/`. There is no installable release yet. You can also place `dist/loaf` in a directory already on your PATH.
+The build embeds Linux amd64 and arm64 runners and produces `dist/loaf`, a platform archive, and `loaf_<version>_checksums.txt`. There is no published release yet. For other build targets, set `LOAF_BUILD_TARGETS`, for example `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`.
+
+### Install an archive
+
+Archives contain one executable, both READMEs, the Skill, examples, `BUILD.json`, and third-party license texts. From an extracted archive directory:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 755 loaf "$HOME/.local/bin/loaf"
+"$HOME/.local/bin/loaf" version --json
+```
+
+Add that directory to PATH if needed. Running an archive needs OpenSSH and rsync locally, not Go. The remote machine needs Linux and rsync; prepare the experiment's Python environment separately.
+
+The build targets macOS/Linux amd64 and arm64. Full SSH workflows have been exercised with macOS arm64 and Linux arm64 clients; the other client targets are cross-built. Linux amd64 runners have completed real GPU training, and Linux arm64 runners are exercised by the CPU fixture. Cross-builds alone are not runtime validation.
+
+`BUILD.json` records the source revision, modified-tree state, Go version, target, and dependency notice inventory. `loaf version --json` exposes the corresponding build identity; missing source metadata is reported as unknown, not clean. Set `archive` to the exact archive filename and `version` to the software version in that filename. Then run the check from the directory containing the archive and its checksums file:
+
+```bash
+# archive is the exact filename of your archive
+grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
+```
+
+Published release archives will also carry GitHub build-provenance attestations, verifiable with `gh attestation verify "$archive" --repo elebirds/loaf`. See [GitHub's verification guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli). Local builds include metadata and download checksums, not a GitHub-signed attestation.
 
 ## Set up a research machine
 
@@ -35,7 +58,7 @@ loaf check
 
 Already have an SSH Host alias? Use `loaf add lab --ssh lab-gpu`. Connections involving jump hosts remain in your SSH Config; `-J`, keys, ports, and an explicit `-F` config file are also accepted. Pasted input must contain only connection arguments, not a remote command or Shell expression. To change an existing alias, use `--replace`.
 
-`add` saves the connection locally; `check` actually connects. JSON and non-TTY checks do not ask for passwords or host trust. Establish access with native SSH first when needed. Loaf never saves passwords or disables host-key verification.
+`add` saves the connection locally; `check` actually connects. JSON and non-TTY commands do not ask for passwords or host trust. Establish host trust with native SSH first. Authentication must then work through a key, SSH agent, or native SSH connection sharing; a one-off password login without connection sharing does not authenticate later commands. Loaf never saves passwords or disables host-key verification.
 
 ### Check runner deployment explicitly
 
@@ -108,6 +131,12 @@ With a configured command, use `loaf run`. Explicit argv after `run --` replaces
 Loaf does not install Python or uv, guess environment activation, or upload datasets. Provision those explicitly. Data/shared environments can live beside `cache/`; refer to them by absolute paths because execution happens in `<remote_dir>/runs/<run-id>/work/`. Output paths are frozen at submission and can be collected with `loaf pull`.
 
 Try the [dependency-free CPU example](examples/cpu/) or the [explicit setup example](examples/setup/). Agents can use the short [Loaf Skill](skills/loaf/SKILL.md); they do not need to inspect internal files, PIDs, or locks.
+
+### Train and use a small GPU model
+
+The [PyTorch example](examples/torch/) trains a classifier on generated data without downloads. It requires an existing CUDA-capable PyTorch environment. From that example directory, select your machine and use `loaf run`, then `loaf logs` and `loaf pull` as above. If `python3` is not on the noninteractive SSH PATH, explicitly select your existing interpreter in `run.command` or after `run --`; Loaf does not source Shell startup files or activate guessed environments.
+
+Outputs include a PyTorch checkpoint, metrics, model parameters, and held-out inference cases. The training script reloads its checkpoint. Run `python3 verify.py` with the downloaded run directory to independently use the collected parameters for inference on your laptop; this verification needs only Python's standard library, not local PyTorch. GPU examples are opt-in and never run in the CPU-only CI fixture.
 
 ## Stop an experiment
 
@@ -242,6 +271,10 @@ Language precedence is `--lang`, `LOAF_LANG`, then `language` in the user config
 
 Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration or unsupported stop options, 3 for unconfirmed submission or stopping, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
 
+## Troubleshooting
+
+For missing source files, use `loaf sync --dry-run` to inspect Git and Loaf exclusions. A project inside a parent repository's ignored directory remains subject to that ignore rule. For a failed command, inspect `loaf logs`; an accepted run can still fail because an interpreter, dependency, or input is missing. For a lost submission or stop confirmation, query the saved ID instead of starting a replacement task.
+
 ## Development
 
 ```bash
@@ -258,6 +291,8 @@ LOAF_PREVIOUS_PULL_BIN=/path/to/previous/loaf bash scripts/integration.sh -run T
 The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, stopping child processes, bounded waits, setup failures, log cancellation, lost-confirmation recovery, and incremental output retrieval. Download cases include missing/unsafe paths, disk full, cancellation, retry, destination isolation, and old-run compatibility without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
 Loaf does not provision machines, schedule GPUs, automatically repair environments, or replace experiment tracking.
+
+Maintainers publish by explicitly pushing a `vX.Y.Z` or prerelease tag. The release workflow runs the same CI and SSH checks, calls `scripts/build.sh`, attests the archives, and creates the release. Ordinary branches and pull requests have no publishing permissions.
 
 ## License
 

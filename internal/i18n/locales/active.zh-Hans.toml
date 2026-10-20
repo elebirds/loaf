@@ -15,7 +15,7 @@ other = "选择当前项目的默认机器。"
 [check_short]
 other = "检查连接与远端基础环境。"
 [version_short]
-other = "显示构建与协议版本。"
+other = "显示构建与协议版本、源码提交和平台。"
 [help_short]
 other = "显示命令帮助。"
 [usage]
@@ -97,7 +97,7 @@ other = "系统 OpenSSH 不可用，请安装并确保 PATH 中可以找到 ssh�
 [ssh_failed]
 other = "SSH 连接或远端操作失败。"
 [ssh_hint]
-other = "请先使用原生 ssh 按已保存的连接检查地址、认证及主机密钥，再重试。JSON 模式无法询问凭据或主机信任。"
+other = "请先用原生 ssh 检查已保存的连接及主机密钥。JSON/非交互命令需要密钥、SSH agent 或连接复用；单次密码登录不会让后续命令自动获得认证。"
 [probe_failed]
 other = "远端环境检查返回了无效响应，请检查登录脚本是否向标准输出写入额外内容。"
 [check_failed]

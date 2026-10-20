@@ -18,7 +18,30 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-构建会内置 Linux amd64、arm64 远端封装，并在 `dist/` 生成本地可执行文件及包含 Agent Skill 和示例的压缩包。目前尚无正式安装包，也可以将 `dist/loaf` 放入已在 PATH 中的目录。
+构建会内置 Linux amd64、arm64 远端封装，并生成 `dist/loaf`、平台压缩包和 `loaf_<version>_checksums.txt`。目前尚未公开发布版本。可用 `LOAF_BUILD_TARGETS` 选择其他构建目标，例如 `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`。
+
+### 安装压缩包
+
+压缩包包含一个可执行文件、双语 README、Skill、示例、`BUILD.json` 及第三方许可证原文。解压后，在该目录执行：
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 755 loaf "$HOME/.local/bin/loaf"
+"$HOME/.local/bin/loaf" version --json
+```
+
+按需将该目录加入 PATH。使用压缩包只需要本地 OpenSSH 和 rsync，不需要 Go。远端需要 Linux、rsync；实验的 Python 环境应单独准备。
+
+构建目标为 macOS/Linux 的 amd64、arm64。macOS arm64、Linux arm64 客户端已运行完整 SSH 工作流，其他客户端目标仅经过交叉构建。Linux amd64 封装已执行真实 GPU 训练，Linux arm64 封装由 CPU fixture 验证。交叉构建不等于运行验证。
+
+`BUILD.json` 保存源码提交、工作树修改状态、Go 版本、目标平台和依赖声明清单；`loaf version --json` 提供对应的构建标识，缺少来源信息时如实显示未知，不伪装成干净构建。将 `archive` 设为压缩包的准确文件名、`version` 设为文件名中的软件版本，再在包含压缩包和校验文件的目录中执行：
+
+```bash
+# archive 是压缩包的准确文件名
+grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
+```
+
+公开发布的压缩包还会生成 GitHub 构建来源证明，可用 `gh attestation verify "$archive" --repo elebirds/loaf` 检查，详见 [GitHub 验证说明](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli)。本地构建包含元数据和下载校验和，不含 GitHub 签名的来源证明。
 
 ## 配置科研机器
 
@@ -35,7 +58,7 @@ loaf check
 
 已有 SSH Host 别名时，使用 `loaf add lab --ssh lab-gpu`。跳板配置仍由 SSH Config 管理，也接受 `-J`、密钥、端口和显式 `-F` 配置文件。粘贴内容只能包含连接参数，不能夹带远端命令或 Shell 表达式。修改已有别名时使用 `--replace`。
 
-`add` 仅在本地保存连接，`check` 才会实际连接。JSON 和非交互终端检查不会询问密码或主机信任；必要时先使用原生 SSH 建立访问。Loaf 不保存密码，也不关闭主机密钥验证。
+`add` 仅在本地保存连接，`check` 才会实际连接。JSON 和非交互终端命令不会询问密码或主机信任；请先用原生 SSH 建立主机信任。之后认证需要通过密钥、SSH agent 或原生 SSH 连接复用完成；没有连接复用的单次密码登录不会让后续命令自动获得认证。Loaf 不保存密码，也不关闭主机密钥验证。
 
 ### 显式检查远端封装部署
 
@@ -108,6 +131,12 @@ tail = 100
 Loaf 不自动安装 Python、uv，不猜测环境激活，也不上传数据集，请显式准备。数据和共享环境可放在 `cache/` 旁边，并通过绝对路径引用，因为执行目录是 `<remote_dir>/runs/<run-id>/work/`。提交时保存输出路径选择，之后可以用 `loaf pull` 取回。
 
 可先运行[无依赖 CPU 示例](examples/cpu/)或[显式准备示例](examples/setup/)。Agent 可使用简短的 [Loaf Skill](skills/loaf/SKILL.md)，不需要读取内部文件、PID 或锁。
+
+### 训练并使用一个小型 GPU 模型
+
+[PyTorch 示例](examples/torch/)使用生成的数据训练分类器，无须下载数据，但需要已有的 CUDA/PyTorch 环境。进入示例目录，选择机器后按前述方式执行 `loaf run`、`loaf logs` 和 `loaf pull`。若非交互 SSH 的 PATH 中没有 `python3`，请在 `run.command` 或 `run --` 后显式指定已有解释器；Loaf 不读取猜测的 Shell 启动文件，也不自动激活环境。
+
+输出包含 PyTorch checkpoint、指标、模型参数和留出推理样本。训练脚本会重新加载 checkpoint；取回结果后，将下载的任务目录作为参数运行 `python3 verify.py`，即可在本地独立使用模型参数推理。验证只需要 Python 标准库，不需要本地 PyTorch。GPU 示例由用户显式运行，不进入仅用 CPU 的 CI fixture。
 
 ## 停止实验
 
@@ -242,6 +271,10 @@ LOAF_LANG=en loaf check --json
 
 核心命令支持 `--json`，包含 `schema_version: 1`、稳定的 `ok` 字段，以及结构化数据或错误码。人类可读的 `message` 和 `hint` 可以随语言变化，命令名、字段和错误码保持不变；外部诊断保留原文。操作退出码：0 表示本次操作成功，2 表示参数、配置错误或不支持的停止选项，3 表示提交或停止未确认，1 表示其他失败。训练退出码在 `data.exit_code` 中，不作为 CLI 退出码；成功查询到失败训练时，仍是 `ok: true`、`data.status: "failed"`。未结束任务没有训练退出码，无法确认的结果如实报告未知。
 
+## 常见问题
+
+源码缺失时，用 `loaf sync --dry-run` 检查 Git 和 Loaf 的排除规则；项目位于上级仓库的忽略目录中时，仍受该规则约束。命令失败时先查看 `loaf logs`：接管成功后仍可能因解释器、依赖或输入缺失而失败。提交或停止未确认时，应查询原 ID，而非另开替代任务。
+
 ## 开发
 
 ```bash
@@ -258,6 +291,8 @@ LOAF_PREVIOUS_PULL_BIN=/path/to/previous/loaf bash scripts/integration.sh -run T
 集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、配置覆盖、镜像删除边界、中断恢复、并发启动保护、封装部署、跳板连接、断线执行、退出结果、重复提交、子进程停止、有界等待、setup 失败、日志取消、回执丢失恢复和增量输出下载。下载场景覆盖缺失/不安全路径、磁盘满、取消、重试、目的地隔离及旧任务兼容，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。
 
 Loaf 不负责租用机器、分配 GPU、自动修复环境或替代实验追踪工具。
+
+维护者显式推送 `vX.Y.Z` 或预发布标签后，发布工作流才会运行同一套 CI、SSH 检查和 `scripts/build.sh`，为压缩包生成来源证明并创建 Release。普通分支和 PR 没有发布权限。
 
 ## 许可证
 

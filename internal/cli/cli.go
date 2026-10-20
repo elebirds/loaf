@@ -10,7 +10,7 @@ import (
     "fmt"
     "io"
     "path"
-    "runtime"
+    "runtime/debug"
     "strings"
     "time"
 
@@ -20,7 +20,6 @@ import (
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
     sources "github.com/elebirds/loaf/internal/sync"
-    "github.com/elebirds/loaf/internal/wire"
     "github.com/spf13/cobra"
     "github.com/spf13/pflag"
     "golang.org/x/text/width"
@@ -219,7 +218,8 @@ func Execute(ctx context.Context, args []string, o Options) int {
         return nil
     }
     version := &cobra.Command{Use: "version", Short: l.Text("version_short"), Args: arguments(0, 0), RunE: func(_ *cobra.Command, _ []string) error {
-        result = map[string]any{"version": wire.Version, "format_version": wire.FormatVersion, "os": runtime.GOOS, "arch": runtime.GOARCH}
+        info, _ := debug.ReadBuildInfo()
+        result = versionData(info)
         return nil
     }}
     help := &cobra.Command{Use: "help " + l.Text("command_arg"), Short: l.Text("help_short"), Args: arguments(0, 1), RunE: func(_ *cobra.Command, args []string) error {

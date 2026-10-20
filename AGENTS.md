@@ -60,6 +60,8 @@ Start with affected-package tests. For Go changes, follow with ordinary tests an
 
 The complete build has one owner: `scripts/build.sh` builds Linux amd64/arm64 runners, writes generated assets under `internal/bundle`, then builds the client with embedded assets. A mise build task, CI, and release jobs call this same script. Do not add parallel Make, Task, or release-tool build paths.
 
+`scripts/package/` only collects metadata and license texts from those built binaries, and generates download checksums; it does not compile or publish. Build archives in fresh temporary staging directories, not reused package trees. Each archive includes `BUILD.json`, Go/dependency notices, both READMEs, the Skill and examples. Keep unavailable VCS metadata unknown. The tag-triggered release workflow reuses CI before publishing; preparing that workflow does not authorize pushing tags or creating a release.
+
 Build runners without the client embedding tag. Separate embedded and development implementations so a clean checkout can run ordinary tests without generated binaries. A development build lacking a runner must give an actionable build instruction, not download one silently. Keep generated binaries out of Git; message catalogs stay in Git. Do not advertise plain `go install` as a complete installation path.
 
 Exercise the binary produced by the current build, not a globally installed `loaf`. Cross-compilation proves buildability, not runtime support.
@@ -128,6 +130,8 @@ Use `go-i18n` templates and `x/text/language` matching in the local rendering la
 | README or agent instructions | Read the affected document as a whole; check examples, links, and consistency without unrelated Go tests |
 
 Automated integration uses temporary keys, directories, accounts, and CPU scripts, not personal SSH files, research data, or rented GPUs. Assert an unrelated sentinel process survives stop tests. Synchronize on observable readiness rather than relying on fixed sleeps. Clean only resources created by the test.
+
+The optional `examples/torch` uses an existing PyTorch environment and generated data; it is not a Go-test or CPU-fixture dependency. Its downloaded parameter verifier uses only Python's standard library. Choose an explicit interpreter when remote noninteractive PATH differs; never source guessed startup files or install dependencies automatically.
 
 A real GPU workflow is separate acceptance work on an explicitly authorized existing target. Do not infer authorization to connect, spend money, stop a machine, or publish from permission to edit code.
 

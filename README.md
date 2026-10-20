@@ -22,7 +22,7 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 
 Add that directory to PATH if needed. Running an archive needs OpenSSH and rsync locally, not Go. The remote machine needs Linux and rsync; prepare the experiment's Python environment separately.
 
-The build targets macOS/Linux amd64 and arm64. Full SSH workflows have been exercised with macOS arm64 and Linux arm64 clients; the other client targets are cross-built. Linux amd64 runners have completed real GPU training, and Linux arm64 runners are exercised by the CPU fixture. Cross-builds alone are not runtime validation.
+The build targets macOS/Linux amd64 and arm64. Full SSH workflows have been exercised with macOS arm64 and Linux arm64 clients locally, and Linux amd64 clients in GitHub CI. The macOS amd64 client is cross-built. Linux amd64 runners have completed real GPU training, and Linux arm64 runners are exercised by the CPU fixture. Cross-builds alone are not runtime validation.
 
 `BUILD.json` records the source revision, modified-tree state, Go version, target, and dependency notice inventory. `loaf version --json` exposes the corresponding build identity; missing source metadata is reported as unknown, not clean. Set `archive` to the exact archive filename and `version` to the software version in that filename. Then run the check from the directory containing the archive and its checksums file:
 

@@ -22,7 +22,7 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 
 按需将该目录加入 PATH。使用压缩包只需要本地 OpenSSH 和 rsync，不需要 Go。远端需要 Linux、rsync；实验的 Python 环境应单独准备。
 
-构建目标为 macOS/Linux 的 amd64、arm64。macOS arm64、Linux arm64 客户端已运行完整 SSH 工作流，其他客户端目标仅经过交叉构建。Linux amd64 封装已执行真实 GPU 训练，Linux arm64 封装由 CPU fixture 验证。交叉构建不等于运行验证。
+构建目标为 macOS/Linux 的 amd64、arm64。macOS arm64、Linux arm64 客户端已在本地运行完整 SSH 工作流，Linux amd64 客户端由 GitHub CI 实际验证；macOS amd64 客户端仅经过交叉构建。Linux amd64 封装已执行真实 GPU 训练，Linux arm64 封装由 CPU fixture 验证。交叉构建不等于运行验证。
 
 `BUILD.json` 保存源码提交、工作树修改状态、Go 版本、目标平台和依赖声明清单；`loaf version --json` 提供对应的构建标识，缺少来源信息时如实显示未知，不伪装成干净构建。将 `archive` 设为压缩包的准确文件名、`version` 设为文件名中的软件版本，再在包含压缩包和校验文件的目录中执行：
 

@@ -136,3 +136,91 @@ other = "The remote architecture must be x86_64 or aarch64."
 other = "The remote directory or its existing parent is not writable and searchable."
 [REMOTE_RSYNC_MISSING]
 other = "Remote rsync is missing; install it before syncing."
+[source_read]
+other = "Cannot select project sources. Check the project directory and file permissions."
+[source_git]
+other = "Cannot enumerate Git working files. Check native git access to this repository."
+[source_encoding]
+other = "A source path is not valid UTF-8. Rename it before syncing."
+[source_submodule]
+other = "Nested repository or submodule {{.Path}} must be synchronized as a separate project."
+[sync_exclude]
+other = "sync.exclude must contain additional Gitignore-style exclusions, without negation or embedded newlines."
+[sync_outputs]
+other = "Output paths must be project-relative subpaths, without . or .. components."
+[sync_rsync_missing]
+other = "System rsync is unavailable. Install it and make rsync available on PATH."
+[sync_canceled]
+other = "Source sync was canceled. An interrupted cache cannot start new runs."
+[sync_failed]
+other = "Source sync did not complete. Review the SSH/rsync diagnostic below."
+[sync_retry]
+other = "Run loaf sync again to repair the cache. Existing runs use independent copies."
+[sync_busy]
+other = "Another source update or source copy holds this project's remote lock. Wait for it to finish, then retry."
+[sync_unowned]
+other = "The remote directory is nonempty and is not managed by Loaf."
+[sync_mismatch]
+other = "The remote directory belongs to a different Loaf project."
+[sync_unsafe]
+other = "The remote project or cache path is unsafe, or contains a symlinked directory."
+[sync_version]
+other = "The receiver rejected the transfer format or rsync options. Rebuild the CLI and check the installed rsync capabilities."
+[sync_write]
+other = "Cannot update the remote cache. Check directory permissions and available disk space."
+[sync_directory_hint]
+other = "Choose a separate empty remote_dir or the directory already owned by this project. Loaf will not take over existing files."
+[sync_short]
+other = "Preview selected working sources."
+[flag_dry_run]
+other = "Preview local selection and exclusion reasons, without connecting or saving state."
+[sync_start]
+other = "Syncing selected files: {{.Count}} -> {{.Target}}"
+[sync_preview]
+other = "Local source preview; no connection or remote changes."
+[sync_done]
+other = "Source cache synchronized."
+[sync_selection]
+other = "Selected files: {{.Count}} ({{.Bytes}} bytes)"
+[sync_changes]
+other = "Updated files: {{.Count}}"
+[sync_cache]
+other = "Remote cache: {{.Path}}"
+[sync_exclusions]
+other = "Excluded paths and rules:"
+[sync_reason_excluded]
+other = "excluded by a source rule"
+[sync_reason_outputs]
+other = "reserved for experiment outputs"
+[sync_reason_private_state]
+other = "private local Loaf state"
+[sync_reason_gitignore]
+other = "ignored by Git rules"
+[sync_reason_unsafe_link]
+other = "absolute or escaping link is not portable"
+[sync_reason_broken_link]
+other = "link target is missing or inaccessible"
+[sync_reason_excluded_link_target]
+other = "link target is not selected"
+[sync_reason_special_file]
+other = "not a regular file or symbolic link"
+[sync_mode]
+other = "Sync mode must be mirror or update."
+[flag_sync_mode]
+other = "Select mirror or update; overrides project and global settings."
+[flag_respect_gitignore]
+other = "Honor Git tracking and ignore rules; use =false to disable."
+[flag_sync_exclude]
+other = "Append an exclusion pattern; repeat for multiple patterns."
+[sync_policy]
+other = "Sync mode: {{.Mode}}"
+[sync_mode_mirror]
+other = "mirror"
+[sync_mode_update]
+other = "update"
+[sync_update_warning]
+other = "Update mode leaves removed or newly excluded remote files in place."
+[sync_ignore_on]
+other = "Git ignore rules: enabled"
+[sync_ignore_off]
+other = "Git ignore rules: disabled; Loaf exclusions still apply"

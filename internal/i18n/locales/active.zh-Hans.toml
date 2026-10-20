@@ -136,3 +136,91 @@ other = "远端架构须为 x86_64 或 aarch64。"
 other = "远端目录或已存在的父目录不可写或不可进入。"
 [REMOTE_RSYNC_MISSING]
 other = "远端缺少 rsync，请在同步前安装。"
+[source_read]
+other = "无法选择项目源码，请检查项目目录及文件读取权限。"
+[source_git]
+other = "无法枚举 Git 工作文件，请检查原生 git 是否能够访问该仓库。"
+[source_encoding]
+other = "源码路径不是有效的 UTF-8，请重命名后再同步。"
+[source_submodule]
+other = "嵌套仓库或子模块 {{.Path}} 需要作为独立项目同步。"
+[sync_exclude]
+other = "sync.exclude 仅接受追加的 Gitignore 风格排除规则，不支持否定规则或内嵌换行。"
+[sync_outputs]
+other = "输出路径须为项目内的相对子路径，不允许 . 或 .. 路径分量。"
+[sync_rsync_missing]
+other = "系统 rsync 不可用，请安装并确保 PATH 中可以找到 rsync。"
+[sync_canceled]
+other = "源码同步已取消，中断的缓存不能用于启动新任务。"
+[sync_failed]
+other = "源码同步未完成，请查看下方 SSH/rsync 原始诊断。"
+[sync_retry]
+other = "重新运行 loaf sync 可修复缓存，已有任务使用独立副本，不受影响。"
+[sync_busy]
+other = "另一次源码同步或工作副本复制正在持有该项目的远端锁，请等待完成后重试。"
+[sync_unowned]
+other = "远端目录非空，且不属于 Loaf 受管目录。"
+[sync_mismatch]
+other = "远端目录属于另一个 Loaf 项目。"
+[sync_unsafe]
+other = "远端项目或缓存路径不安全，或其中的目录为符号链接。"
+[sync_version]
+other = "远端接收器拒绝了传输格式或 rsync 参数，请重新构建 CLI 并检查已安装 rsync 的能力。"
+[sync_write]
+other = "无法更新远端缓存，请检查目录权限及可用磁盘空间。"
+[sync_directory_hint]
+other = "请设置独立的空 remote_dir，或使用已属于当前项目的目录；Loaf 不会接管已有文件。"
+[sync_short]
+other = "预览选中的工作源码。"
+[flag_dry_run]
+other = "预览本地文件选择及排除原因，不建立连接或保存状态。"
+[sync_start]
+other = "正在同步所选文件：{{.Count}} -> {{.Target}}"
+[sync_preview]
+other = "本地源码预览，不建立连接或改动远端。"
+[sync_done]
+other = "源码缓存已同步。"
+[sync_selection]
+other = "所选文件：{{.Count}}（{{.Bytes}} 字节）"
+[sync_changes]
+other = "更新文件：{{.Count}}"
+[sync_cache]
+other = "远端缓存：{{.Path}}"
+[sync_exclusions]
+other = "排除的路径及规则："
+[sync_reason_excluded]
+other = "源码规则排除"
+[sync_reason_outputs]
+other = "保留给实验输出"
+[sync_reason_private_state]
+other = "本地 Loaf 私有状态"
+[sync_reason_gitignore]
+other = "Git 规则忽略"
+[sync_reason_unsafe_link]
+other = "绝对链接或越界链接不可移植"
+[sync_reason_broken_link]
+other = "链接目标不存在或不可访问"
+[sync_reason_excluded_link_target]
+other = "链接目标未被选中"
+[sync_reason_special_file]
+other = "不是普通文件或符号链接"
+[sync_mode]
+other = "同步模式必须是 mirror 或 update。"
+[flag_sync_mode]
+other = "选择 mirror 或 update，覆盖项目及全局设置。"
+[flag_respect_gitignore]
+other = "遵循 Git 跟踪及忽略规则，使用 =false 关闭。"
+[flag_sync_exclude]
+other = "追加一条排除规则，可重复指定。"
+[sync_policy]
+other = "同步模式：{{.Mode}}"
+[sync_mode_mirror]
+other = "镜像（mirror）"
+[sync_mode_update]
+other = "只覆盖（update）"
+[sync_update_warning]
+other = "只覆盖模式会保留远端已在本地删除或新被排除的旧文件。"
+[sync_ignore_on]
+other = "Git 忽略规则：已启用"
+[sync_ignore_off]
+other = "Git 忽略规则：已关闭，Loaf 排除规则仍生效"

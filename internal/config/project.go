@@ -20,9 +20,7 @@ type ProjectFile struct {
         Setup   string            `toml:"setup"`
         Env     map[string]string `toml:"env"`
     }   `toml:"run"`
-    Sync struct {
-        Exclude []string `toml:"exclude"`
-    }   `toml:"sync"`
+    Sync    SyncSettings `toml:"sync"`
     Outputs struct {
         Paths []string `toml:"paths"`
     }   `toml:"outputs"`
@@ -47,6 +45,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
             }
             if c.RemoteDir != "" && !ValidRemotePath(c.RemoteDir) {
                 return "", c, fault.New("BAD_CONFIG", "invalid_remote", nil)
+            }
+            if _, err := ResolveSync(c.Sync); err != nil {
+                return "", c, err
             }
             return dir, c, nil
         }

@@ -6,7 +6,7 @@
 
 Loaf keeps remote machine addresses, project selections, and environment checks close to your code. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: `add`, `use`, `check`, and `version` are available from source. Source sync, the background-run CLI, logs, and result downloads are still being built.
+> Early development: `add`, `use`, `check`, and `version` are available from source. Local source previews are available with sync --dry-run. Remote source transfer, the background-run CLI, logs, and result downloads are still being built.
 
 ## Build from source
 
@@ -46,6 +46,20 @@ loaf check --runner
 Normal `check` only observes the remote environment. `--runner` additionally uploads the matching bundled executable into a private, versioned Loaf directory and verifies its version. It does not start an experiment or install Python, uv, CUDA, or project dependencies.
 
 Python, uv, and GPU tools are optional observations. Their absence does not make a CPU-capable machine fail the check. Missing rsync, unsupported platforms, or an unwritable remote location do.
+
+## Preview working sources
+
+```bash
+loaf sync --dry-run
+loaf sync --dry-run --mode update --respect-gitignore=false --exclude 'scratch/'
+loaf sync --dry-run --json
+```
+
+This command selects local working files and reports policy and exclusions. It requires no target, connection, or runner and creates no project state. File transfer is not available yet; --dry-run is required.
+
+Git projects include tracked working files and nonignored new files, preserving nested ignore and negation rules. Non-Git projects read nested .gitignore files. Loaf additionally excludes virtual environments, caches, weights, private-key names, .env files, and output paths, even when tracked. Safe relative links to selected paths are preserved; absolute, escaping, broken, or excluded-target links are reported and skipped.
+
+Optional project and user [sync] settings support mode = "mirror" or "update", respect_gitignore = true or false, and exclude = ["data/"]. Flags override project settings, then user settings, then built-ins (mirror and true); each scalar inherits separately. Exclusions append and cannot negate built-in exclusions. The preview displays the effective policy. Update mode retains removed/newly excluded remote files when transfer is added; mirror selects exact source-set convergence.
 
 ## Project configuration
 

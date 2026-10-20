@@ -3,6 +3,7 @@ module github.com/elebirds/loaf
 go 1.27.0
 
 require (
+	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/spf13/cobra v1.10.2
@@ -14,6 +15,7 @@ require (
 )
 
 require (
+	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect

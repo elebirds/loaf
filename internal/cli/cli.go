@@ -225,7 +225,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         return c.Help()
     }}
     root.SetHelpCommand(help)
-    root.AddCommand(add, use, check, version)
+    root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
     err := earlyErr
     if err == nil {
         err = langErr
@@ -386,6 +386,8 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         fmt.Fprintln(out, l.Text("added", map[string]any{"Target": r.Target, "Destination": r.Destination}))
     case useResult:
         fmt.Fprintln(out, l.Text("selected", map[string]any{"Root": r.Root, "Target": r.Target}))
+    case syncResult:
+        printSync(out, r, l)
     case checkResult:
         fmt.Fprintln(out, l.Text("check_heading", map[string]any{"Target": r.Target}))
         if r.Report.OS == "" {

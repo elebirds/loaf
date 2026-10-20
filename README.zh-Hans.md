@@ -6,7 +6,7 @@
 
 Loaf 在项目目录中管理远端机器地址、项目选择和环境检查。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 早期开发版本：目前可从源码使用 `add`、`use`、`check` 和 `version`。源码同步、后台运行 CLI、日志及结果下载仍在开发中。
+> 早期开发版本：目前可从源码使用 `add`、`use`、`check` 和 `version`。可用 sync --dry-run 在本地预览源码。远端传输、后台运行 CLI、日志及结果下载仍在开发中。
 
 ## 从源码构建
 
@@ -46,6 +46,20 @@ loaf check --runner
 普通 `check` 只读取远端环境。`--runner` 会额外将匹配的内置封装上传到私有、带版本的 Loaf 目录，并验证版本；不启动实验，也不安装 Python、uv、CUDA 或项目依赖。
 
 Python、uv 和 GPU 工具属于可选检查项，缺失时不会让能够执行 CPU 程序的机器检查失败。缺少 rsync、不支持的平台或不可写的远端位置则会报告问题。
+
+## 预览工作源码
+
+```bash
+loaf sync --dry-run
+loaf sync --dry-run --mode update --respect-gitignore=false --exclude 'scratch/'
+loaf sync --dry-run --json
+```
+
+命令在本地选择工作文件，显示策略及排除结果，不需要目标、连接或封装，也不创建项目状态。当前尚不传输文件，必须显式提供 --dry-run。
+
+Git 项目包含已跟踪的工作文件及未被忽略的新文件，保留嵌套忽略及否定语义；非 Git 项目读取嵌套 .gitignore。Loaf 还会排除环境、缓存、权重、私钥名称、.env 和输出路径，即使已经跟踪。保留指向已选路径的安全相对链接，跳过并报告绝对、越界、失效和目标未选中的链接。
+
+项目和用户配置的 [sync] 支持 mode = "mirror" 或 "update"、respect_gitignore = true 或 false，以及 exclude = ["data/"]。按参数、项目、用户、内置默认（mirror 和 true）的顺序逐项继承；排除项追加，不能恢复默认排除项。预览显示有效策略。后续传输中的 update 会保留远端已删除或新被排除的旧文件，mirror 则收敛到所选源码集合。
 
 ## 项目配置
 

@@ -33,6 +33,7 @@ type Target struct {
 type Global struct {
     FormatVersion int               `toml:"format_version"`
     Language      string            `toml:"language,omitempty"`
+    Sync          SyncSettings      `toml:"sync,omitempty"`
     Targets       map[string]Target `toml:"targets"`
 }
 
@@ -84,6 +85,9 @@ func (s *Store) Load() (Global, error) {
     }
     if c.Targets == nil {
         c.Targets = map[string]Target{}
+    }
+    if _, err := ResolveSync(c.Sync); err != nil {
+        return c, err
     }
     return c, nil
 }

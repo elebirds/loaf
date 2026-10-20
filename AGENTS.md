@@ -130,3 +130,9 @@ A real GPU workflow is separate acceptance work on an explicitly authorized exis
 - Before handing off, inspect the complete affected diff, check public-contract consistency, and remove debug output or accidental artifacts. Update this guide when real commands or package boundaries change; keep it independently usable without local planning notes.
 - When commits are authorized, use English subjects and bodies in `type(module): description` format, for example `feat(cli): add machine connection management`. Group coherent, tested behavior changes; describe the change rather than milestone codes.
 - Summarize the result, validation actually performed, and material unresolved limitations. Separate build success from runtime evidence. Do not commit, push, tag, publish, or modify a real server without the corresponding user authorization.
+
+## Local source previews
+
+sync --dry-run selects current local files and effective policy without SSH, deployment, a target, or state writes. Real transfer is not available yet. Preserve nested Git tracking/ignore semantics, safe relative links, default exclusions, and output exclusions.
+
+Resolve sync scalars by flags, project, user, then defaults (mirror and respect_gitignore=true), preserving explicit false. Append exclusions across scopes; they cannot negate built-ins. Update mode is an explicit policy choice that retains removed/excluded remote cache files when transfer is available.

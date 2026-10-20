@@ -10,6 +10,7 @@ import (
     "github.com/elebirds/loaf/internal/cli"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
     "golang.org/x/term"
 )
@@ -34,12 +35,14 @@ func main() {
         env[k] = os.Getenv(k)
     }
     var checker cli.Checker = unavailableSSH{}
+    var runner cli.RunnerVerifier
     if binary, err := exec.LookPath("ssh"); err == nil {
         client := &ssh.Client{Binary: binary}
         checker = client
+        runner = execution.Bootstrap{Remote: client}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME")), Checker: checker, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME")), Checker: checker, Runner: runner, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
 }

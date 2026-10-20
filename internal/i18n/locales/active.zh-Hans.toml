@@ -42,6 +42,14 @@ other = "远端基目录；各项目使用独立子目录。"
 other = "明确替换已有的目标别名。"
 [flag_timeout]
 other = "连接及环境检查的最长时间。"
+[flag_runner]
+other = "同时验证内置远端封装；会在远端写入带版本的 Loaf 文件。"
+[runner_missing]
+other = "缺少远端封装资源，请使用 bash scripts/build.sh 构建完整 CLI。"
+[runner_failed]
+other = "远端封装部署或版本验证失败，请检查私有目录的执行权限及 SSH 访问。"
+[runner_verified]
+other = "已验证远端封装 {{.Version}}：{{.Path}}"
 [invalid_flags]
 other = "无法解析命令选项，请检查选项名称及取值。"
 [invalid_command]

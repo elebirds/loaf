@@ -17,6 +17,7 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/i18n"
+    execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
     "github.com/elebirds/loaf/internal/wire"
     "github.com/spf13/cobra"
@@ -29,10 +30,16 @@ type Checker interface {
     Check(context.Context, config.Target, string, bool) (ssh.Report, error)
 }
 
+// RunnerVerifier is the optional, explicit runner deployment check.
+type RunnerVerifier interface {
+    Verify(context.Context, config.Target, string, bool) (execution.RunnerInfo, error)
+}
+
 // Options are assembled by the executable, not looked up inside command handlers.
 type Options struct {
     Store       *config.Store
     Checker     Checker
+    Runner      RunnerVerifier
     CWD         string
     Env         map[string]string
     In          io.Reader
@@ -63,9 +70,10 @@ type useResult struct {
     Root      string `json:"root"`
 }
 type checkResult struct {
-    Target    string     `json:"target"`
-    ProjectID string     `json:"project_id"`
-    Report    ssh.Report `json:"report"`
+    Target    string                `json:"target"`
+    ProjectID string                `json:"project_id"`
+    Report    ssh.Report            `json:"report"`
+    Runner    *execution.RunnerInfo `json:"runner,omitempty"`
 }
 
 // Execute runs one command and returns the public operation exit code.
@@ -157,6 +165,8 @@ func Execute(ctx context.Context, args []string, o Options) int {
     }
     check := &cobra.Command{Use: "check", Short: l.Text("check_short"), Args: arguments(0, 0)}
     var timeout time.Duration
+    var verifyRunner bool
+    check.Flags().BoolVar(&verifyRunner, "runner", false, l.Text("flag_runner"))
     check.Flags().DurationVar(&timeout, "timeout", 20*time.Second, l.Text("flag_timeout"))
     check.RunE = func(cmd *cobra.Command, _ []string) error {
         if timeout <= 0 {
@@ -189,6 +199,17 @@ func Execute(ctx context.Context, args []string, o Options) int {
         result = checked
         if err != nil {
             return err
+        }
+        if verifyRunner {
+            if o.Runner == nil {
+                return fault.New("BUILD_REQUIRED", "runner_missing", nil)
+            }
+            verified, err := o.Runner.Verify(requestCtx, t, r.Arch, jsonMode || !o.Interactive)
+            if err != nil {
+                return err
+            }
+            checked.Runner = &verified
+            result = checked
         }
         return nil
     }
@@ -398,6 +419,9 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         }
         if r.Report.GPU != "" {
             fmt.Fprintf(out, "%s: %s\n", l.Text("gpu"), r.Report.GPU)
+        }
+        if r.Runner != nil {
+            fmt.Fprintln(out, l.Text("runner_verified", map[string]any{"Version": r.Runner.Version, "Path": r.Runner.Path}))
         }
         for _, issue := range r.Report.Issues {
             fmt.Fprintln(out, "- "+l.Text(issue))

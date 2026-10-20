@@ -11,12 +11,15 @@ import (
     "os/exec"
     "path/filepath"
     "strings"
+    "sync"
     "testing"
     "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/wire"
 )
 
 type fixture struct {
@@ -124,7 +127,7 @@ func cli(t *testing.T, dir string, args ...string) (int, []byte) {
     return code, out
 }
 
-func TestSSHConnectionsAndEnvironment(t *testing.T) {
+func TestSSHAndDetachedRunner(t *testing.T) {
     if os.Getenv("LOAF_INTEGRATION") != "1" {
         t.Skip("run bash scripts/integration.sh for isolated SSH tests")
     }
@@ -163,5 +166,122 @@ func TestSSHConnectionsAndEnvironment(t *testing.T) {
     spacedTarget.Args = []string{"-F", spaced}
     if _, err := f.client.Check(ctx, spacedTarget, "~/projects/test", true); err != nil {
         t.Fatal(err)
+    }
+    code, out := cli(t, project, "check", "--runner", "--timeout", "30s", "--json")
+    if code != 0 {
+        t.Fatalf("runner verification: %d %s", code, out)
+    }
+    var checked struct {
+        Data struct {
+            Runner execution.RunnerInfo `json:"runner"`
+        }
+    }
+    if err := json.Unmarshal(out, &checked); err != nil || checked.Data.Runner.Path == "" || checked.Data.Runner.Version != wire.Version || checked.Data.Runner.Bytes == 0 {
+        t.Fatal(string(out), err)
+    }
+    runner := checked.Data.Runner.Path
+    root := "/home/researcher/project space 中文"
+    f.shell(`mkdir -p "$1/cache"; printf '%s\n' project >"$1/.loaf-project"; printf '%s\n' "$2" >"$1/cache/train.sh"`, root, "echo tick; while [ ! -f release ]; do echo tick; sleep .05; done; echo done; exit 7")
+    control := func(action, id string, args ...string) (*wire.RunRecord, error) {
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        return f.client.Control(ctx, f.target, runner, wire.Request{FormatVersion: 1, Version: wire.Version, Action: action, Root: root, ProjectID: "project", RunID: id, Args: args}, true)
+    }
+    record, err := control("start", "completed", "/bin/sh", "train.sh")
+    if err != nil || record.Status != "running" {
+        t.Fatal(record, err)
+    }
+    // Every control call has already exited its SSH process. The command keeps running.
+    record, err = control("status", "completed")
+    if err != nil || record.Status != "running" {
+        t.Fatal(record, err)
+    }
+    f.shell(`test -s "$1/runs/completed/output.log"; printf '%s' changed >"$1/cache/train.sh"; grep -q 'echo tick' "$1/runs/completed/work/train.sh"; touch "$1/runs/completed/work/release"`, root)
+    wait(t, 5*time.Second, func() bool {
+        record, err = control("status", "completed")
+        return err == nil && record.Status == "failed"
+    })
+    if record.ExitCode == nil || *record.ExitCode != 7 {
+        t.Fatal(record)
+    }
+    if !strings.Contains(f.shell(`cat "$1/runs/completed/output.log"`, root), "done") {
+        t.Fatal("logs lost")
+    }
+    t.Logf("embedded runner %d bytes; isolated source copy %d ms; disconnected run exit=%d", checked.Data.Runner.Bytes, record.CopyMillis, *record.ExitCode)
+    f.shell(`printf '%s\n' original >"$1/cache/data"`, root)
+    reqArgs := []string{"/bin/sh", "-c", "echo once >> launch-count; while [ ! -f release ]; do sleep .05; done"}
+    var wg sync.WaitGroup
+    errs := make(chan error, 2)
+    for n := 0; n < 2; n++ {
+        wg.Add(1)
+        go func() { defer wg.Done(); _, err := control("start", "duplicate", reqArgs...); errs <- err }()
+    }
+    wg.Wait()
+    close(errs)
+    for err := range errs {
+        if err != nil && err.Error() != "SUBMISSION_UNKNOWN" {
+            t.Fatal(err)
+        }
+    }
+    f.shell(`test "$(wc -l <"$1/runs/duplicate/work/launch-count")" -eq 1; touch "$1/runs/duplicate/work/release"`, root)
+    command(t, "docker", "exec", "-d", "--user", "researcher", f.id, "/bin/sh", "-c", `echo $$ >"$1/sentinel.pid"; exec sleep 60`, "--", root)
+    record, err = control("start", "stoppable", "/bin/sh", "-c", `trap '' TERM; sh -c 'trap "" TERM; echo $$ > worker.pid; while :; do sleep .1; done' & wait`)
+    if err != nil {
+        t.Fatal(err)
+    }
+    wait(t, 5*time.Second, func() bool {
+        return exec.Command("docker", "exec", f.id, "test", "-s", root+"/runs/stoppable/work/worker.pid").Run() == nil
+    })
+    worker := f.shell(`cat "$1/runs/stoppable/work/worker.pid"`, root)
+    if _, err := control("stop", "stoppable"); err != nil {
+        t.Fatal(err)
+    }
+    wait(t, 5*time.Second, func() bool {
+        record, err = control("status", "stoppable")
+        return err == nil && record.Status == "stopped"
+    })
+    if record.Signal == "" || record.ExitCode != nil {
+        t.Fatalf("fabricated exit result: %+v", record)
+    }
+    f.shell(`if [ -e "/proc/$2/stat" ]; then test "$(awk '{print $3}' "/proc/$2/stat")" = Z; fi; kill -0 "$(cat "$1/sentinel.pid")"`, root, worker)
+    repeat, err := control("stop", "stoppable")
+    if err != nil || repeat.Status != "stopped" {
+        t.Fatal(repeat, err)
+    }
+    for _, kind := range []string{"auth", "trust"} {
+        data, err := os.ReadFile(f.config)
+        if err != nil {
+            t.Fatal(err)
+        }
+        if kind == "auth" {
+            data = bytes.ReplaceAll(data, []byte(f.key), []byte(filepath.Join(f.dir, "missing-key")))
+        } else {
+            empty := filepath.Join(f.dir, "empty-known-hosts")
+            if err := os.WriteFile(empty, nil, 0600); err != nil {
+                t.Fatal(err)
+            }
+            data = bytes.ReplaceAll(data, []byte(f.known), []byte(empty))
+        }
+        broken := filepath.Join(f.dir, kind+"-config")
+        if err := os.WriteFile(broken, data, 0600); err != nil {
+            t.Fatal(err)
+        }
+        code, out := cli(t, project, "add", kind, "--ssh", "ssh -F "+ssh.Quote(broken)+" fixture", "--json")
+        if code != 0 {
+            t.Fatal(string(out))
+        }
+        code, out = cli(t, project, "check", "--target", kind, "--json")
+        if code != 1 || !strings.Contains(string(out), `"code":"SSH_FAILED"`) {
+            t.Fatal(code, string(out))
+        }
+    }
+    wait(t, 5*time.Second, func() bool {
+        return exec.Command("docker", "exec", f.id, "/bin/sh", "-c", "! pgrep -u researcher -x loaf-runner").Run() == nil
+    })
+    // Execute Linux-only process identity and protocol tests on the actual Linux kernel.
+    remoteTest := os.Getenv("LOAF_REMOTE_TEST")
+    if remoteTest != "" {
+        command(t, "docker", "cp", remoteTest, f.id+":/tmp/remote.test")
+        command(t, "docker", "exec", "--user", "researcher", f.id, "/tmp/remote.test", "-test.v")
     }
 }

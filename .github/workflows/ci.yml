@@ -1,0 +1,38 @@
+name: CI
+on:
+    push:
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    check:
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+            - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+              with:
+                  go-version: '1.27.1'
+            - run: bash scripts/check.sh
+            - name: Check module declarations
+              run: go mod tidy && git diff --exit-code -- go.mod go.sum
+            - name: Build supported targets
+              if: matrix.os == 'ubuntu-latest'
+              env:
+                  VERSION: ci-${{ github.sha }}
+                  LOAF_BUILD_TARGETS: linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+              run: bash scripts/build.sh
+    ssh:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+            - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+              with:
+                  go-version: '1.27.1'
+            - run: bash scripts/integration.sh

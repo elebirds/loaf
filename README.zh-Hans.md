@@ -18,7 +18,7 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-构建在 `dist/` 生成本地可执行文件及压缩包。目前尚无正式安装包，也可以将 `dist/loaf` 放入已在 PATH 中的目录。
+构建会内置 Linux amd64、arm64 远端封装，并在 `dist/` 生成本地可执行文件及压缩包。目前尚无正式安装包，也可以将 `dist/loaf` 放入已在 PATH 中的目录。
 
 ## 配置科研机器
 
@@ -36,6 +36,14 @@ loaf check
 已有 SSH Host 别名时，使用 `loaf add lab --ssh lab-gpu`。跳板配置仍由 SSH Config 管理，也接受 `-J`、密钥、端口和显式 `-F` 配置文件。粘贴内容只能包含连接参数，不能夹带远端命令或 Shell 表达式。修改已有别名时使用 `--replace`。
 
 `add` 仅在本地保存连接，`check` 才会实际连接。JSON 和非交互终端检查不会询问密码或主机信任；必要时先使用原生 SSH 建立访问。Loaf 不保存密码，也不关闭主机密钥验证。
+
+### 显式检查远端封装部署
+
+```bash
+loaf check --runner
+```
+
+普通 `check` 只读取远端环境。`--runner` 会额外将匹配的内置封装上传到私有、带版本的 Loaf 目录，并验证版本；不启动实验，也不安装 Python、uv、CUDA 或项目依赖。
 
 Python、uv 和 GPU 工具属于可选检查项，缺失时不会让能够执行 CPU 程序的机器检查失败。缺少 rsync、不支持的平台或不可写的远端位置则会报告问题。
 
@@ -73,7 +81,7 @@ bash scripts/check.sh        # 单元、静态、竞态、格式及漏洞检查
 bash scripts/integration.sh  # 真实 SSH 与 Linux 进程测试，需要 Docker
 ```
 
-集成环境使用临时密钥，验证发行包中的连接检查、跳板机和带空格的 SSH 配置路径，不接触科研服务器。
+集成环境使用临时密钥和 CPU 脚本，验证发行包中的封装部署、跳板连接、断线执行、退出结果、重复提交及子进程停止，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。
 
 Loaf 不负责租用机器、分配 GPU、自动修复环境或替代实验追踪工具。
 

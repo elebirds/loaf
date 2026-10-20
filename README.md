@@ -18,7 +18,7 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-The build produces a local executable plus a compressed archive in `dist/`. There is no installable release yet. You can also place `dist/loaf` in a directory already on your PATH.
+The build embeds Linux amd64 and arm64 runners and produces a local executable plus a compressed archive in `dist/`. There is no installable release yet. You can also place `dist/loaf` in a directory already on your PATH.
 
 ## Set up a research machine
 
@@ -36,6 +36,14 @@ loaf check
 Already have an SSH Host alias? Use `loaf add lab --ssh lab-gpu`. Connections involving jump hosts remain in your SSH Config; `-J`, keys, ports, and an explicit `-F` config file are also accepted. Pasted input must contain only connection arguments, not a remote command or Shell expression. To change an existing alias, use `--replace`.
 
 `add` saves the connection locally; `check` actually connects. JSON and non-TTY checks do not ask for passwords or host trust. Establish access with native SSH first when needed. Loaf never saves passwords or disables host-key verification.
+
+### Check runner deployment explicitly
+
+```bash
+loaf check --runner
+```
+
+Normal `check` only observes the remote environment. `--runner` additionally uploads the matching bundled executable into a private, versioned Loaf directory and verifies its version. It does not start an experiment or install Python, uv, CUDA, or project dependencies.
 
 Python, uv, and GPU tools are optional observations. Their absence does not make a CPU-capable machine fail the check. Missing rsync, unsupported platforms, or an unwritable remote location do.
 
@@ -73,7 +81,7 @@ bash scripts/check.sh        # Unit, static, race, format, and vulnerability che
 bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
 ```
 
-The integration fixture uses temporary keys and verifies packaged connection checks, jump hosts, and spaced SSH configuration paths without touching research servers.
+The integration fixture uses temporary keys and CPU scripts. It tests packaged runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, and stopping child processes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
 Loaf does not provision machines, schedule GPUs, automatically repair environments, or replace experiment tracking.
 

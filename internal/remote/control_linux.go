@@ -39,7 +39,13 @@ func Serve(in io.Reader, out io.Writer) int {
         err = errors.New("BAD_REQUEST")
     }
     response := wire.Response{FormatVersion: 1, Version: wire.Version}
-    if err == nil && (req.Action == "observe" || req.Action == "follow") {
+    if err == nil && req.Action == "outputs" {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        selection, selectionErr := Outputs(ctx, req)
+        response.Outputs = &selection
+        err = selectionErr
+    } else if err == nil && (req.Action == "observe" || req.Action == "follow") {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()
         if req.Action == "follow" {
@@ -59,6 +65,10 @@ func Serve(in io.Reader, out io.Writer) int {
     response.OK = err == nil
     if err != nil {
         response.Error = &wire.Error{Code: err.Error()}
+        var pathErr *outputError
+        if errors.As(err, &pathErr) {
+            response.Error.Path = pathErr.path
+        }
     }
     if err := json.NewEncoder(out).Encode(response); err != nil {
         return 1

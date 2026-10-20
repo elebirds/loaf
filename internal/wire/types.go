@@ -29,6 +29,7 @@ type Request struct {
     WaitMillis    int64             `json:"wait_millis,omitempty"`
     Tail          int               `json:"tail,omitempty"`
     GraceMillis   *int64            `json:"grace_millis,omitempty"`
+    Outputs       []string          `json:"outputs,omitempty"`
 }
 
 // RunRecord is persisted by the remote execution owner.
@@ -53,16 +54,24 @@ type RunRecord struct {
 // Error is machine-readable; only the local CLI chooses explanatory language.
 type Error struct {
     Code string `json:"code"`
+    Path string `json:"path,omitempty"`
 }
 
 // Response is the single control response on SSH stdout.
 type Response struct {
-    FormatVersion int        `json:"format_version"`
-    Version       string     `json:"version"`
-    OK            bool       `json:"ok"`
-    Record        *RunRecord `json:"record,omitempty"`
-    Error         *Error     `json:"error,omitempty"`
-    Log           *LogChunk  `json:"log,omitempty"`
+    FormatVersion int              `json:"format_version"`
+    Version       string           `json:"version"`
+    OK            bool             `json:"ok"`
+    Record        *RunRecord       `json:"record,omitempty"`
+    Error         *Error           `json:"error,omitempty"`
+    Log           *LogChunk        `json:"log,omitempty"`
+    Outputs       *OutputSelection `json:"outputs,omitempty"`
+}
+
+// OutputSelection is a transient read-only selection, not an artifact inventory.
+type OutputSelection struct {
+    Available []string `json:"available"`
+    Missing   []string `json:"missing"`
 }
 
 // LogChunk is a bounded UTF-8 view of the durable log; offset counts source bytes.

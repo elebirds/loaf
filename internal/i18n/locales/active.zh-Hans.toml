@@ -405,3 +405,57 @@ other = "此任务绑定的旧封装不支持配置停止宽限期。"
 
 [stop_grace_unsupported_hint]
 other = "移除 --grace 及项目或用户 stop.grace 设置，再按任务原封装的默认策略重试停止。"
+
+[pull_base_dir]
+other = "结果根目录必须是独立目录，不能是项目根目录或其上级目录。"
+
+[pull_paths]
+other = "输出路径必须是非空、明确的工作目录相对子路径，不能选择工作目录本身或越界路径。"
+
+[pull_destination]
+other = "下载目的地不安全，请选择独立目录，且不要通过链接写到目录范围之外。"
+
+[pull_platform]
+other = "结果下载需要 x86_64 或 aarch64 架构的 Linux 机器。"
+
+[pull_rsync_missing]
+other = "下载输出需要系统 rsync。"
+
+[pull_failed]
+other = "输出下载未完成。"
+
+[pull_retry]
+other = "检查连接、磁盘空间和权限后，对同一任务重新执行 pull；已有完整文件会保留。"
+
+[pull_unsafe]
+other = "结果下载拒绝了不安全路径、不支持的文件类型或归属不匹配的项目。"
+
+[pull_path_hint]
+other = "请选择本任务工作目录内的路径，并将相对链接的目标保持在选定输出范围内。"
+
+[pull_format]
+other = "输出读取封装或任务记录格式不支持或无效。"
+
+[pull_format_hint]
+other = "检查客户端构建与保存的任务位置，不要为取回文件而改写任务记录或重新训练。"
+
+[pull_missing]
+other = "部分选定输出不存在，下载结果不完整。"
+
+[pull_missing_hint]
+other = "查看 missing_paths；存在的选定输出会尽可能下载。可用 --path 缩小范围，或在输出写入后重试。"
+
+[pull_read]
+other = "无法读取远端的选定输出。"
+
+[pull_canceled]
+other = "输出下载已取消，远端实验不受影响。"
+
+[pull_write]
+other = "无法写入本地结果目录。"
+
+[pull_busy]
+other = "另一次下载正在写入同一目的地，请等待其完成或用 --to 选择其他目录。"
+
+[sync_reason_results]
+other = "本地已下载的结果"

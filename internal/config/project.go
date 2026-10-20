@@ -18,6 +18,7 @@ type ProjectFile struct {
     Run       RunSettings  `toml:"run"`
     Logs      LogSettings  `toml:"logs"`
     Stop      StopSettings `toml:"stop"`
+    Pull      PullSettings `toml:"pull"`
     Sync      SyncSettings `toml:"sync"`
     Outputs   struct {
         Paths []string `toml:"paths"`
@@ -54,6 +55,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
                 return "", c, err
             }
             if _, err := ResolveStopGrace(c.Stop); err != nil {
+                return "", c, err
+            }
+            if _, err := ResolvePull(c.Pull); err != nil {
                 return "", c, err
             }
             return dir, c, nil

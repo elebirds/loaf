@@ -405,3 +405,57 @@ other = "This task's saved runner does not support configurable stop grace."
 
 [stop_grace_unsupported_hint]
 other = "Remove --grace and project/user stop.grace settings, then retry stop using the task's original runner default."
+
+[pull_base_dir]
+other = "The result base must be a separate directory, not the project root or an ancestor."
+
+[pull_paths]
+other = "Output paths must be nonempty, concrete work-relative subpaths, not the work root or escaping paths."
+
+[pull_destination]
+other = "The download destination is unsafe. Choose a separate directory without escaping links."
+
+[pull_platform]
+other = "Output retrieval requires a Linux machine with x86_64 or aarch64 architecture."
+
+[pull_rsync_missing]
+other = "System rsync is required to download outputs."
+
+[pull_failed]
+other = "Output download did not complete."
+
+[pull_retry]
+other = "Check access, disk space and permissions, then repeat pull for the same run. Existing complete files are retained."
+
+[pull_unsafe]
+other = "Output retrieval rejected an unsafe path, unsupported file type, or mismatched project."
+
+[pull_path_hint]
+other = "Select paths within this run's work directory and keep relative links inside the selected output trees."
+
+[pull_format]
+other = "The output helper or run record has an unsupported or invalid format."
+
+[pull_format_hint]
+other = "Check the client build and saved run location. Do not rewrite the run record or restart training to retrieve files."
+
+[pull_missing]
+other = "Some selected outputs do not exist; the download is incomplete."
+
+[pull_missing_hint]
+other = "Inspect missing_paths; existing selections were downloaded when possible. Use --path to choose a narrower set, or retry after outputs are written."
+
+[pull_read]
+other = "Selected outputs could not be read on the remote machine."
+
+[pull_canceled]
+other = "Output download was canceled. The remote experiment is unchanged."
+
+[pull_write]
+other = "The local result directory could not be written."
+
+[pull_busy]
+other = "Another download is writing this destination. Wait for it to finish or choose a different --to directory."
+
+[sync_reason_results]
+other = "local downloaded results"

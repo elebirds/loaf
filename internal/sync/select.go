@@ -18,6 +18,7 @@ import (
     gitignore "github.com/denormal/go-gitignore"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/wire"
 )
 
 // File is a selected working file. Safe relative links retain their literal target.
@@ -52,6 +53,7 @@ type SelectOptions struct {
     Exclude          []string
     Outputs          []string
     PrivatePaths     []string
+    ResultsDir       string
 }
 
 // Defaults are name-based exclusions, including secrets even when tracked by Git.
@@ -149,7 +151,7 @@ func Select(ctx context.Context, root string, o SelectOptions) (Plan, error) {
     }
     for i, output := range outputs {
         output = strings.TrimSuffix(output, "/")
-        if !fs.ValidPath(output) || output == "." || strings.ContainsAny(output, "\x00\r\n") {
+        if !wire.ValidOutputPath(output) {
             return p, fault.New("BAD_CONFIG", "sync_outputs", nil)
         }
         outputs[i] = output
@@ -162,6 +164,20 @@ func Select(ctx context.Context, root string, o SelectOptions) (Plan, error) {
         rel, err := filepath.Rel(root, name)
         if err == nil && rel != "." && filepath.IsLocal(rel) {
             private = append(private, filepath.ToSlash(rel))
+        }
+    }
+    results := []string{}
+    if o.ResultsDir != "" {
+        name := o.ResultsDir
+        if canonical, err := filepath.EvalSymlinks(name); err == nil {
+            name = canonical
+        }
+        rel, err := filepath.Rel(root, name)
+        if err == nil && rel == "." {
+            return p, fault.New("BAD_CONFIG", "pull_base_dir", nil)
+        }
+        if err == nil && filepath.IsLocal(rel) {
+            results = append(results, filepath.ToSlash(rel))
         }
     }
     var candidates, parents map[string]bool
@@ -245,7 +261,7 @@ func Select(ctx context.Context, root string, o SelectOptions) (Plan, error) {
             for _, group := range []struct {
                 paths  []string
                 reason string
-            }{{outputs, "outputs"}, {private, "private_state"}} {
+            }{{outputs, "outputs"}, {private, "private_state"}, {results, "results"}} {
                 for _, item := range group.paths {
                     if rel == item || strings.HasPrefix(rel, item+"/") {
                         exclude(rel, group.reason, item, isDir)

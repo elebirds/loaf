@@ -261,7 +261,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
             view.Detail = detail
         }
         code = 1
-        if f.Code == "BAD_CONFIG" {
+        if f.Code == "BAD_CONFIG" || f.Code == "STOP_OPTIONS_UNSUPPORTED" {
             code = 2
         }
         if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" {
@@ -301,7 +301,7 @@ func earlyOptions(args []string) (bool, string, error) {
         if a == "--" {
             break
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" {
             i++
             continue
         }
@@ -359,7 +359,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs") {
+        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs" || c.Name() == "stop") {
             return
         }
         name := "--" + f.Name

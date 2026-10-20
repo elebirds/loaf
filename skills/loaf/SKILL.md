@@ -1,6 +1,6 @@
 ---
 name: loaf
-description: Run local project experiments on existing SSH machines with Loaf, and retrieve their status and logs across sessions. Use for Loaf-managed execution, not machine rental or resource scheduling.
+description: Run and stop local project experiments on existing SSH machines with Loaf, and retrieve their status and logs across sessions. Use for Loaf-managed execution, not machine rental or resource scheduling.
 ---
 
 # Run experiments with Loaf
@@ -34,4 +34,16 @@ Prefer finite queries over a busy polling loop. Log tails are line- and byte-bou
 
 Use explicit argv after `run --` for changing experiment parameters. Optional project `run.command` and `run.setup` are Shell commands; setup runs before each task and its failure prevents training. Setup's `cd`, exports and activation do not persist into the separate training process. Use an explicit interpreter or `uv run`.
 
-Choose data, dependencies, smoke tests and scientific acceptance for the actual experiment. Loaf does not assess metrics or automatically repair environments. Public `stop`, `pull`, `exec`, scheduling and provisioning are not available in this version.
+## Stop the intended run
+
+When stopping is authorized, use the saved run ID:
+
+```bash
+loaf stop <run-id> --json
+```
+
+Loaf requests process-group cleanup and waits for a confirmed result. Do not look up PIDs or send signals yourself. An already completed task returns its original outcome, including a natural failure.
+
+`STOP_UNCONFIRMED` (operation exit 3) means query the same ID with `ps`; do not report the task as stopped. Canceling the client does not withdraw an accepted stop request. Repeating stop does not reset or replace its first grace policy. `STOP_OPTIONS_UNSUPPORTED` (exit 2) means the saved older runner cannot honor the configured grace; report that incompatibility rather than silently discarding the policy.
+
+Choose data, dependencies, smoke tests and scientific acceptance for the actual experiment. Loaf does not assess metrics or automatically repair environments. Public `pull`, `exec`, scheduling and provisioning are not available in this version.

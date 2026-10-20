@@ -62,4 +62,13 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     }
     invoke("ps", ran.Data.ID, "--json")
     invoke("logs", ran.Data.ID, "--json")
+    out = invoke("run", "--json", "--", "/bin/sh", "-c", `trap '' TERM; echo ready >ready; while :; do sleep .05; done`)
+    if err := json.Unmarshal(out, &ran); err != nil {
+        t.Fatal(err)
+    }
+    waitRunFile(t, f, ran.Data, "work/ready")
+    out = invoke("stop", ran.Data.ID, "--grace", "0s", "--json")
+    if json.Unmarshal(out, &ran) != nil || ran.Data.Status != "stopped" || ran.Data.Signal == "" || ran.Data.StopGraceMillis == nil || *ran.Data.StopGraceMillis != 0 {
+        t.Fatal(string(out))
+    }
 }

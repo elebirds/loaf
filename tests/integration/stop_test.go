@@ -1,13 +1,20 @@
 package integration
 
 import (
+    "bytes"
     "context"
+    "encoding/json"
+    "errors"
+    "fmt"
     "os"
     "os/exec"
+    "path/filepath"
+    "strings"
     "testing"
     "time"
 
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/ssh"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -86,4 +93,287 @@ func TestRunnerStopGraceAndGroupCleanup(t *testing.T) {
         t.Fatalf("lost leader result: %+v", r)
     }
     f.shell(`worker=$(cat "$1/runs/children/work/worker.pid"); if [ -e "/proc/$worker/stat" ]; then test "$(awk '{print $3}' "/proc/$worker/stat")" = Z; fi; kill -0 "$(cat "$1/sentinel.pid")"`, root)
+}
+
+func stopProject(t *testing.T, f *fixture) string {
+    t.Helper()
+    project := t.TempDir()
+    for _, args := range [][]string{{"add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "lab", "--json"}} {
+        if code, out := cli(t, project, args...); code != 0 {
+            t.Fatal(code, string(out))
+        }
+    }
+    return project
+}
+
+func waitRunFile(t *testing.T, f *fixture, run execution.View, file string) {
+    t.Helper()
+    wait(t, 5*time.Second, func() bool {
+        return exec.Command("docker", "exec", f.id, "test", "-s", run.RemoteDir+"/runs/"+run.ID+"/"+file).Run() == nil
+    })
+}
+
+func stopCLICommand(ctx context.Context, project string, args ...string) *exec.Cmd {
+    cmd := exec.CommandContext(ctx, os.Getenv("LOAF_BIN"), args...)
+    cmd.Dir = project
+    cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+filepath.Join(project, "config"), "XDG_STATE_HOME="+filepath.Join(project, "state"), "LOAF_LANG=en")
+    return cmd
+}
+
+func TestPublicStopWorkflow(t *testing.T) {
+    if os.Getenv("LOAF_INTEGRATION") != "1" {
+        t.Skip("run bash scripts/integration.sh")
+    }
+    f := newFixture(t)
+    project := stopProject(t, f)
+    sourceFile(t, project, "loaf.toml", "[stop]\ngrace = '1s'\n")
+    started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", `trap 'sleep .4; echo cleaned; exit 23' TERM; echo ready >ready; while :; do sleep .02; done`)
+    waitRunFile(t, f, started, "work/ready")
+    cfg := filepath.Join(project, "config", "loaf", "config.toml")
+    data, err := os.ReadFile(cfg)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if err := os.WriteFile(cfg, append(data, []byte("\n[stop]\ngrace = '0s'\n")...), 0600); err != nil {
+        t.Fatal(err)
+    }
+    // A different default connection and directory must not redirect stop.
+    for _, args := range [][]string{{"add", "other", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json"}, {"use", "other", "--json"}} {
+        if code, out := cli(t, project, args...); code != 0 {
+            t.Fatal(code, string(out))
+        }
+    }
+    sourceFile(t, project, "loaf.toml", "remote_dir = '/home/researcher/not-this-task'\n[stop]\ngrace = '1s'\n")
+    stopped := runCLI(t, project, "stop", "--json")
+    if stopped.ID != started.ID || stopped.Target != "lab" || stopped.Status != "stopped" || stopped.ExitCode == nil || *stopped.ExitCode != 23 || stopped.StopGraceMillis == nil || *stopped.StopGraceMillis != 1000 {
+        t.Fatalf("public stop: %+v", stopped)
+    }
+    before := f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID)
+    repeated := runCLI(t, project, "stop", started.ID, "--grace", "0s", "--json")
+    if repeated.Status != stopped.Status || f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID) != before {
+        t.Fatal("repeated stop changed terminal result")
+    }
+    logs := runCLI(t, project, "logs", started.ID, "--json")
+    if logs.Log == nil || !strings.Contains(logs.Log.Text, "cleaned") {
+        t.Fatal("cleanup log lost", logs)
+    }
+    if code, out := cli(t, project, "use", "lab", "--json"); code != 0 {
+        t.Fatal(code, string(out))
+    }
+    sourceFile(t, project, "loaf.toml", "[run]\nsetup = 'echo ready >ready; while :; do sleep .02; done'\n[stop]\ngrace = '1s'\n")
+    setup := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "touch trained")
+    waitRunFile(t, f, setup, "work/ready")
+    stopped = runCLI(t, project, "stop", setup.ID, "--grace", "0s", "--json")
+    if stopped.Status != "stopped" || stopped.Phase != "setup" || stopped.StopGraceMillis == nil || *stopped.StopGraceMillis != 0 {
+        t.Fatal("setup stop failed", stopped)
+    }
+    f.shell(`test ! -e "$1/runs/$2/work/trained"`, setup.RemoteDir, setup.ID)
+
+    sourceFile(t, project, "loaf.toml", "")
+    orphaned := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", `sh -c 'trap "" TERM; echo $$ >worker.pid; while :; do sleep .05; done' & while [ ! -s worker.pid ]; do sleep .02; done; exit 7`)
+    waitRunFile(t, f, orphaned, "work/worker.pid")
+    var record wire.RunRecord
+    if err := json.Unmarshal([]byte(f.shell(`cat "$1/runs/$2/run.json"`, orphaned.RemoteDir, orphaned.ID)), &record); err != nil {
+        t.Fatal(err)
+    }
+    wait(t, 5*time.Second, func() bool {
+        return exec.Command("docker", "exec", f.id, "/bin/sh", "-c", `test "$(awk '{print $3}' "/proc/$1/stat")" = Z`, "--", fmt.Sprint(record.ChildPID)).Run() == nil
+    })
+    stopped = runCLI(t, project, "stop", orphaned.ID, "--grace", "0s", "--json")
+    if stopped.Status != "stopped" || stopped.ExitCode == nil || *stopped.ExitCode != 7 || stopped.StopGraceMillis == nil || *stopped.StopGraceMillis != 0 {
+        t.Fatal("stop ignored after natural leader exit", stopped)
+    }
+    f.shell(`worker=$(cat "$1/runs/$2/work/worker.pid"); if [ -e "/proc/$worker/stat" ]; then test "$(awk '{print $3}' "/proc/$worker/stat")" = Z; fi`, orphaned.RemoteDir, orphaned.ID)
+    for i := 0; i < 4; i++ {
+        natural := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while [ ! -f release ]; do sleep .02; done; exit 7")
+        waitRunFile(t, f, natural, "work/ready")
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        cmd := stopCLICommand(ctx, project, "stop", natural.ID, "--json")
+        var out, diagnostic bytes.Buffer
+        cmd.Stdout, cmd.Stderr = &out, &diagnostic
+        if err := cmd.Start(); err != nil {
+            cancel()
+            t.Fatal(err)
+        }
+        f.shell(`touch "$1/runs/$2/work/release"`, natural.RemoteDir, natural.ID)
+        err := cmd.Wait()
+        cancel()
+        var response struct {
+            Data execution.View `json:"data"`
+        }
+        if err != nil || diagnostic.Len() != 0 || json.Unmarshal(out.Bytes(), &response) != nil || !wire.Terminal(response.Data.Status) {
+            t.Fatal("natural-exit/stop race", out.String(), diagnostic.String(), err)
+        }
+        result := response.Data
+        if result.Status == "failed" && (result.ExitCode == nil || *result.ExitCode != 7) || result.Status == "stopped" && result.Signal == "" && result.ExitCode == nil {
+            t.Fatal("exit outcome lost", result)
+        }
+        before := f.shell(`cat "$1/runs/$2/run.json"`, natural.RemoteDir, natural.ID)
+        runCLI(t, project, "stop", natural.ID, "--json")
+        if after := f.shell(`cat "$1/runs/$2/run.json"`, natural.RemoteDir, natural.ID); before != after {
+            t.Fatal("stop overwrote natural terminal record")
+        }
+    }
+}
+
+func TestCanceledStopKeepsAcceptedRequest(t *testing.T) {
+    if os.Getenv("LOAF_INTEGRATION") != "1" {
+        t.Skip("run bash scripts/integration.sh")
+    }
+    f := newFixture(t)
+    project := stopProject(t, f)
+    started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", `trap 'while [ ! -f release-cleanup ]; do sleep .02; done; exit 19' TERM; echo ready >ready; while :; do sleep .02; done`)
+    waitRunFile(t, f, started, "work/ready")
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    cmd := stopCLICommand(ctx, project, "stop", started.ID, "--grace", "2s", "--json")
+    var out, diagnostic bytes.Buffer
+    cmd.Stdout, cmd.Stderr = &out, &diagnostic
+    if err := cmd.Start(); err != nil {
+        t.Fatal(err)
+    }
+    waitRunFile(t, f, started, "stop.request")
+    if err := cmd.Process.Signal(os.Interrupt); err != nil {
+        t.Fatal(err)
+    }
+    err := cmd.Wait()
+    var exit *exec.ExitError
+    if !errors.As(err, &exit) || exit.ExitCode() != 3 || diagnostic.Len() != 0 || !bytes.Contains(out.Bytes(), []byte(`"code":"STOP_UNCONFIRMED"`)) || !bytes.Contains(out.Bytes(), []byte(started.ID)) {
+        t.Fatal("canceled confirmation", err, out.String(), diagnostic.String())
+    }
+    f.shell(`touch "$1/runs/$2/work/release-cleanup"`, started.RemoteDir, started.ID)
+    done := runCLI(t, project, "ps", started.ID, "--wait", "5s", "--json")
+    if done.Status != "stopped" || done.ExitCode == nil || *done.ExitCode != 19 {
+        t.Fatal("accepted stop was withdrawn", done)
+    }
+}
+
+func TestPublicStopRefusesLostSupervisor(t *testing.T) {
+    if os.Getenv("LOAF_INTEGRATION") != "1" {
+        t.Skip("run bash scripts/integration.sh")
+    }
+    f := newFixture(t)
+    project := stopProject(t, f)
+    started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while :; do sleep .05; done")
+    waitRunFile(t, f, started, "work/ready")
+    var record wire.RunRecord
+    if err := json.Unmarshal([]byte(f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID)), &record); err != nil {
+        t.Fatal(err)
+    }
+    f.shell(`kill -KILL "$1"`, fmt.Sprint(record.SupervisorPID))
+    wait(t, 5*time.Second, func() bool {
+        observed := runCLI(t, project, "ps", started.ID, "--json")
+        return observed.Status == "unknown"
+    })
+    code, out := cli(t, project, "stop", started.ID, "--json")
+    if code != 3 || !bytes.Contains(out, []byte(`"code":"STOP_UNCONFIRMED"`)) || !bytes.Contains(out, []byte(`"status":"unknown"`)) {
+        t.Fatal(code, string(out))
+    }
+    f.shell(`test ! -e "$1/runs/$2/stop.request"; kill -0 "$3"`, started.RemoteDir, started.ID, fmt.Sprint(record.ChildPID))
+}
+
+func TestLostStopConfirmationQueriesWithoutReplaying(t *testing.T) {
+    if os.Getenv("LOAF_INTEGRATION") != "1" {
+        t.Skip("run bash scripts/integration.sh")
+    }
+    f := newFixture(t)
+    project := stopProject(t, f)
+    realSSH, err := exec.LookPath("ssh")
+    if err != nil {
+        t.Fatal(err)
+    }
+    bin := filepath.Join(f.dir, "stop-fault-bin")
+    if err := os.Mkdir(bin, 0700); err != nil {
+        t.Fatal(err)
+    }
+    counter := filepath.Join(bin, "requests")
+    marker := filepath.Join(bin, "drop-observation")
+    script := `#!/bin/sh
+for argument do
+    case "$argument" in *'__receive'*|*'/bin/sh -s --'*|*'umask 077'*|-V) exec ` + ssh.Quote(realSSH) + ` "$@" ;; esac
+done
+payload=$(mktemp)
+trap 'rm -f "$payload"' EXIT HUP INT TERM
+cat >"$payload"
+if grep -q '"action":"stop"' "$payload"; then
+    printf 'stop\n' >>` + ssh.Quote(counter) + `
+    ` + ssh.Quote(realSSH) + ` "$@" <"$payload" >/dev/null
+    exit 255
+fi
+if [ -e ` + ssh.Quote(marker) + ` ] && grep -q '"action":"observe"' "$payload"; then
+    ` + ssh.Quote(realSSH) + ` "$@" <"$payload" >/dev/null
+    exit 255
+fi
+` + ssh.Quote(realSSH) + ` "$@" <"$payload"
+exit $?
+`
+    if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0700); err != nil {
+        t.Fatal(err)
+    }
+    originalPATH := os.Getenv("PATH")
+    t.Setenv("PATH", bin+string(os.PathListSeparator)+originalPATH)
+    for _, loseObservation := range []bool{false, true} {
+        started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while :; do sleep .02; done")
+        waitRunFile(t, f, started, "work/ready")
+        if loseObservation {
+            if err := os.WriteFile(marker, nil, 0600); err != nil {
+                t.Fatal(err)
+            }
+        }
+        code, out := cli(t, project, "stop", started.ID, "--json")
+        if loseObservation {
+            if code != 3 || !bytes.Contains(out, []byte(`"code":"STOP_UNCONFIRMED"`)) || bytes.Contains(out, []byte(`"status":"stopped"`)) {
+                t.Fatal(code, string(out))
+            }
+            if err := os.Remove(marker); err != nil {
+                t.Fatal(err)
+            }
+        } else if code != 0 || !bytes.Contains(out, []byte(`"status":"stopped"`)) {
+            t.Fatal(code, string(out))
+        }
+        after := runCLI(t, project, "ps", started.ID, "--json")
+        if after.Status != "stopped" || after.StopGraceMillis == nil || *after.StopGraceMillis != wire.DefaultStopGrace.Milliseconds() {
+            t.Fatal("original run was not stopped", after)
+        }
+    }
+    calls, err := os.ReadFile(counter)
+    if err != nil || strings.Count(string(calls), "stop") != 2 {
+        t.Fatal("stop was automatically replayed", string(calls), err)
+    }
+}
+
+func TestPreviousRunnerStopCompatibility(t *testing.T) {
+    previous := os.Getenv("LOAF_PREVIOUS_BIN")
+    if os.Getenv("LOAF_INTEGRATION") != "1" || previous == "" {
+        t.Skip("set LOAF_PREVIOUS_BIN to a previous packaged host CLI for upgrade testing")
+    }
+    current := os.Getenv("LOAF_BIN")
+    f := newFixture(t)
+    t.Setenv("LOAF_BIN", previous)
+    project := stopProject(t, f)
+    for _, explicitGrace := range []bool{false, true} {
+        t.Setenv("LOAF_BIN", previous)
+        started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while :; do sleep .02; done")
+        waitRunFile(t, f, started, "work/ready")
+        t.Setenv("LOAF_BIN", current)
+        if explicitGrace {
+            code, out := cli(t, project, "stop", started.ID, "--grace", "0s", "--json")
+            if code != 2 || !bytes.Contains(out, []byte(`"code":"STOP_OPTIONS_UNSUPPORTED"`)) {
+                t.Fatal("legacy runner ignored unsupported grace", code, string(out))
+            }
+            f.shell(`test ! -e "$1/runs/$2/stop.request"`, started.RemoteDir, started.ID)
+        }
+        stopped := runCLI(t, project, "stop", started.ID, "--json")
+        if stopped.Status != "stopped" || stopped.StopGraceMillis != nil {
+            t.Fatal("legacy default stop failed", stopped)
+        }
+        observed := runCLI(t, project, "ps", started.ID, "--json")
+        if observed.Status != "stopped" {
+            t.Fatal("saved legacy run could not be queried", observed)
+        }
+        completed := runCLI(t, project, "stop", started.ID, "--grace", "0s", "--json")
+        if completed.Status != "stopped" {
+            t.Fatal("completed legacy run required an unsupported grace", completed)
+        }
+    }
 }

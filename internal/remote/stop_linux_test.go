@@ -162,3 +162,42 @@ func TestStopPolicyValidation(t *testing.T) {
         }
     }
 }
+
+func TestStopRefusesInvalidSupervisorIdentities(t *testing.T) {
+    for _, kind := range []string{"start", "boot", "owner", "not_yet_owned"} {
+        t.Run(kind, func(t *testing.T) {
+            req, dir := ownedRun(t)
+            r, err := read(dir)
+            if err != nil {
+                t.Fatal(err)
+            }
+            switch kind {
+            case "start":
+                r.SupervisorStart = "different"
+            case "boot":
+                r.BootID = "different"
+            case "owner":
+                if err := os.Remove(filepath.Join(dir, "owner.lock")); err != nil {
+                    t.Fatal(err)
+                }
+            case "not_yet_owned":
+                r.SupervisorPID = 0
+            }
+            if err := save(dir, r); err != nil {
+                t.Fatal(err)
+            }
+            before, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+            r, err = Handle(req)
+            if err == nil || err.Error() != "STOP_UNCONFIRMED" || r.ExitCode != nil {
+                t.Fatal(r, err)
+            }
+            after, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+            if !bytes.Equal(before, after) {
+                t.Fatal("stop rewrote an unowned run")
+            }
+            if _, err := os.Stat(filepath.Join(dir, "stop.request")); !os.IsNotExist(err) {
+                t.Fatal("stop accepted without a valid owner")
+            }
+        })
+    }
+}

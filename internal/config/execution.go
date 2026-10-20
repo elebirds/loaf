@@ -4,6 +4,7 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/wire"
 )
 
 // RunPreferences contains personal waiting behavior, not executable commands.
@@ -22,6 +23,28 @@ type RunSettings struct {
 // LogSettings controls bounded initial log reads. Zero means no initial lines.
 type LogSettings struct {
     Tail *int `toml:"tail,omitempty"`
+}
+
+// StopSettings controls the TERM-to-KILL grace, independently of observation.
+type StopSettings struct {
+    Grace string `toml:"grace,omitempty"`
+}
+
+// ResolveStopGrace retains absence so legacy runners can use their own default.
+// An explicit zero is a request to escalate without a grace interval.
+func ResolveStopGrace(layers ...StopSettings) (*time.Duration, error) {
+    var result *time.Duration
+    for _, layer := range layers {
+        if layer.Grace == "" {
+            continue
+        }
+        duration, err := time.ParseDuration(layer.Grace)
+        if err != nil || duration < 0 || duration > wire.MaxStopGrace {
+            return nil, fault.New("BAD_CONFIG", "invalid_stop_grace", nil)
+        }
+        result = &duration
+    }
+    return result, nil
 }
 
 // ResolveWait applies individual overrides; waiting never limits remote runtime.

@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 早期开发版本：目前可从源码使用 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs` 和 `version`。公开的停止与结果下载命令尚未提供。
+> 早期开发版本：目前可从源码使用 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop` 和 `version`。结果下载命令尚未提供。
 
 ## 从源码构建
 
@@ -109,6 +109,32 @@ Loaf 不自动安装 Python、uv，不猜测环境激活，也不上传数据集
 
 可先运行[无依赖 CPU 示例](examples/cpu/)或[显式准备示例](examples/setup/)。Agent 可使用简短的 [Loaf Skill](skills/loaf/SKILL.md)，不需要读取内部文件、PID 或锁。
 
+## 停止实验
+
+```bash
+loaf stop                    # 当前项目最近一次提交的任务
+loaf stop <任务ID> --json
+```
+
+停止始终使用任务保存的机器和位置，不随项目默认值改变。Loaf 请求所属监督进程终止受管进程组，等待确认，并保留日志和真实退出结果。setup 期间接收停止后，不再启动训练阶段；主动脱离受管进程组的进程不在清理范围内。
+
+新任务从 TERM 到 KILL 默认留出 10 秒。可以在项目或用户配置中设置，也可以只覆盖本次请求：
+
+```toml
+[stop]
+grace = "10s"
+```
+
+```bash
+loaf stop <任务ID> --grace 30s
+```
+
+优先级为显式参数、项目设置、用户设置、封装默认值。宽限期支持 0s 到 5m，`0s` 允许立即升级为 KILL。首次接收的请求确定宽限期，重复请求不会重新计时或更改它；停止已结束任务会返回原结果。
+
+除 SSH 连接时间外，确认最多等待宽限期加 5 秒，上限为 5 分钟。超时、确认丢失或客户端取消时，返回 `STOP_UNCONFIRMED` 和操作退出码 3；远端已接收的请求继续执行。请用 `loaf ps <任务ID> --json` 查询同一任务。监督进程身份失效时如实报告，不按可能复用的 PID 盲目发信号。已知接收策略时，JSON 包含 `data.stop_grace_millis`。
+
+已有任务保留原封装及其默认宽限期。旧封装不支持显式宽限设置时，返回 `STOP_OPTIONS_UNSUPPORTED`（退出码 2）；移除 `--grace` 及项目或用户 `stop.grace` 设置后，可以使用其原默认策略。客户端不会替换仍在运行的监督进程。
+
 ## 同步工作代码
 
 在项目目录中，先预览选中的文件，再上传：
@@ -186,7 +212,7 @@ LOAF_LANG=en loaf check --json
 
 语言选择顺序为 `--lang`、`LOAF_LANG`、用户配置中的 `language`；默认 `auto` 使用系统语言。语言偏好不属于共享项目配置。
 
-核心命令支持 `--json`，包含 `schema_version: 1`、稳定的 `ok` 字段，以及结构化数据或错误码。人类可读的 `message` 和 `hint` 可以随语言变化，命令名、字段和错误码保持不变；外部诊断保留原文。操作退出码：0 表示本次操作成功，2 表示参数或配置错误，3 表示提交未确认，1 表示其他失败。训练退出码在 `data.exit_code` 中，不作为 CLI 退出码；成功查询到失败训练时，仍是 `ok: true`、`data.status: "failed"`。未结束任务没有训练退出码，无法确认的结果如实报告未知。
+核心命令支持 `--json`，包含 `schema_version: 1`、稳定的 `ok` 字段，以及结构化数据或错误码。人类可读的 `message` 和 `hint` 可以随语言变化，命令名、字段和错误码保持不变；外部诊断保留原文。操作退出码：0 表示本次操作成功，2 表示参数、配置错误或不支持的停止选项，3 表示提交或停止未确认，1 表示其他失败。训练退出码在 `data.exit_code` 中，不作为 CLI 退出码；成功查询到失败训练时，仍是 `ok: true`、`data.status: "failed"`。未结束任务没有训练退出码，无法确认的结果如实报告未知。
 
 ## 开发
 
@@ -195,6 +221,8 @@ go run ./scripts/format.go    # Go 代码使用四空格格式化
 bash scripts/check.sh        # 单元、静态、竞态、格式及漏洞检查
 bash scripts/integration.sh  # 真实 SSH 与 Linux 进程测试，需要 Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
+# 可选：验证旧版宿主客户端提交的任务
+LOAF_PREVIOUS_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerStopCompatibility
 ```
 
 集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、配置覆盖、镜像删除边界、中断恢复、并发启动保护、封装部署、跳板连接、断线执行、退出结果、重复提交、子进程停止、有界等待、setup 失败、日志取消及回执丢失恢复，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。

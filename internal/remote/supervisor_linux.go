@@ -170,6 +170,19 @@ func waitPhase(dir string, r *wire.RunRecord, command *exec.Cmd) error {
     stopped := false
     var deadline time.Time
     killed := false
+    acceptStop := func() {
+        if stopped {
+            return
+        }
+        request, err := readStop(dir)
+        if err != nil || request == nil {
+            return
+        }
+        stopped = true
+        r.StopGraceMillis = &request.GraceMillis
+        deadline = time.Now().Add(time.Duration(request.GraceMillis) * time.Millisecond)
+        _ = unix.Kill(-r.ChildPID, unix.SIGTERM)
+    }
     for {
         var info unix.Siginfo
         err := unix.Waitid(unix.P_PID, r.ChildPID, &info, unix.WEXITED|unix.WNOHANG|unix.WNOWAIT, nil)
@@ -181,21 +194,7 @@ func waitPhase(dir string, r *wire.RunRecord, command *exec.Cmd) error {
         if info.Signo != 0 {
             break
         }
-        if !stopped {
-            request, err := readStop(dir)
-            if err != nil {
-                // Leave ownership intact and keep waiting rather than guessing
-                // a stop policy from a damaged request.
-                time.Sleep(20 * time.Millisecond)
-                continue
-            }
-            if request != nil {
-                stopped = true
-                r.StopGraceMillis = &request.GraceMillis
-                deadline = time.Now().Add(time.Duration(request.GraceMillis) * time.Millisecond)
-                _ = unix.Kill(-r.ChildPID, unix.SIGTERM)
-            }
-        }
+        acceptStop()
         if stopped && !killed && !time.Now().Before(deadline) {
             _ = unix.Kill(-r.ChildPID, unix.SIGKILL)
             killed = true
@@ -210,6 +209,12 @@ func waitPhase(dir string, r *wire.RunRecord, command *exec.Cmd) error {
             deadline = time.Now().Add(wire.DefaultStopGrace)
         }
         for groupAlive(r.ChildPID) && time.Now().Before(deadline) {
+            // The leader can exit naturally before stop is accepted. Continue
+            // honoring the first stop policy while cleaning its remaining group.
+            acceptStop()
+            if !time.Now().Before(deadline) {
+                break
+            }
             time.Sleep(10 * time.Millisecond)
         }
         if groupAlive(r.ChildPID) && !killed {

@@ -52,19 +52,20 @@ type SubmitInput struct {
 
 // View exposes operational results without leaking private request environments.
 type View struct {
-    ID          string         `json:"run_id"`
-    Target      string         `json:"target"`
-    RemoteDir   string         `json:"remote_dir"`
-    Status      string         `json:"status"`
-    Phase       string         `json:"phase,omitempty"`
-    CreatedAt   time.Time      `json:"created_at"`
-    CompletedAt *time.Time     `json:"completed_at,omitempty"`
-    ExitCode    *int           `json:"exit_code"`
-    Signal      string         `json:"signal,omitempty"`
-    Reason      string         `json:"reason,omitempty"`
-    QueryError  string         `json:"query_error,omitempty"`
-    Log         *wire.LogChunk `json:"log,omitempty"`
-    Ref         config.RunRef  `json:"-"`
+    ID              string         `json:"run_id"`
+    Target          string         `json:"target"`
+    RemoteDir       string         `json:"remote_dir"`
+    Status          string         `json:"status"`
+    Phase           string         `json:"phase,omitempty"`
+    CreatedAt       time.Time      `json:"created_at"`
+    CompletedAt     *time.Time     `json:"completed_at,omitempty"`
+    ExitCode        *int           `json:"exit_code"`
+    Signal          string         `json:"signal,omitempty"`
+    Reason          string         `json:"reason,omitempty"`
+    QueryError      string         `json:"query_error,omitempty"`
+    Log             *wire.LogChunk `json:"log,omitempty"`
+    StopGraceMillis *int64         `json:"stop_grace_millis,omitempty"`
+    Ref             config.RunRef  `json:"-"`
 }
 
 func view(ref config.RunRef, r *wire.RunRecord) View {
@@ -77,6 +78,7 @@ func view(ref config.RunRef, r *wire.RunRecord) View {
         v.ExitCode = r.ExitCode
         v.Signal = r.Signal
         v.Reason = r.Reason
+        v.StopGraceMillis = r.StopGraceMillis
         if r.SupervisorPID == 0 && !wire.Terminal(r.Status) {
             v.Status = "unknown"
             v.Reason = "SUBMISSION_UNCONFIRMED"

@@ -1,0 +1,106 @@
+package run
+
+import (
+    "context"
+    "errors"
+    "time"
+
+    "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/wire"
+)
+
+// Stop sends one stop request to the bound runner, then observes that same run.
+// Neither lost confirmation nor cancellation replays or withdraws the request.
+func (s Service) Stop(ctx context.Context, ref config.RunRef, grace *time.Duration, batch bool) (View, error) {
+    result := view(ref, nil)
+    req := request(ref, 0, 0)
+    req.Action = "stop"
+    if grace != nil {
+        if *grace < 0 || *grace > wire.MaxStopGrace {
+            return result, fault.New("BAD_CONFIG", "invalid_stop_grace", nil)
+        }
+        millis := int64((*grace + time.Millisecond - 1) / time.Millisecond)
+        req.GraceMillis = &millis
+    }
+    submitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+    record, err := s.Remote.Control(submitCtx, ref.Connection, ref.Runner, req, batch)
+    cancel()
+    if record != nil && matching(ref, record) {
+        result = view(ref, record)
+        if wire.Terminal(result.Status) {
+            return result, nil
+        }
+    } else if record != nil {
+        return result, unconfirmedStop(fault.New("BAD_RESPONSE", "run_query", nil))
+    }
+    if err != nil {
+        switch errorCode(err) {
+        case "BAD_REQUEST":
+            if grace != nil {
+                // Older strict decoders reject the new option before looking
+                // up the run. A completed run still needs no stopping policy.
+                observed, observeErr := s.Observe(ctx, ref, 0, 0, batch)
+                observed.Log = nil
+                if observeErr == nil {
+                    result = observed
+                    if wire.Terminal(observed.Status) {
+                        return observed, nil
+                    }
+                }
+                f := fault.New("STOP_OPTIONS_UNSUPPORTED", "stop_grace_unsupported", nil)
+                f.Hint = "stop_grace_unsupported_hint"
+                return result, f
+            }
+            return result, remoteFault(err)
+        case "BAD_FORMAT", "VERSION_MISMATCH", "UNSAFE_PATH", "PROJECT_MISMATCH", "RUN_NOT_FOUND":
+            return result, remoteFault(err)
+        case "STOP_UNCONFIRMED":
+            return result, unconfirmedStop(err)
+        }
+        result.QueryError = errorCode(err)
+    }
+    if ctx.Err() != nil {
+        return result, unconfirmedStop(ctx.Err())
+    }
+    budget := wire.DefaultStopGrace
+    if grace != nil {
+        budget = *grace
+    }
+    // A repeated request must wait on the first accepted policy, not its override.
+    if result.StopGraceMillis != nil {
+        if *result.StopGraceMillis < 0 || *result.StopGraceMillis > wire.MaxStopGrace.Milliseconds() {
+            return result, unconfirmedStop(fault.New("BAD_RESPONSE", "run_query", nil))
+        }
+        budget = time.Duration(*result.StopGraceMillis) * time.Millisecond
+    }
+    budget = min(budget+5*time.Second, 5*time.Minute)
+    observed, observeErr := s.Observe(ctx, ref, budget, 0, batch)
+    observed.Log = nil
+    if observed.StopGraceMillis == nil {
+        observed.StopGraceMillis = result.StopGraceMillis
+    }
+    if observeErr == nil && wire.Terminal(observed.Status) {
+        return observed, nil
+    }
+    if observeErr != nil {
+        result.QueryError = errorCode(observeErr)
+        if observed.Status == "unknown" && observed.Reason == "" {
+            return result, unconfirmedStop(observeErr)
+        }
+    }
+    return observed, unconfirmedStop(observeErr)
+}
+
+func unconfirmedStop(cause error) error {
+    f := fault.New("STOP_UNCONFIRMED", "stop_unconfirmed", nil)
+    f.Cause = cause
+    f.Hint = "stop_query_hint"
+    var original *fault.Error
+    if errors.As(cause, &original) {
+        if detail, ok := original.Params["Detail"].(string); ok {
+            f.Params = map[string]any{"Detail": detail}
+        }
+    }
+    return f
+}

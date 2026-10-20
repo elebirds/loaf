@@ -36,6 +36,7 @@ type Global struct {
     Sync          SyncSettings      `toml:"sync,omitempty"`
     Run           RunPreferences    `toml:"run,omitempty"`
     Logs          LogSettings       `toml:"logs,omitempty"`
+    Stop          StopSettings      `toml:"stop,omitempty"`
     Targets       map[string]Target `toml:"targets"`
 }
 
@@ -95,6 +96,9 @@ func (s *Store) Load() (Global, error) {
         return c, err
     }
     if _, err := ResolveTail(c.Logs); err != nil {
+        return c, err
+    }
+    if _, err := ResolveStopGrace(c.Stop); err != nil {
         return c, err
     }
     return c, nil

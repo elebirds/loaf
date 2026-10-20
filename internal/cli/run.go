@@ -119,7 +119,7 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
     }
     ps := newPSCommand(o, cfg, target, l, result)
     logs := newLogsCommand(o, cfg, target, l, result, streamed)
-    return []*cobra.Command{run, ps, logs}
+    return []*cobra.Command{run, ps, logs, newStopCommand(o, cfg, target, l, result)}
 }
 
 func runProject(cmd *cobra.Command, o Options, target *string) (config.Project, config.ProjectFile, error) {

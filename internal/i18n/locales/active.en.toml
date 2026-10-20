@@ -299,7 +299,7 @@ other = "Query the saved run ID again after checking SSH access. A query failure
 other = "Some runs could not be queried; successful rows are included."
 
 [run_bound_target]
-other = "Run queries use their saved machine and location; --target cannot redirect them."
+other = "Run operations use their saved machine and location; --target cannot redirect them."
 
 [run_not_found]
 other = "No matching submitted or submission-uncertain run exists in this project."
@@ -381,3 +381,27 @@ other = "stop request could not be read safely"
 
 [run_reason_GROUP_TERMINATION_UNCONFIRMED]
 other = "process-group termination not confirmed"
+
+[stop_short]
+other = "Stop a saved run and wait for its confirmed result."
+
+[flag_stop_grace]
+other = "Time between TERM and KILL (0s to 5m); overrides project/user stop.grace."
+
+[invalid_stop_grace]
+other = "Stop grace must be a duration from 0s to 5m."
+
+[stop_progress]
+other = "Requesting stop and waiting for confirmation…"
+
+[stop_unconfirmed]
+other = "Task termination is not confirmed. An accepted stop request remains active."
+
+[stop_query_hint]
+other = "Query the same ID with loaf ps <run-id> --json to check its current result."
+
+[stop_grace_unsupported]
+other = "This task's saved runner does not support configurable stop grace."
+
+[stop_grace_unsupported_hint]
+other = "Remove --grace and project/user stop.grace settings, then retry stop using the task's original runner default."

@@ -299,7 +299,7 @@ other = "检查 SSH 访问后再次查询原任务 ID；查询失败不代表训
 other = "部分任务查询失败，已保留其他任务的成功结果。"
 
 [run_bound_target]
-other = "任务查询使用提交时保存的机器和位置，不能通过 --target 改向。"
+other = "任务操作使用提交时保存的机器和位置，不能通过 --target 改向。"
 
 [run_not_found]
 other = "当前项目中没有匹配的已提交或提交未确认任务。"
@@ -381,3 +381,27 @@ other = "无法安全读取停止请求"
 
 [run_reason_GROUP_TERMINATION_UNCONFIRMED]
 other = "进程组终止尚未确认"
+
+[stop_short]
+other = "停止已保存的任务，并等待确认结果。"
+
+[flag_stop_grace]
+other = "TERM 到 KILL 的宽限期（0s 到 5m），覆盖项目或用户 stop.grace。"
+
+[invalid_stop_grace]
+other = "停止宽限期必须为 0s 到 5m 之间的时长。"
+
+[stop_progress]
+other = "正在请求停止并等待确认……"
+
+[stop_unconfirmed]
+other = "尚未确认任务已结束；远端已接收的停止请求仍然有效。"
+
+[stop_query_hint]
+other = "请用 loaf ps <任务 ID> --json 查询同一任务的当前结果。"
+
+[stop_grace_unsupported]
+other = "此任务绑定的旧封装不支持配置停止宽限期。"
+
+[stop_grace_unsupported_hint]
+other = "移除 --grace 及项目或用户 stop.grace 设置，再按任务原封装的默认策略重试停止。"

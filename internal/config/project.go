@@ -17,6 +17,7 @@ type ProjectFile struct {
     RemoteDir string       `toml:"remote_dir"`
     Run       RunSettings  `toml:"run"`
     Logs      LogSettings  `toml:"logs"`
+    Stop      StopSettings `toml:"stop"`
     Sync      SyncSettings `toml:"sync"`
     Outputs   struct {
         Paths []string `toml:"paths"`
@@ -50,6 +51,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
                 return "", c, err
             }
             if _, err := ResolveTail(c.Logs); err != nil {
+                return "", c, err
+            }
+            if _, err := ResolveStopGrace(c.Stop); err != nil {
                 return "", c, err
             }
             return dir, c, nil

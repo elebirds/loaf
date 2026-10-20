@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, and `version` are available from source. Public stop and output-download commands are not available yet.
+> Early development: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, and `version` are available from source. Output downloads are not available yet.
 
 ## Build from source
 
@@ -109,6 +109,32 @@ Loaf does not install Python or uv, guess environment activation, or upload data
 
 Try the [dependency-free CPU example](examples/cpu/) or the [explicit setup example](examples/setup/). Agents can use the short [Loaf Skill](skills/loaf/SKILL.md); they do not need to inspect internal files, PIDs, or locks.
 
+## Stop an experiment
+
+```bash
+loaf stop                    # Latest submitted run in this project
+loaf stop <run-id> --json
+```
+
+Stop uses the run's saved machine and location, even after project defaults change. It asks the owning supervisor to terminate the managed process group, waits for confirmation, and retains logs and actual exit results. A stop accepted during setup prevents the training phase from starting. Processes that deliberately leave the managed group are outside this cleanup scope.
+
+New runs allow 10 seconds between TERM and KILL. Set a project or user preference, or override it for one request:
+
+```toml
+[stop]
+grace = "10s"
+```
+
+```bash
+loaf stop <run-id> --grace 30s
+```
+
+Precedence is the explicit flag, project setting, user setting, then the runner default. Grace accepts 0s to 5m; `0s` allows immediate escalation. The first accepted request fixes the grace interval; repeated requests do not reset or change it. Stopping an already completed run returns its original result.
+
+Confirmation waits for up to grace plus 5 seconds, capped at 5 minutes, in addition to SSH connection time. A timeout, lost confirmation, or canceled client returns `STOP_UNCONFIRMED` with operation exit 3; an accepted remote request continues. Check the same ID with `loaf ps <run-id> --json`. An unknown supervisor identity is reported rather than signaling a possibly reused PID. JSON includes `data.stop_grace_millis` when the accepted policy is known.
+
+Existing runs keep their original runner and default grace. If that runner cannot honor an explicit grace setting, stop returns `STOP_OPTIONS_UNSUPPORTED` (exit 2). Remove `--grace` and project/user `stop.grace` settings to use its original default; the client does not replace active supervisors.
+
 ## Sync working code
 
 From the project directory, preview the selected files before uploading:
@@ -186,7 +212,7 @@ LOAF_LANG=en loaf check --json
 
 Language precedence is `--lang`, `LOAF_LANG`, then `language` in the user configuration. The default `auto` uses the system locale. Language preference is not a shared project setting.
 
-Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration, 3 for unconfirmed submission, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
+Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration or unsupported stop options, 3 for unconfirmed submission or stopping, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
 
 ## Development
 
@@ -195,6 +221,8 @@ go run ./scripts/format.go    # Four-space Go formatting
 bash scripts/check.sh        # Unit, static, race, format, and vulnerability checks
 bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
+# Optional: test runs submitted by an older packaged host CLI
+LOAF_PREVIOUS_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerStopCompatibility
 ```
 
 The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, stopping child processes, bounded waits, setup failures, log cancellation, and lost-confirmation recovery without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.

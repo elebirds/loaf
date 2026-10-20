@@ -6,21 +6,11 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, `pull`, and `version` are available from source.
+> Pre-release: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, `pull`, and `version` are available in [v0.1.0-rc.1](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.1) and from source.
 
-## Build from source
+## Install
 
-Requires Go 1.27.1, Git, OpenSSH, and rsync. The Go version is pinned in `mise.toml`; review that file before trusting it if you use mise.
-
-```bash
-bash scripts/build.sh
-export PATH="$PWD/dist:$PATH"
-loaf --help
-```
-
-The build embeds Linux amd64 and arm64 runners and produces `dist/loaf`, a platform archive, and `loaf_<version>_checksums.txt`. There is no published release yet. For other build targets, set `LOAF_BUILD_TARGETS`, for example `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`.
-
-### Install an archive
+Download the archive for your platform and its checksums file from [Releases](https://github.com/elebirds/loaf/releases). Filenames use `darwin` for macOS, `linux` for Linux, `arm64` for Apple Silicon/ARM64, and `amd64` for Intel/AMD x86-64. Extract the archive into a new directory.
 
 Archives contain one executable, both READMEs, the Skill, examples, `BUILD.json`, and third-party license texts. From an extracted archive directory:
 
@@ -41,7 +31,19 @@ The build targets macOS/Linux amd64 and arm64. Full SSH workflows have been exer
 grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
 ```
 
-Published release archives will also carry GitHub build-provenance attestations, verifiable with `gh attestation verify "$archive" --repo elebirds/loaf`. See [GitHub's verification guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli). Local builds include metadata and download checksums, not a GitHub-signed attestation.
+Published release archives carry GitHub build-provenance attestations, verifiable with `gh attestation verify "$archive" --repo elebirds/loaf`. See [GitHub's verification guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli). Local builds include metadata and download checksums, not a GitHub-signed attestation.
+
+### Build from source
+
+Requires Go 1.27.1, Git, OpenSSH, and rsync. The Go version is pinned in `mise.toml`; review that file before trusting it if you use mise.
+
+```bash
+bash scripts/build.sh
+export PATH="$PWD/dist:$PATH"
+loaf --help
+```
+
+The build embeds Linux amd64 and arm64 runners and produces `dist/loaf`, a platform archive, and `loaf_<version>_checksums.txt`. For other build targets, set `LOAF_BUILD_TARGETS`, for example `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`.
 
 ## Set up a research machine
 

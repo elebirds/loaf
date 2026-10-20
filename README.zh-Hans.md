@@ -6,21 +6,11 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 早期开发版本：目前可从源码使用 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop`、`pull` 和 `version`。
+> 预发布版本：[v0.1.0-rc.1](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.1) 和源码均提供 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop`、`pull` 和 `version`。
 
-## 从源码构建
+## 安装
 
-需要 Go 1.27.1、Git、OpenSSH 和 rsync。Go 版本固定在 `mise.toml`；使用 mise 时，请先检查该文件再信任项目配置。
-
-```bash
-bash scripts/build.sh
-export PATH="$PWD/dist:$PATH"
-loaf --help
-```
-
-构建会内置 Linux amd64、arm64 远端封装，并生成 `dist/loaf`、平台压缩包和 `loaf_<version>_checksums.txt`。目前尚未公开发布版本。可用 `LOAF_BUILD_TARGETS` 选择其他构建目标，例如 `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`。
-
-### 安装压缩包
+从 [Releases](https://github.com/elebirds/loaf/releases) 下载匹配平台的压缩包及校验文件。文件名中，`darwin` 表示 macOS，`linux` 表示 Linux，`arm64` 对应 Apple Silicon/ARM64，`amd64` 对应 Intel/AMD x86-64。将压缩包解压到新目录。
 
 压缩包包含一个可执行文件、双语 README、Skill、示例、`BUILD.json` 及第三方许可证原文。解压后，在该目录执行：
 
@@ -41,7 +31,19 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
 ```
 
-公开发布的压缩包还会生成 GitHub 构建来源证明，可用 `gh attestation verify "$archive" --repo elebirds/loaf` 检查，详见 [GitHub 验证说明](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli)。本地构建包含元数据和下载校验和，不含 GitHub 签名的来源证明。
+公开发布的压缩包附带 GitHub 构建来源证明，可用 `gh attestation verify "$archive" --repo elebirds/loaf` 检查，详见 [GitHub 验证说明](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli)。本地构建包含元数据和下载校验和，不含 GitHub 签名的来源证明。
+
+### 从源码构建
+
+需要 Go 1.27.1、Git、OpenSSH 和 rsync。Go 版本固定在 `mise.toml`；使用 mise 时，请先检查该文件再信任项目配置。
+
+```bash
+bash scripts/build.sh
+export PATH="$PWD/dist:$PATH"
+loaf --help
+```
+
+构建会内置 Linux amd64、arm64 远端封装，并生成 `dist/loaf`、平台压缩包和 `loaf_<version>_checksums.txt`。可用 `LOAF_BUILD_TARGETS` 选择其他构建目标，例如 `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`。
 
 ## 配置科研机器
 

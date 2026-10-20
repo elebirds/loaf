@@ -1,0 +1,125 @@
+package ssh
+
+import (
+    "bytes"
+    "context"
+    "encoding/json"
+    "errors"
+    "io"
+    "os/exec"
+    "strings"
+
+    "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/wire"
+)
+
+// RemoteError distinguishes a runner's response from an interrupted transport.
+type RemoteError struct{ Code string }
+
+func (e *RemoteError) Error() string { return e.Code }
+
+// Observe returns a finite remote observation, optionally after bounded waiting.
+func (c *Client) Observe(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (wire.Observation, error) {
+    req.Action = "observe"
+    data, err := json.Marshal(req)
+    if err != nil {
+        return wire.Observation{}, err
+    }
+    out, transportErr := c.Execute(ctx, target, Quote(runner), bytes.NewReader(data), batch)
+    var response wire.Response
+    if err := json.Unmarshal(out, &response); err != nil {
+        if transportErr != nil {
+            return wire.Observation{}, transportErr
+        }
+        return wire.Observation{}, errors.New("BAD_RESPONSE")
+    }
+    result := wire.Observation{Record: response.Record}
+    if response.Log != nil {
+        result.Log = *response.Log
+    }
+    if response.FormatVersion != wire.FormatVersion || response.Version != req.Version {
+        return result, errors.New("VERSION_MISMATCH")
+    }
+    if !response.OK {
+        if response.Error == nil {
+            return result, errors.New("BAD_RESPONSE")
+        }
+        return result, &RemoteError{response.Error.Code}
+    }
+    if transportErr != nil {
+        return result, transportErr
+    }
+    if response.Record == nil || response.Log == nil {
+        return result, errors.New("BAD_RESPONSE")
+    }
+    return result, nil
+}
+
+// Follow decodes one cancellable SSH stream. It never signals a remote run.
+func (c *Client) Follow(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool, emit func(wire.LogEvent) error) error {
+    if err := Validate(target); err != nil {
+        return err
+    }
+    req.Action = "follow"
+    data, err := json.Marshal(req)
+    if err != nil {
+        return err
+    }
+    streamCtx, cancel := context.WithCancel(ctx)
+    defer cancel()
+    cmd := exec.CommandContext(streamCtx, c.Binary, arguments(target, Quote(runner), batch)...)
+    cmd.Stdin = bytes.NewReader(data)
+    var diagnostic bytes.Buffer
+    cmd.Stderr = &diagnostic
+    output, err := cmd.StdoutPipe()
+    if err != nil {
+        return err
+    }
+    if err := cmd.Start(); err != nil {
+        return err
+    }
+    ended := false
+    decoder := json.NewDecoder(output)
+    var streamErr error
+    for {
+        var event struct {
+            wire.LogEvent
+            Error *wire.Error `json:"error"`
+        }
+        err := decoder.Decode(&event)
+        if errors.Is(err, io.EOF) {
+            break
+        }
+        if err != nil {
+            streamErr = err
+            break
+        }
+        if event.Error != nil {
+            streamErr = &RemoteError{event.Error.Code}
+            break
+        }
+        if ended || event.Record == nil || (event.Type != "chunk" && event.Type != "end") {
+            streamErr = errors.New("BAD_RESPONSE")
+            break
+        }
+        if err := emit(event.LogEvent); err != nil {
+            streamErr = err
+            break
+        }
+        ended = event.Type == "end"
+    }
+    if streamErr != nil {
+        cancel()
+    }
+    waitErr := cmd.Wait()
+    if streamErr != nil {
+        return streamErr
+    }
+    if waitErr != nil || !ended {
+        f := fault.Wrap("SSH_FAILED", "ssh_failed", waitErr)
+        f.Params = map[string]any{"Detail": strings.TrimSpace(diagnostic.String())}
+        return f
+    }
+    return nil
+}

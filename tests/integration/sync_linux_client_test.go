@@ -4,7 +4,10 @@ import (
     "encoding/json"
     "os"
     "path/filepath"
+    "strings"
     "testing"
+
+    execution "github.com/elebirds/loaf/internal/run"
 )
 
 func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
@@ -50,4 +53,13 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
         t.Fatal(string(out))
     }
     f.shell(`test -f "$1/cache/中文 space.py"; test -f "$1/cache/back\slash[1]*?.py"; test ! -e "$1/cache/.env"; test "$(readlink "$1/cache/linked.py")" = '中文 space.py'`, root)
+    out = invoke("run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", "printf 'linux 中文\\n'; exit 7")
+    var ran struct {
+        Data execution.View `json:"data"`
+    }
+    if json.Unmarshal(out, &ran) != nil || ran.Data.Status != "failed" || ran.Data.ExitCode == nil || *ran.Data.ExitCode != 7 || ran.Data.Log == nil || !strings.Contains(ran.Data.Log.Text, "linux 中文") {
+        t.Fatal(string(out))
+    }
+    invoke("ps", ran.Data.ID, "--json")
+    invoke("logs", ran.Data.ID, "--json")
 }

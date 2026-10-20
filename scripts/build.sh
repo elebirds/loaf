@@ -28,7 +28,8 @@ for target in $targets; do
         -ldflags="-s -w -X github.com/elebirds/loaf/internal/wire.Version=$version" \
         -o "dist/$package/loaf" ./cmd/loaf
     cp LICENSE README.md README.zh-Hans.md "dist/$package/"
-    tar -czf "dist/$package.tar.gz" -C "dist/$package" loaf LICENSE README.md README.zh-Hans.md
+    cp -R skills examples "dist/$package/"
+    tar -czf "dist/$package.tar.gz" -C "dist/$package" loaf LICENSE README.md README.zh-Hans.md skills examples
     if [[ "$target" == "$(go env GOOS)/$(go env GOARCH)" ]]; then
         cp "dist/$package/loaf" dist/loaf
     fi

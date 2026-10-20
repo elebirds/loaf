@@ -1,0 +1,6 @@
+[run]
+command = "/bin/sh train.sh"
+wait = "5s"
+
+[outputs]
+paths = ["outputs"]

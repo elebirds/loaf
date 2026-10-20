@@ -13,15 +13,12 @@ import (
 
 // ProjectFile is the optional shared project configuration.
 type ProjectFile struct {
-    Target    string `toml:"target"`
-    RemoteDir string `toml:"remote_dir"`
-    Run       struct {
-        Command string            `toml:"command"`
-        Setup   string            `toml:"setup"`
-        Env     map[string]string `toml:"env"`
-    }   `toml:"run"`
-    Sync    SyncSettings `toml:"sync"`
-    Outputs struct {
+    Target    string       `toml:"target"`
+    RemoteDir string       `toml:"remote_dir"`
+    Run       RunSettings  `toml:"run"`
+    Logs      LogSettings  `toml:"logs"`
+    Sync      SyncSettings `toml:"sync"`
+    Outputs   struct {
         Paths []string `toml:"paths"`
     }   `toml:"outputs"`
 }
@@ -47,6 +44,12 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
                 return "", c, fault.New("BAD_CONFIG", "invalid_remote", nil)
             }
             if _, err := ResolveSync(c.Sync); err != nil {
+                return "", c, err
+            }
+            if _, err := ResolveWait(c.Run.Wait); err != nil {
+                return "", c, err
+            }
+            if _, err := ResolveTail(c.Logs); err != nil {
                 return "", c, err
             }
             return dir, c, nil

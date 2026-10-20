@@ -84,8 +84,8 @@ exit $?
         t.Fatal("automatically resubmitted", string(calls))
     }
     os.Remove(marker)
-    latest := runCLI(t, project, "ps", uncertain.ID, "--json")
-    if latest.ID != uncertain.ID || latest.ID == recovered.ID {
+    latest := runCLI(t, project, "logs", "--json")
+    if latest.ID != uncertain.ID || latest.ID == recovered.ID || latest.Log == nil || !strings.Contains(latest.Log.Text, "uncertain") {
         t.Fatalf("uncertain latest replaced: %+v", latest)
     }
     f.shell(`test "$(wc -l <"$1/runs/$2/work/launch-count")" -eq 1`, uncertain.RemoteDir, uncertain.ID)

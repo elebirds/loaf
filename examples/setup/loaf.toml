@@ -1,0 +1,10 @@
+[run]
+setup = "mkdir -p scratch; printf ready >scratch/setup-ready"
+command = "/bin/sh train.sh"
+wait = "5s"
+
+[run.env]
+EXPERIMENT_NAME = "baseline"
+
+[outputs]
+paths = ["outputs"]

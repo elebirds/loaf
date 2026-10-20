@@ -4,9 +4,9 @@
 
 **Write code locally. Use your existing SSH research machines.**
 
-Loaf remembers your SSH machines and synchronizes working code to a dedicated remote source directory. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
+Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: add, use, check, sync, run, ps, and version are available from source. Logs, public stop, and output downloads are not available yet.
+> Early development: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, and `version` are available from source. Public stop and output-download commands are not available yet.
 
 ## Build from source
 
@@ -18,7 +18,7 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-The build embeds Linux amd64 and arm64 runners and produces a local executable plus a compressed archive in `dist/`. There is no installable release yet. You can also place `dist/loaf` in a directory already on your PATH.
+The build embeds Linux amd64 and arm64 runners and produces a local executable plus a compressed archive with the Agent Skill and examples in `dist/`. There is no installable release yet. You can also place `dist/loaf` in a directory already on your PATH.
 
 ## Set up a research machine
 
@@ -29,7 +29,7 @@ From your research project directory:
 loaf add autodl --ssh "ssh -p 12345 root@example.com"
 loaf use autodl
 
-# Check the connection, remote directory, tools, and disk
+# Optional: inspect the connection, remote directory, tools, and disk
 loaf check
 ```
 
@@ -49,21 +49,65 @@ Python, uv, and GPU tools are optional observations. Their absence does not make
 
 ## Run an experiment
 
+From the project directory, submit the command you would otherwise run remotely:
+
 ```bash
 loaf run -- python3 train.py
 loaf ps
-loaf ps <run-id>
+loaf logs
 ```
 
-Run automatically checks prerequisites, deploys the matching runner, synchronizes working sources, and copies an independent work directory under the same lock. It starts a detached supervisor and returns a saved run ID. No manual check, sync, or project initialization is required. Later syncs do not change existing work copies.
+`run` checks execution prerequisites, deploys the matching runner, synchronizes working sources, and copies an independent work directory under the same project lock. It then starts a detached supervisor and returns a run ID. There is no required `check`, `sync`, project initialization, or launch script before each run. Later syncs do not change an existing run's code.
 
-Acceptance means the supervisor owns the task, not that training succeeded. Close the terminal and query the saved ID later. ps lists the latest 20 submitted or submission-uncertain project runs; --limit changes that bound. Individual queries retain their submitted connection and location when defaults change, and cannot be redirected with --target. Partial query failures preserve successful rows.
+Acceptance means the supervisor owns the task, not that training succeeded. Close the local terminal or SSH connection and query the saved ID later:
 
-Submission confirmation loss triggers one query of the original saved ID, not another launch. If still uncertain, SUBMISSION_UNKNOWN returns that ID and operation exit 3. Query it instead of automatically resubmitting.
+```bash
+loaf ps <run-id>
+loaf logs <run-id> -f
+```
 
-An optional project [run] supports command = "uv run python train.py", setup = "uv sync", and [run.env] entries. Explicit argv after run -- replaces command without extra Shell interpretation. Configured command and setup use /bin/sh -c. Setup runs explicitly before each task; failure prevents training. Its cd, exports, and activation do not persist into the separate command process. Environment values are not included in public observations. Executable settings are project-only.
+`ps` lists the latest 20 submitted or submission-uncertain runs in this project (`--limit` changes the bound). An ID queries that run only. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection, remote location, and runner version when project defaults change; `--target` cannot redirect queries.
 
-Execution happens in <remote_dir>/runs/<run-id>/work/. Provision tools and data explicitly; Loaf does not install dependencies or upload .env. Outputs remain remotely until collected with native tools. Logs, bounded observation, public stop, and output-download commands are not available yet.
+### Short tasks: wait for a result, not forever
+
+```bash
+loaf run --wait 10s --json -- python3 smoke.py
+loaf ps <run-id> --wait 30s --json
+```
+
+Waiting starts after remote acceptance. A task that finishes within the budget returns its final status, exit result, and bounded log tail in the same response. Otherwise Loaf returns the observed state and the same run ID; the task continues. `--wait 0s` returns after acceptance. The maximum wait is 5 minutes. This is an observation budget, not a training timeout; canceling observation does not stop accepted work.
+
+Normal output shows preparation stages and streams logs during `run --wait`. JSON mode returns one finite result without progress text. A following log stream uses NDJSON:
+
+```bash
+loaf logs <run-id> --tail 100 --json
+loaf logs <run-id> -f --json
+```
+
+Log tails default to 100 lines and at most 256 KiB of log text. `log.truncated` reports omitted output. Following reads emit `data.type = "chunk"` and a final `"end"`, with the run observation under `data.run`; stream errors emit `"error"` with the ordinary error object. Offsets count bytes in the source log. Program output is not translated or interpreted as metrics. Programs must flush their own output for timely logs.
+
+If submission confirmation is lost, Loaf checks the same saved ID once. If still uncertain, it returns `SUBMISSION_UNKNOWN` with that ID and operation exit 3. Query it; do not automatically submit another run.
+
+### Optional project setup
+
+```toml
+[run]
+command = "uv run python train.py"
+setup = "uv sync"                 # Explicitly run before each task
+wait = "10s"
+
+[run.env]
+EXPERIMENT_NAME = "baseline"
+
+[logs]
+tail = 100
+```
+
+With a configured command, use `loaf run`. Explicit argv after `run --` replaces the configured command and receives no extra Shell interpretation. TOML `run.command` and `run.setup` are `/bin/sh -c` commands. Setup runs once per task, and failure prevents training. Its `cd`, exports, and environment activation do not persist into the separate command process; use an explicit interpreter or `uv run`. Project `run.env` applies to both processes and is not echoed in Loaf's observations; the program itself can still print it.
+
+Loaf does not install Python or uv, guess environment activation, or upload datasets. Provision those explicitly. Data/shared environments can live beside `cache/`; refer to them by absolute paths because execution happens in `<remote_dir>/runs/<run-id>/work/`. Outputs currently remain there until collected with native tools. Output paths are frozen at submission for the future download command.
+
+Try the [dependency-free CPU example](examples/cpu/) or the [explicit setup example](examples/setup/). Agents can use the short [Loaf Skill](skills/loaf/SKILL.md); they do not need to inspect internal files, PIDs, or locks.
 
 ## Sync working code
 
@@ -108,7 +152,7 @@ paths = ["outputs", "checkpoints"]
 
 Target selection follows `--target`, the current project's `loaf use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf add ... --remote-dir '~/projects'`.
 
-User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside the index in `runs.json`; execution records remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
+User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside it in `runs.json`; execution records and logs remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 
@@ -118,6 +162,10 @@ mode = "mirror"
 respect_gitignore = true
 exclude = ["scratch/"]
 ```
+
+Personal `[run] wait = "10s"` and `[logs] tail = 100` defaults are also supported. Explicit flags override project preferences, then user preferences, then built-ins (`wait = "0s"`, `tail = 100`). Zero is an explicit override. Executable command, setup, and environment settings are project-only, never inherited from global configuration.
+
+`run.wait` applies to submission only. `ps <run-id>` waits only when explicitly given `--wait`; list queries never wait for tasks to finish.
 
 For sync strategies, explicit flags override project settings, then user defaults, then built-ins (`mirror` and `respect_gitignore = true`). Each scalar inherits independently; exclusions append across all scopes and never replace built-in safeguards. Setting `respect_gitignore = false` disables Git tracking/ignore selection, not Loaf's own exclusions. `update` leaves removed and newly excluded remote files in place and reports that warning in human output. JSON includes the effective `policy` and selection/exclusion results.
 
@@ -138,7 +186,7 @@ LOAF_LANG=en loaf check --json
 
 Language precedence is `--lang`, `LOAF_LANG`, then `language` in the user configuration. The default `auto` uses the system locale. Language preference is not a shared project setting.
 
-Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for success, 2 for arguments/configuration, 3 for unconfirmed submission, and 1 for other failures. Training exit codes belong in data.exit_code, not the CLI exit status.
+Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration, 3 for unconfirmed submission, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
 
 ## Development
 
@@ -146,9 +194,10 @@ Core commands support `--json` with `schema_version: 1`, a stable `ok` field, an
 go run ./scripts/format.go    # Four-space Go formatting
 bash scripts/check.sh        # Unit, static, race, format, and vulnerability checks
 bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
+bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 ```
 
-The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, and stopping child processes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
+The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, stopping child processes, bounded waits, setup failures, log cancellation, and lost-confirmation recovery without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
 Loaf does not provision machines, schedule GPUs, automatically repair environments, or replace experiment tracking.
 

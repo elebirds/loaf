@@ -20,6 +20,8 @@ type Request struct {
     Args          []string          `json:"args,omitempty"`
     Setup         string            `json:"setup,omitempty"`
     Env           map[string]string `json:"env,omitempty"`
+    WaitMillis    int64             `json:"wait_millis,omitempty"`
+    Tail          int               `json:"tail,omitempty"`
 }
 
 // RunRecord is persisted by the remote execution owner.
@@ -52,6 +54,27 @@ type Response struct {
     OK            bool       `json:"ok"`
     Record        *RunRecord `json:"record,omitempty"`
     Error         *Error     `json:"error,omitempty"`
+    Log           *LogChunk  `json:"log,omitempty"`
+}
+
+// LogChunk is a bounded UTF-8 view of the durable log; offset counts source bytes.
+type LogChunk struct {
+    Text      string `json:"text"`
+    Offset    int64  `json:"offset"`
+    Truncated bool   `json:"truncated"`
+}
+
+// Observation combines a status snapshot with a bounded log tail.
+type Observation struct {
+    Record *RunRecord `json:"record"`
+    Log    LogChunk   `json:"log"`
+}
+
+// LogEvent belongs to a transient observation stream, not a stored event log.
+type LogEvent struct {
+    Type   string     `json:"type"`
+    Record *RunRecord `json:"record,omitempty"`
+    Log    LogChunk   `json:"log"`
 }
 
 // Terminal reports a known, retained execution outcome.

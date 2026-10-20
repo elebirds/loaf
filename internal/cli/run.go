@@ -2,6 +2,7 @@ package cli
 
 import (
     "context"
+    "encoding/json"
     "fmt"
     "io"
     "path"
@@ -22,8 +23,10 @@ type runList struct {
     Truncated bool             `json:"truncated"`
 }
 
-func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any)) []*cobra.Command {
+func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any), streamed *bool) []*cobra.Command {
     run := &cobra.Command{Use: "run " + l.Text("run_args"), Short: l.Text("run_short")}
+    var wait string
+    run.Flags().StringVar(&wait, "wait", "0s", l.Text("flag_wait"))
     run.Args = func(cmd *cobra.Command, args []string) error {
         if len(args) > 0 && cmd.ArgsLenAtDash() != 0 {
             return fault.New("BAD_CONFIG", "run_command", nil)
@@ -32,6 +35,18 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
     }
     run.RunE = func(cmd *cobra.Command, args []string) error {
         root, file, err := config.Discover(cmd.Context(), o.CWD)
+        if err != nil {
+            return err
+        }
+        layers := []string{cfg.Run.Wait, file.Run.Wait}
+        if cmd.Flags().Changed("wait") {
+            layers = append(layers, wait)
+        }
+        budget, err := config.ResolveWait(layers...)
+        if err != nil {
+            return err
+        }
+        tail, err := config.ResolveTail(cfg.Logs, file.Logs)
         if err != nil {
             return err
         }
@@ -66,17 +81,45 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
         if !jsonMode && policy.Mode == "update" {
             fmt.Fprintln(o.Err, l.Text("sync_update_warning"))
         }
-        submitted, err := o.Runs.Submit(cmd.Context(), execution.SubmitInput{Project: personal, File: file, Target: name, Connection: machine, RemoteDir: remoteDir, Plan: plan, Args: args, Batch: jsonMode || !o.Interactive}, nil)
+        submitted, err := o.Runs.Submit(cmd.Context(), execution.SubmitInput{Project: personal, File: file, Target: name, Connection: machine, RemoteDir: remoteDir, Plan: plan, Args: args, Batch: jsonMode || !o.Interactive}, func(stage string) {
+            if !jsonMode {
+                fmt.Fprintln(o.Err, l.Text("run_progress_"+stage))
+            }
+        })
         if submitted.ID != "" {
             result(submitted)
         }
         if err != nil {
             return err
         }
-        return nil
+        if budget == 0 {
+            return nil
+        }
+        if jsonMode {
+            observed, err := o.Runs.Observe(cmd.Context(), submitted.Ref, budget, tail, true)
+            result(observed)
+            return err
+        }
+        fmt.Fprintln(o.Err, l.Text("run_accepted", map[string]any{"ID": submitted.ID}))
+        phase := ""
+        observed, err := o.Runs.Follow(cmd.Context(), submitted.Ref, budget, tail, !o.Interactive, func(v execution.View, kind string) error {
+            if v.Phase != "" && v.Phase != phase {
+                phase = v.Phase
+                fmt.Fprintln(o.Err, l.Text("run_phase_"+phase))
+            }
+            if v.Log != nil {
+                _, err := io.WriteString(o.Out, v.Log.Text)
+                return err
+            }
+            return nil
+        })
+        observed.Log = nil
+        result(observed)
+        return err
     }
     ps := newPSCommand(o, cfg, target, l, result)
-    return []*cobra.Command{run, ps}
+    logs := newLogsCommand(o, cfg, target, l, result, streamed)
+    return []*cobra.Command{run, ps, logs}
 }
 
 func runProject(cmd *cobra.Command, o Options, target *string) (config.Project, config.ProjectFile, error) {
@@ -95,14 +138,20 @@ func runProject(cmd *cobra.Command, o Options, target *string) (config.Project, 
 }
 
 func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any)) *cobra.Command {
+    var wait string
     var limit int
     cmd := &cobra.Command{Use: "ps " + l.Text("run_id_arg"), Short: l.Text("ps_short"), Args: arguments(0, 1)}
+    cmd.Flags().StringVar(&wait, "wait", "0s", l.Text("flag_ps_wait"))
     cmd.Flags().IntVar(&limit, "limit", 20, l.Text("flag_limit"))
     cmd.RunE = func(cmd *cobra.Command, args []string) error {
-        if limit < 1 || limit > 1000 {
+        budget, err := config.ResolveWait(wait)
+        if err != nil {
+            return err
+        }
+        if limit < 1 || limit > 1000 || len(args) == 0 && budget > 0 {
             return fault.New("BAD_CONFIG", "invalid_flags", nil)
         }
-        project, _, err := runProject(cmd, o, target)
+        project, file, err := runProject(cmd, o, target)
         if err != nil {
             return err
         }
@@ -112,7 +161,17 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
             if err != nil {
                 return err
             }
-            observed, err := o.Runs.Observe(cmd.Context(), ref, jsonMode || !o.Interactive)
+            tail := 0
+            if budget > 0 {
+                tail, err = config.ResolveTail(cfg.Logs, file.Logs)
+                if err != nil {
+                    return err
+                }
+            }
+            observed, err := o.Runs.Observe(cmd.Context(), ref, budget, tail, jsonMode || !o.Interactive)
+            if budget == 0 {
+                observed.Log = nil
+            }
             result(observed)
             return err
         }
@@ -125,7 +184,8 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
         defer cancel()
         failed := false
         for _, ref := range refs[:min(len(refs), limit)] {
-            observed, err := o.Runs.Observe(ctx, ref, jsonMode || !o.Interactive)
+            observed, err := o.Runs.Observe(ctx, ref, 0, 0, jsonMode || !o.Interactive)
+            observed.Log = nil
             if err != nil {
                 failed = true
             }
@@ -136,6 +196,75 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
             return fault.New("QUERY_PARTIAL", "run_query_partial", nil)
         }
         return nil
+    }
+    return cmd
+}
+
+func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any), streamed *bool) *cobra.Command {
+    var tail int
+    var follow bool
+    cmd := &cobra.Command{Use: "logs " + l.Text("run_id_arg"), Short: l.Text("logs_short"), Args: arguments(0, 1)}
+    cmd.Flags().IntVar(&tail, "tail", 100, l.Text("flag_tail"))
+    cmd.Flags().BoolVarP(&follow, "follow", "f", false, l.Text("flag_follow"))
+    cmd.RunE = func(cmd *cobra.Command, args []string) error {
+        project, file, err := runProject(cmd, o, target)
+        if err != nil {
+            return err
+        }
+        layers := []config.LogSettings{cfg.Logs, file.Logs}
+        if cmd.Flags().Changed("tail") {
+            layers = append(layers, config.LogSettings{Tail: &tail})
+        }
+        lines, err := config.ResolveTail(layers...)
+        if err != nil {
+            return err
+        }
+        id := ""
+        if len(args) > 0 {
+            id = args[0]
+        }
+        ref, err := o.Runs.Select(project.ID, id)
+        if err != nil {
+            return err
+        }
+        jsonMode, _ := cmd.Flags().GetBool("json")
+        if follow {
+            if jsonMode {
+                *streamed = true
+            }
+            last, err := o.Runs.Follow(cmd.Context(), ref, 0, lines, jsonMode || !o.Interactive, func(v execution.View, kind string) error {
+                if jsonMode {
+                    return json.NewEncoder(o.Out).Encode(envelope{SchemaVersion: 1, OK: true, Data: struct {
+                        Type string         `json:"type"`
+                        Run  execution.View `json:"run"`
+                    }{kind, v}})
+                }
+                if v.Log != nil {
+                    _, err := io.WriteString(o.Out, v.Log.Text)
+                    return err
+                }
+                return nil
+            })
+            if err != nil && jsonMode {
+                result(struct {
+                    Type string         `json:"type"`
+                    Run  execution.View `json:"run"`
+                }{"error", last})
+            }
+            return err
+        }
+        observed, err := o.Runs.Observe(cmd.Context(), ref, 0, lines, jsonMode || !o.Interactive)
+        if jsonMode {
+            result(observed)
+        } else if observed.Log != nil {
+            if _, writeErr := io.WriteString(o.Out, observed.Log.Text); writeErr != nil {
+                return writeErr
+            }
+            if observed.Log.Truncated {
+                fmt.Fprintln(o.Err, l.Text("logs_truncated"))
+            }
+        }
+        return err
     }
     return cmd
 }
@@ -163,4 +292,10 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
         fmt.Fprintf(out, "  %s: %s", l.Text("run_query"), v.QueryError)
     }
     fmt.Fprintln(out)
+    if v.Log != nil {
+        fmt.Fprint(out, v.Log.Text)
+        if v.Log.Truncated {
+            fmt.Fprintln(out, l.Text("logs_truncated"))
+        }
+    }
 }

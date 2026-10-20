@@ -6,6 +6,7 @@ import (
     "errors"
     "strings"
     "testing"
+    "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
@@ -51,12 +52,15 @@ func (r *localRemote) Control(_ context.Context, _ config.Target, _ string, req 
     if r.unknown {
         return nil, errors.New("not reachable")
     }
-    request := r.request
-    if req.Action == "status" {
-        request = req
-    }
-    return &wire.RunRecord{FormatVersion: 1, Request: request, Status: "running", Phase: "command", SupervisorPID: 123}, nil
+    return &wire.RunRecord{FormatVersion: 1, Request: r.request, Status: "running", Phase: "command", SupervisorPID: 123}, nil
 }
+func (r *localRemote) Observe(_ context.Context, _ config.Target, _ string, req wire.Request, _ bool) (wire.Observation, error) {
+    return wire.Observation{Record: &wire.RunRecord{FormatVersion: 1, Request: req, Status: "failed", Phase: "command"}}, nil
+}
+func (r *localRemote) Follow(context.Context, config.Target, string, wire.Request, bool, func(wire.LogEvent) error) error {
+    return nil
+}
+
 func executionFixture(t *testing.T) (Service, SubmitInput, *localSender, *localRemote) {
     t.Helper()
     store := config.New(t.TempDir(), "", "")
@@ -175,8 +179,11 @@ func TestLatestAmbiguityAndBoundObservation(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    result, err := service.Observe(context.Background(), actual, true)
-    if err != nil || result.Target != "lab" || result.Status != "running" {
+    result, err := service.Observe(context.Background(), actual, 0, 100, true)
+    if err != nil || result.Target != "lab" || result.Status != "failed" {
         t.Fatal(result, err)
+    }
+    if request(actual, time.Nanosecond, 100).WaitMillis != 1 {
+        t.Fatal("positive wait became an unbounded follow")
     }
 }

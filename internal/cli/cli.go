@@ -93,6 +93,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     }
     l, langErr := i18n.New(preferred, o.Env)
     var result any
+    streamed := false
     var target string
     root := &cobra.Command{Use: "loaf", Short: l.Text("root_short"), SilenceErrors: true, SilenceUsage: true, DisableAutoGenTag: true}
     root.CompletionOptions.DisableDefaultCmd = true
@@ -228,7 +229,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     }}
     root.SetHelpCommand(help)
     root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
-    root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value })...)
+    root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     err := earlyErr
     if err == nil {
         err = langErr
@@ -267,11 +268,14 @@ func Execute(ctx context.Context, args []string, o Options) int {
             code = 3
         }
     }
-    if jsonMode {
+    if jsonMode && (!streamed || view != nil) {
+        if streamed && result == nil {
+            result = map[string]string{"type": "error"}
+        }
         if err := json.NewEncoder(o.Out).Encode(envelope{1, view == nil, result, view}); err != nil {
             return 1
         }
-    } else {
+    } else if !jsonMode {
         if result != nil {
             printResult(o.Out, result, l, view == nil)
         }
@@ -297,7 +301,7 @@ func earlyOptions(args []string) (bool, string, error) {
         if a == "--" {
             break
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--limit" || a == "--exclude" || a == "--mode" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" {
             i++
             continue
         }
@@ -355,7 +359,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && (c.Name() == "ps") {
+        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs") {
             return
         }
         name := "--" + f.Name

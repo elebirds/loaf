@@ -2,12 +2,14 @@
 package remote
 
 import (
+    "context"
     "encoding/json"
     "errors"
     "fmt"
     "io"
     "os"
     "os/exec"
+    "os/signal"
     "path/filepath"
     "regexp"
     "strings"
@@ -37,7 +39,21 @@ func Serve(in io.Reader, out io.Writer) int {
         err = errors.New("BAD_REQUEST")
     }
     response := wire.Response{FormatVersion: 1, Version: wire.Version}
-    if err == nil {
+    if err == nil && (req.Action == "observe" || req.Action == "follow") {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        if req.Action == "follow" {
+            if streamErr := Follow(ctx, req, out); streamErr != nil {
+                _ = json.NewEncoder(out).Encode(wire.Response{FormatVersion: 1, Version: wire.Version, Error: &wire.Error{Code: streamErr.Error()}})
+                return 1
+            }
+            return 0
+        }
+        observed, observeErr := Observe(ctx, req)
+        response.Record = observed.Record
+        response.Log = &observed.Log
+        err = observeErr
+    } else if err == nil {
         response.Record, err = Handle(req)
     }
     response.OK = err == nil

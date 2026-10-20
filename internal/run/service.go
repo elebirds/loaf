@@ -25,6 +25,8 @@ type RunIndex interface {
 // Remote is the SSH control and observation boundary, independent of rendering.
 type Remote interface {
     Control(context.Context, config.Target, string, wire.Request, bool) (*wire.RunRecord, error)
+    Observe(context.Context, config.Target, string, wire.Request, bool) (wire.Observation, error)
+    Follow(context.Context, config.Target, string, wire.Request, bool, func(wire.LogEvent) error) error
 }
 
 // Service composes existing SSH, native source transfer and private run locators.
@@ -50,18 +52,19 @@ type SubmitInput struct {
 
 // View exposes operational results without leaking private request environments.
 type View struct {
-    ID          string        `json:"run_id"`
-    Target      string        `json:"target"`
-    RemoteDir   string        `json:"remote_dir"`
-    Status      string        `json:"status"`
-    Phase       string        `json:"phase,omitempty"`
-    CreatedAt   time.Time     `json:"created_at"`
-    CompletedAt *time.Time    `json:"completed_at,omitempty"`
-    ExitCode    *int          `json:"exit_code"`
-    Signal      string        `json:"signal,omitempty"`
-    Reason      string        `json:"reason,omitempty"`
-    QueryError  string        `json:"query_error,omitempty"`
-    Ref         config.RunRef `json:"-"`
+    ID          string         `json:"run_id"`
+    Target      string         `json:"target"`
+    RemoteDir   string         `json:"remote_dir"`
+    Status      string         `json:"status"`
+    Phase       string         `json:"phase,omitempty"`
+    CreatedAt   time.Time      `json:"created_at"`
+    CompletedAt *time.Time     `json:"completed_at,omitempty"`
+    ExitCode    *int           `json:"exit_code"`
+    Signal      string         `json:"signal,omitempty"`
+    Reason      string         `json:"reason,omitempty"`
+    QueryError  string         `json:"query_error,omitempty"`
+    Log         *wire.LogChunk `json:"log,omitempty"`
+    Ref         config.RunRef  `json:"-"`
 }
 
 func view(ref config.RunRef, r *wire.RunRecord) View {
@@ -249,15 +252,16 @@ func (s Service) Select(projectID, id string) (config.RunRef, error) {
     return refs[0], nil
 }
 
-// Observe queries a saved run without reading current target defaults.
-func (s Service) Observe(ctx context.Context, ref config.RunRef, batch bool) (View, error) {
-    timeout, cancel := context.WithTimeout(ctx, 20*time.Second)
+func request(ref config.RunRef, wait time.Duration, tail int) wire.Request {
+    return wire.Request{FormatVersion: wire.FormatVersion, Version: ref.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, WaitMillis: int64((wait + time.Millisecond - 1) / time.Millisecond), Tail: tail}
+}
+
+// Observe queries a bound locator without reading today's target configuration.
+func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool) (View, error) {
+    timeout, cancel := context.WithTimeout(ctx, wait+20*time.Second)
     defer cancel()
-    record, err := s.Remote.Control(timeout, ref.Connection, ref.Runner, wire.Request{
-        FormatVersion: wire.FormatVersion, Version: ref.Version, Action: "status",
-        Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID,
-    }, batch)
-    result := view(ref, record)
+    observed, err := s.Remote.Observe(timeout, ref.Connection, ref.Runner, request(ref, wait, tail), batch)
+    result := view(ref, observed.Record)
     if err != nil {
         if ctx.Err() != nil {
             return result, fault.Wrap("OBSERVATION_CANCELED", "observation_canceled", ctx.Err())
@@ -265,10 +269,31 @@ func (s Service) Observe(ctx context.Context, ref config.RunRef, batch bool) (Vi
         result.QueryError = errorCode(err)
         return result, remoteFault(err)
     }
-    if !matching(ref, record) {
+    if !matching(ref, observed.Record) {
         return result, fault.New("BAD_RESPONSE", "run_query", nil)
     }
+    result.Log = &observed.Log
     return result, nil
+}
+
+// Follow observes one run over one SSH connection; callback errors only close it.
+func (s Service) Follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, emit func(View, string) error) (View, error) {
+    last := view(ref, nil)
+    err := s.Remote.Follow(ctx, ref.Connection, ref.Runner, request(ref, wait, tail), batch, func(event wire.LogEvent) error {
+        if !matching(ref, event.Record) {
+            return errors.New("BAD_RESPONSE")
+        }
+        last = view(ref, event.Record)
+        last.Log = &event.Log
+        return emit(last, event.Type)
+    })
+    if err != nil {
+        if ctx.Err() != nil {
+            return last, fault.Wrap("OBSERVATION_CANCELED", "observation_canceled", ctx.Err())
+        }
+        return last, remoteFault(err)
+    }
+    return last, nil
 }
 
 func errorCode(err error) string {

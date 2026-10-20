@@ -61,8 +61,3 @@ func (c *Client) Control(ctx context.Context, target config.Target, runner strin
     }
     return response.Record, nil
 }
-
-// RemoteError distinguishes a runner's response from an interrupted transport.
-type RemoteError struct{ Code string }
-
-func (e *RemoteError) Error() string { return e.Code }

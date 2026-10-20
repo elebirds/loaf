@@ -75,6 +75,8 @@ Exercise the binary produced by the current build, not a globally installed `loa
 
 ## CLI and data contracts
 
+- `run` includes prerequisite checks, source sync and independent-copy preparation; do not require manual `check`/`sync` before submission. `run --wait` and `ps <id> --wait` are bounded observation, not remote runtime limits. Defaults are immediate return after acceptance, configurable project/user waiting, and 100 log tail lines; preserve explicit zero overrides. List queries are bounded and preserve partial results. `exec`, public `stop`, and `pull` remain deferred.
+- Normal `run --wait` shows preparation and live log feedback. JSON finite commands keep one result; only `logs -f --json` emits NDJSON chunks followed by end/error. Bound log text to 256 KiB per chunk, report truncation, and preserve source byte offsets. Do not expose private execution environments or raw run records in public observations.
 - Discover the project from the nearest `loaf.toml`, then the Git worktree root, then the current directory. Target precedence is `--target`, project-local `loaf use`, then TOML `target`; never inherit another project's last machine.
 - Sync policy scalars use explicit flags, project `[sync]`, global `[sync]`, then built-ins (`mode = "mirror"`, `respect_gitignore = true`). Preserve explicit false values and merge each scalar independently. `exclude` appends across scopes and cannot negate built-in exclusions. `update` mode retains removed/newly excluded cache files; show that consequence and the effective policy.
 - `sync --dry-run` only selects local files and reports policy/exclusions, without requiring a target, connecting, deploying, or writing state. A real sync deploys the bundled receiver. Keep the preview distinct from a remote transfer simulation or a frozen snapshot.
@@ -133,9 +135,3 @@ A real GPU workflow is separate acceptance work on an explicitly authorized exis
 - Before handing off, inspect the complete affected diff, check public-contract consistency, and remove debug output or accidental artifacts. Update this guide when real commands or package boundaries change; keep it independently usable without local planning notes.
 - When commits are authorized, use English subjects and bodies in `type(module): description` format, for example `feat(cli): add machine connection management`. Group coherent, tested behavior changes; describe the change rather than milestone codes.
 - Summarize the result, validation actually performed, and material unresolved limitations. Separate build success from runtime evidence. Do not commit, push, tag, publish, or modify a real server without the corresponding user authorization.
-
-## Durable execution and status
-
-run includes prerequisite checks, sync, and an independent work copy prepared under the receiving lock. Never require manual check/sync. Preserve argv; project command/setup use explicit /bin/sh -c, and setup shell state does not persist. Save locations before submission and claim each remote ID once; lost confirmation must query the same ID without resubmission.
-
-ps queries saved connections/locations, not current defaults, and preserves successful rows when another query fails. Public observations omit private environments. Logs, bounded waits, public stop, and downloads remain deferred.

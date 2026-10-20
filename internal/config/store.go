@@ -34,6 +34,8 @@ type Global struct {
     FormatVersion int               `toml:"format_version"`
     Language      string            `toml:"language,omitempty"`
     Sync          SyncSettings      `toml:"sync,omitempty"`
+    Run           RunPreferences    `toml:"run,omitempty"`
+    Logs          LogSettings       `toml:"logs,omitempty"`
     Targets       map[string]Target `toml:"targets"`
 }
 
@@ -87,6 +89,12 @@ func (s *Store) Load() (Global, error) {
         c.Targets = map[string]Target{}
     }
     if _, err := ResolveSync(c.Sync); err != nil {
+        return c, err
+    }
+    if _, err := ResolveWait(c.Run.Wait); err != nil {
+        return c, err
+    }
+    if _, err := ResolveTail(c.Logs); err != nil {
         return c, err
     }
     return c, nil

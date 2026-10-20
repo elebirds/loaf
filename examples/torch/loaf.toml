@@ -1,0 +1,5 @@
+[run]
+command = "python3 -u train.py --device cuda"
+
+[outputs]
+paths = ["outputs"]

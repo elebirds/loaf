@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Pre-release: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, `pull`, and `version` are available in [v0.1.0-rc.1](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.1) and from source.
+> Pre-release: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, `pull`, and `version` are available in [v0.1.0-rc.2](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) and from source.
 
 ## Install
 
@@ -35,7 +35,7 @@ Published release archives carry GitHub build-provenance attestations, verifiabl
 
 ### Build from source
 
-Requires Go 1.27.1, Git, OpenSSH, and rsync. The Go version is pinned in `mise.toml`; review that file before trusting it if you use mise.
+Requires Go 1.27.3, Git, OpenSSH, and rsync. The Go version is pinned in `mise.toml`; review that file before trusting it if you use mise.
 
 ```bash
 bash scripts/build.sh

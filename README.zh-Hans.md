@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 预发布版本：[v0.1.0-rc.1](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.1) 和源码均提供 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop`、`pull` 和 `version`。
+> 预发布版本：[v0.1.0-rc.2](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 和源码均提供 `add`、`use`、`check`、`sync`、`run`、`ps`、`logs`、`stop`、`pull` 和 `version`。
 
 ## 安装
 
@@ -35,7 +35,7 @@ grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
 
 ### 从源码构建
 
-需要 Go 1.27.1、Git、OpenSSH 和 rsync。Go 版本固定在 `mise.toml`；使用 mise 时，请先检查该文件再信任项目配置。
+需要 Go 1.27.3、Git、OpenSSH 和 rsync。Go 版本固定在 `mise.toml`；使用 mise 时，请先检查该文件再信任项目配置。
 
 ```bash
 bash scripts/build.sh

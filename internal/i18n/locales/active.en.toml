@@ -1,5 +1,11 @@
 [root_short]
 other = "Connect research projects to existing SSH machines."
+[add_short]
+other = "Save an SSH machine alias."
+[use_short]
+other = "Select the default machine for this project."
+[check_short]
+other = "Inspect connectivity and the remote environment."
 [version_short]
 other = "Show build and protocol versions."
 [help_short]
@@ -14,6 +20,8 @@ other = "Options:"
 other = "value"
 [default_value]
 other = "default: {{.Value}}"
+[name_arg]
+other = "<name>"
 [command_arg]
 other = "[command]"
 [options_arg]
@@ -24,6 +32,16 @@ other = "Show help."
 other = "Interface language: auto, en, or zh-Hans."
 [flag_json]
 other = "Write a structured JSON result without interaction."
+[flag_target]
+other = "Override the project's target alias."
+[flag_ssh]
+other = "SSH connection command or existing Host alias."
+[flag_remote]
+other = "Remote base directory; projects receive separate subdirectories."
+[flag_replace]
+other = "Replace an existing target alias explicitly."
+[flag_timeout]
+other = "Maximum time for the connection and environment check."
 [invalid_flags]
 other = "Cannot parse command options. Check option names and values."
 [invalid_command]
@@ -36,7 +54,77 @@ other = "Use loaf help or loaf <command> --help."
 other = "Unsupported interface language. Available: {{.Languages}}."
 [config_read]
 other = "Cannot read Loaf configuration or state. Check file permissions and TOML/JSON syntax."
+[project_config]
+other = "Cannot read project configuration. Check loaf.toml and its field names."
+[state_write]
+other = "Cannot save project state. Check the state directory's permissions and free space."
 [unknown_format]
 other = "Unsupported data format version. The original file was left unchanged."
+[invalid_target]
+other = "Use a valid target name and an absolute or ~/ remote base directory."
+[invalid_remote]
+other = "Remote directory must be absolute or start with ~/; root, home itself, and .. are not allowed."
+[target_exists]
+other = "Target {{.Target}} already exists. Use --replace to change it."
+[target_unknown]
+other = "Unknown target: {{.Target}}. Add it with loaf add first."
+[target_required]
+other = "No target selected. Use loaf use <name> or --target <name>."
+[ssh_input]
+other = "Enter only an SSH connection or Host alias. Commands, expansions, forwarding, and unsafe SSH options are not accepted."
+[ssh_prompt]
+other = "SSH command or Host alias: "
+[ssh_required]
+other = "Provide --ssh when running without an interactive terminal."
+[ssh_missing]
+other = "System OpenSSH is unavailable. Install it and make ssh available on PATH."
+[ssh_failed]
+other = "SSH connection or remote operation failed."
+[ssh_hint]
+other = "Use native ssh with the saved connection to check the address, authentication, and host key; then retry. JSON mode cannot ask for credentials or trust."
+[probe_failed]
+other = "The remote environment returned an invalid probe response. Check login scripts for unexpected stdout."
+[check_failed]
+other = "Environment check found required capabilities missing. Review the issues below."
 [internal_error]
 other = "The operation failed. Check file access and retry."
+[added]
+other = "Saved target {{.Target}} ({{.Destination}})."
+[selected]
+other = "Project {{.Root}} now uses {{.Target}}."
+[check_heading]
+other = "Target: {{.Target}}"
+[platform]
+other = "Remote platform"
+[remote_directory]
+other = "Remote directory"
+[writable]
+other = "Directory writable"
+[yes]
+other = "yes"
+[no]
+other = "no"
+[disk]
+other = "Available disk"
+[local_tools]
+other = "Local tools"
+[remote_tools]
+other = "Remote tools"
+[missing]
+other = "not found (optional unless listed as an issue)"
+[gpu]
+other = "GPU / driver"
+[check_ok]
+other = "Connection and required tools are ready."
+[LOCAL_RSYNC_MISSING]
+other = "Local rsync is missing; install it before syncing."
+[LOCAL_RSYNC_FAILED]
+other = "Local rsync could not run; check its installation."
+[REMOTE_OS_UNSUPPORTED]
+other = "The remote OS must be Linux."
+[REMOTE_ARCH_UNSUPPORTED]
+other = "The remote architecture must be x86_64 or aarch64."
+[REMOTE_DIRECTORY_UNWRITABLE]
+other = "The remote directory or its existing parent is not writable and searchable."
+[REMOTE_RSYNC_MISSING]
+other = "Remote rsync is missing; install it before syncing."

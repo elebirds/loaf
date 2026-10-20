@@ -13,7 +13,7 @@ Keep machine provisioning, GPU scheduling, queues, automatic retries, central se
 
 ## Available entry points
 
-The current foundation provides root help, version, English/Simplified Chinese, and JSON output. Machine management and remote execution are not available yet.
+Available commands are add, use, check, and version, with English/Simplified Chinese and JSON. Normal check is read-only remotely; bundled runner verification and background execution are not available yet.
 
 - `go run ./scripts/format.go` formats Go with four-space indentation; use `-check` in checks. Do not run standalone gofmt.
 - `go test ./...`, `go vet ./...`, and `go test -race ./...` validate changes.
@@ -25,3 +25,11 @@ Keep CLI rendering local, errors structured, and both embedded catalogs aligned.
 Keep both READMEs consistent with available commands. docs/ is local-only and Git-ignored; do not force-add it or make builds depend on it. Governance, SECURITY, CHANGELOG, ADR, and dependency-update configuration remain deferred.
 
 When authorized, use English type(module): description commit subjects and bodies without milestone codes. Do not push, tag, publish, or modify a real server without authorization.
+
+## SSH and project selection
+
+Reuse SSH Config, agents, jump hosts, and host-key verification. Never store passwords, disable verification, or rewrite SSH configuration. Accept only pasted connection arguments, not appended commands or Shell expressions.
+
+Discover the nearest loaf.toml, then Git worktree root, then current directory. Choose a target by explicit flag, project-local use, then project TOML; never inherit another project's last machine. Save private configuration and project selections atomically under locks.
+
+Run bash scripts/integration.sh for isolated real SSH checks using temporary keys and CPU-only containers. Do not touch personal SSH files or research servers.

@@ -1,5 +1,11 @@
 [root_short]
 other = "连接科研项目与已有的 SSH 机器。"
+[add_short]
+other = "保存 SSH 机器别名。"
+[use_short]
+other = "选择当前项目的默认机器。"
+[check_short]
+other = "检查连接与远端基础环境。"
 [version_short]
 other = "显示构建与协议版本。"
 [help_short]
@@ -14,6 +20,8 @@ other = "选项："
 other = "值"
 [default_value]
 other = "默认：{{.Value}}"
+[name_arg]
+other = "<别名>"
 [command_arg]
 other = "[命令]"
 [options_arg]
@@ -24,6 +32,16 @@ other = "显示帮助。"
 other = "界面语言：auto、en 或 zh-Hans。"
 [flag_json]
 other = "输出结构化 JSON，不进行交互。"
+[flag_target]
+other = "覆盖当前项目的目标别名。"
+[flag_ssh]
+other = "SSH 连接命令或已有的 Host 别名。"
+[flag_remote]
+other = "远端基目录；各项目使用独立子目录。"
+[flag_replace]
+other = "明确替换已有的目标别名。"
+[flag_timeout]
+other = "连接及环境检查的最长时间。"
 [invalid_flags]
 other = "无法解析命令选项，请检查选项名称及取值。"
 [invalid_command]
@@ -36,7 +54,77 @@ other = "请使用 loaf help 或 loaf <命令> --help。"
 other = "不支持该界面语言。可用语言：{{.Languages}}。"
 [config_read]
 other = "无法读取 Loaf 配置或状态，请检查文件权限及 TOML/JSON 语法。"
+[project_config]
+other = "无法读取项目配置，请检查 loaf.toml 及字段名称。"
+[state_write]
+other = "无法保存项目状态，请检查状态目录权限及可用空间。"
 [unknown_format]
 other = "不支持该数据格式版本，原文件保持不变。"
+[invalid_target]
+other = "请使用有效的目标别名，以及绝对路径或以 ~/ 开头的远端基目录。"
+[invalid_remote]
+other = "远端目录须为绝对路径或以 ~/ 开头，不允许根目录、主目录本身及 ..。"
+[target_exists]
+other = "目标 {{.Target}} 已存在，修改时请使用 --replace。"
+[target_unknown]
+other = "未知目标：{{.Target}}。请先使用 loaf add 添加。"
+[target_required]
+other = "尚未选择目标，请使用 loaf use <别名> 或 --target <别名>。"
+[ssh_input]
+other = "请仅输入 SSH 连接或 Host 别名，不接受远端命令、变量展开、端口转发或不安全的 SSH 选项。"
+[ssh_prompt]
+other = "SSH 命令或 Host 别名："
+[ssh_required]
+other = "非交互终端中请提供 --ssh。"
+[ssh_missing]
+other = "系统 OpenSSH 不可用，请安装并确保 PATH 中可以找到 ssh。"
+[ssh_failed]
+other = "SSH 连接或远端操作失败。"
+[ssh_hint]
+other = "请先使用原生 ssh 按已保存的连接检查地址、认证及主机密钥，再重试。JSON 模式无法询问凭据或主机信任。"
+[probe_failed]
+other = "远端环境检查返回了无效响应，请检查登录脚本是否向标准输出写入额外内容。"
+[check_failed]
+other = "环境检查发现缺少必要条件，请查看下列问题。"
 [internal_error]
 other = "操作失败，请检查文件访问权限后重试。"
+[added]
+other = "已保存目标 {{.Target}}（{{.Destination}}）。"
+[selected]
+other = "项目 {{.Root}} 已选择 {{.Target}}。"
+[check_heading]
+other = "目标：{{.Target}}"
+[platform]
+other = "远端平台"
+[remote_directory]
+other = "远端目录"
+[writable]
+other = "目录可写"
+[yes]
+other = "是"
+[no]
+other = "否"
+[disk]
+other = "可用磁盘"
+[local_tools]
+other = "本地工具"
+[remote_tools]
+other = "远端工具"
+[missing]
+other = "未找到（除非列为问题，否则为可选项）"
+[gpu]
+other = "GPU / 驱动"
+[check_ok]
+other = "连接与必要工具已就绪。"
+[LOCAL_RSYNC_MISSING]
+other = "本地缺少 rsync，请在同步前安装。"
+[LOCAL_RSYNC_FAILED]
+other = "本地 rsync 无法运行，请检查安装。"
+[REMOTE_OS_UNSUPPORTED]
+other = "远端操作系统须为 Linux。"
+[REMOTE_ARCH_UNSUPPORTED]
+other = "远端架构须为 x86_64 或 aarch64。"
+[REMOTE_DIRECTORY_UNWRITABLE]
+other = "远端目录或已存在的父目录不可写或不可进入。"
+[REMOTE_RSYNC_MISSING]
+other = "远端缺少 rsync，请在同步前安装。"

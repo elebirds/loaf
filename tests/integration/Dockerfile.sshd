@@ -1,0 +1,9 @@
+FROM alpine:3.23
+RUN apk add --no-cache openssh rsync coreutils procps \
+    && adduser -D researcher \
+    && passwd -u researcher \
+    && mkdir -p /home/researcher/.ssh \
+    && chmod 700 /home/researcher/.ssh \
+    && chown -R researcher:researcher /home/researcher
+EXPOSE 22
+CMD ["/bin/sh", "-c", "ssh-keygen -A && exec /usr/sbin/sshd -D -e -o PasswordAuthentication=no -o PermitRootLogin=no -o AllowTcpForwarding=yes -o AuthorizedKeysFile=.ssh/authorized_keys"]

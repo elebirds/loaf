@@ -1,0 +1,4 @@
+**
+!tests/
+!tests/integration/
+!tests/integration/Dockerfile.sshd

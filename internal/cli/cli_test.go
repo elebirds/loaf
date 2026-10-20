@@ -10,11 +10,25 @@ import (
     "testing"
 
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/ssh"
 )
+
+type fakeChecker struct {
+    Target config.Target
+    Dir    string
+    Batch  bool
+}
+
+func (f *fakeChecker) Check(_ context.Context, t config.Target, dir string, batch bool) (ssh.Report, error) {
+    f.Target = t
+    f.Dir = dir
+    f.Batch = batch
+    return ssh.Report{OS: "Linux", Arch: "aarch64", RemoteDir: dir, Writable: true, Issues: []string{}}, nil
+}
 
 func fixture(t *testing.T) Options {
     t.Helper()
-    return Options{Store: config.New(t.TempDir(), "", ""), CWD: t.TempDir(), Env: map[string]string{"LANG": "C"}, In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
+    return Options{Store: config.New(t.TempDir(), "", ""), Checker: &fakeChecker{}, CWD: t.TempDir(), Env: map[string]string{"LANG": "C"}, In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
 }
 func run(t *testing.T, o Options, args ...string) (int, string, string) {
     t.Helper()
@@ -25,8 +39,29 @@ func run(t *testing.T, o Options, args ...string) (int, string, string) {
     return code, out.String(), errout.String()
 }
 
+func TestConnectionWorkflowJSON(t *testing.T) {
+    o := fixture(t)
+    for _, args := range [][]string{{"add", "demo", "--ssh", "ssh -p 2222 root@example.com", "--json"}, {"use", "demo", "--json"}, {"check", "--json"}} {
+        code, out, stderr := run(t, o, args...)
+        if code != 0 || stderr != "" {
+            t.Fatalf("%v: %d %s %s", args, code, out, stderr)
+        }
+        var e envelope
+        if err := json.Unmarshal([]byte(out), &e); err != nil || e.SchemaVersion != 1 || !e.OK {
+            t.Fatalf("%s %v", out, err)
+        }
+    }
+    checker := o.Checker.(*fakeChecker)
+    if checker.Target.Destination != "root@example.com" || !checker.Batch || !strings.Contains(checker.Dir, "p_") {
+        t.Fatalf("%+v", checker)
+    }
+    if _, err := os.Stat(filepath.Join(o.CWD, "loaf.toml")); !os.IsNotExist(err) {
+        t.Fatal("use modified shared project configuration")
+    }
+}
+
 func TestLocalizedHelpAndParserErrors(t *testing.T) {
-    for _, args := range [][]string{{"--help"}, {"version", "--help"}, {"help", "version"}, {"version", "extra"}, {"version", "--bad"}, {"bogus"}} {
+    for _, args := range [][]string{{"--help"}, {"add", "--help"}, {"check", "--help"}, {"help", "use"}, {"add"}, {"check", "--bad"}, {"check", "--timeout", "bad"}, {"bogus"}} {
         for _, lang := range []string{"en", "zh-Hans"} {
             o := fixture(t)
             code, out, stderr := run(t, o, append([]string{"--lang", lang}, args...)...)
@@ -44,6 +79,44 @@ func TestLocalizedHelpAndParserErrors(t *testing.T) {
                 t.Fatalf("untranslated parser/help: %s %s", out, stderr)
             }
         }
+    }
+}
+
+func TestLanguagePrecedenceAndJSONStability(t *testing.T) {
+    o := fixture(t)
+    o.Env["LOAF_LANG"] = "zh-Hans"
+    _, out, _ := run(t, o, "--help")
+    if !strings.Contains(out, "用法") {
+        t.Fatal(out)
+    }
+    _, out, _ = run(t, o, "--lang", "en", "--help")
+    if !strings.Contains(out, "Usage") {
+        t.Fatal(out)
+    }
+    var errorsByLanguage []errorView
+    for _, lang := range []string{"en", "zh-Hans"} {
+        code, out, stderr := run(t, o, "--lang", lang, "use", "missing", "--json")
+        if code != 2 || stderr != "" {
+            t.Fatal(code, out, stderr)
+        }
+        var e envelope
+        if err := json.Unmarshal([]byte(out), &e); err != nil {
+            t.Fatal(err)
+        }
+        errorsByLanguage = append(errorsByLanguage, *e.Error)
+    }
+    if errorsByLanguage[0].Code != errorsByLanguage[1].Code || errorsByLanguage[0].Message == errorsByLanguage[1].Message {
+        t.Fatal(errorsByLanguage)
+    }
+    for _, args := range [][]string{{"--lang", "zh-Hant", "--json", "version"}, {"--lang=", "--json"}} {
+        code, out, _ := run(t, o, args...)
+        if code != 2 || !json.Valid([]byte(out)) {
+            t.Fatal(code, out)
+        }
+    }
+    code, out, _ := run(t, o, "add", "demo", "--json")
+    if code != 2 || !strings.Contains(out, "BAD_CONFIG") {
+        t.Fatal(code, out)
     }
 }
 
@@ -66,22 +139,5 @@ func TestGlobalLanguageAndFlagAlignment(t *testing.T) {
     }
     if padFlag("--lang <值>", 22) != "--lang <值>"+strings.Repeat(" ", 11) {
         t.Fatalf("CJK flag width: %q", padFlag("--lang <值>", 22))
-    }
-}
-
-func TestVersionAndLanguageErrorsAreStructured(t *testing.T) {
-    o := fixture(t)
-    for _, lang := range []string{"en", "zh-Hans"} {
-        code, out, stderr := run(t, o, "--lang", lang, "version", "--json")
-        var e envelope
-        if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &e) != nil || !e.OK || e.SchemaVersion != 1 {
-            t.Fatal(code, out, stderr)
-        }
-    }
-    for _, args := range [][]string{{"--lang", "zh-Hant", "--json", "version"}, {"--lang=", "--json"}} {
-        code, out, stderr := run(t, o, args...)
-        if code != 2 || stderr != "" || !json.Valid([]byte(out)) {
-            t.Fatal(code, out, stderr)
-        }
     }
 }

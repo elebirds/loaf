@@ -41,6 +41,7 @@ type Options struct {
     Checker     Checker
     Runner      RunnerVerifier
     Syncer      Synchronizer
+    Runs        *execution.Service
     CWD         string
     Env         map[string]string
     In          io.Reader
@@ -227,6 +228,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     }}
     root.SetHelpCommand(help)
     root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
+    root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value })...)
     err := earlyErr
     if err == nil {
         err = langErr
@@ -295,7 +297,7 @@ func earlyOptions(args []string) (bool, string, error) {
         if a == "--" {
             break
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--limit" || a == "--exclude" || a == "--mode" {
             i++
             continue
         }
@@ -353,6 +355,9 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
+        if f.Name == "target" && (c.Name() == "ps") {
+            return
+        }
         name := "--" + f.Name
         if f.Shorthand != "" {
             name = "-" + f.Shorthand + ", " + name
@@ -389,6 +394,18 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         fmt.Fprintln(out, l.Text("selected", map[string]any{"Root": r.Root, "Target": r.Target}))
     case syncResult:
         printSync(out, r, l)
+    case execution.View:
+        printRun(out, r, l)
+    case runList:
+        for _, run := range r.Runs {
+            printRun(out, run, l)
+        }
+        if len(r.Runs) == 0 {
+            fmt.Fprintln(out, l.Text("runs_empty"))
+        }
+        if r.Truncated {
+            fmt.Fprintln(out, l.Text("runs_truncated"))
+        }
     case checkResult:
         fmt.Fprintln(out, l.Text("check_heading", map[string]any{"Target": r.Target}))
         if r.Report.OS == "" {

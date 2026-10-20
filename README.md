@@ -6,7 +6,7 @@
 
 Loaf remembers your SSH machines and synchronizes working code to a dedicated remote source directory. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Early development: `add`, `use`, `check`, `sync`, and `version` are available from source. The background-run CLI, logs, and result downloads are still being built.
+> Early development: add, use, check, sync, run, ps, and version are available from source. Logs, public stop, and output downloads are not available yet.
 
 ## Build from source
 
@@ -46,6 +46,24 @@ loaf check --runner
 Normal `check` only observes the remote environment. `--runner` additionally uploads the matching bundled executable into a private, versioned Loaf directory and verifies its version. It does not start an experiment or install Python, uv, CUDA, or project dependencies.
 
 Python, uv, and GPU tools are optional observations. Their absence does not make a CPU-capable machine fail the check. Missing rsync, unsupported platforms, or an unwritable remote location do.
+
+## Run an experiment
+
+```bash
+loaf run -- python3 train.py
+loaf ps
+loaf ps <run-id>
+```
+
+Run automatically checks prerequisites, deploys the matching runner, synchronizes working sources, and copies an independent work directory under the same lock. It starts a detached supervisor and returns a saved run ID. No manual check, sync, or project initialization is required. Later syncs do not change existing work copies.
+
+Acceptance means the supervisor owns the task, not that training succeeded. Close the terminal and query the saved ID later. ps lists the latest 20 submitted or submission-uncertain project runs; --limit changes that bound. Individual queries retain their submitted connection and location when defaults change, and cannot be redirected with --target. Partial query failures preserve successful rows.
+
+Submission confirmation loss triggers one query of the original saved ID, not another launch. If still uncertain, SUBMISSION_UNKNOWN returns that ID and operation exit 3. Query it instead of automatically resubmitting.
+
+An optional project [run] supports command = "uv run python train.py", setup = "uv sync", and [run.env] entries. Explicit argv after run -- replaces command without extra Shell interpretation. Configured command and setup use /bin/sh -c. Setup runs explicitly before each task; failure prevents training. Its cd, exports, and activation do not persist into the separate command process. Environment values are not included in public observations. Executable settings are project-only.
+
+Execution happens in <remote_dir>/runs/<run-id>/work/. Provision tools and data explicitly; Loaf does not install dependencies or upload .env. Outputs remain remotely until collected with native tools. Logs, bounded observation, public stop, and output-download commands are not available yet.
 
 ## Sync working code
 
@@ -90,7 +108,7 @@ paths = ["outputs", "checkpoints"]
 
 Target selection follows `--target`, the current project's `loaf use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf add ... --remote-dir '~/projects'`.
 
-User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
+User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside the index in `runs.json`; execution records remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 
@@ -120,7 +138,7 @@ LOAF_LANG=en loaf check --json
 
 Language precedence is `--lang`, `LOAF_LANG`, then `language` in the user configuration. The default `auto` uses the system locale. Language preference is not a shared project setting.
 
-Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for success, 2 for arguments/configuration, and 1 for connection or operation failures.
+Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for success, 2 for arguments/configuration, 3 for unconfirmed submission, and 1 for other failures. Training exit codes belong in data.exit_code, not the CLI exit status.
 
 ## Development
 

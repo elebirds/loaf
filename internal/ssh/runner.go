@@ -54,10 +54,15 @@ func (c *Client) Control(ctx context.Context, target config.Target, runner strin
         if response.Error == nil {
             return response.Record, errors.New("BAD_RESPONSE")
         }
-        return response.Record, errors.New(response.Error.Code)
+        return response.Record, &RemoteError{response.Error.Code}
     }
     if sshErr != nil {
         return response.Record, sshErr
     }
     return response.Record, nil
 }
+
+// RemoteError distinguishes a runner's response from an interrupted transport.
+type RemoteError struct{ Code string }
+
+func (e *RemoteError) Error() string { return e.Code }

@@ -68,6 +68,15 @@ type Report struct {
 
 // Check observes the remote environment without installing tools or creating directories.
 func (c *Client) Check(ctx context.Context, target config.Target, remoteDir string, noninteractive bool) (Report, error) {
+    return c.check(ctx, target, remoteDir, noninteractive, false)
+}
+
+// Preflight checks execution prerequisites without probing Python or GPU tools.
+func (c *Client) Preflight(ctx context.Context, target config.Target, remoteDir string, batch bool) (Report, error) {
+    return c.check(ctx, target, remoteDir, batch, true)
+}
+
+func (c *Client) check(ctx context.Context, target config.Target, remoteDir string, noninteractive, minimal bool) (Report, error) {
     r := Report{Local: map[string]Tool{}, Remote: map[string]Tool{}, Issues: []string{}}
     if !config.ValidRemotePath(remoteDir) {
         return r, fault.New("BAD_CONFIG", "invalid_remote", nil)
@@ -90,7 +99,11 @@ func (c *Client) Check(ctx context.Context, target config.Target, remoteDir stri
     } else {
         r.Issues = append(r.Issues, "LOCAL_RSYNC_MISSING")
     }
-    out, err := c.Execute(ctx, target, "/bin/sh -s -- "+Quote(remoteDir), strings.NewReader(probeScript), noninteractive)
+    script := probeScript
+    if minimal {
+        script = "minimal=yes\n" + script
+    }
+    out, err := c.Execute(ctx, target, "/bin/sh -s -- "+Quote(remoteDir), strings.NewReader(script), noninteractive)
     if err != nil {
         return r, err
     }
@@ -140,6 +153,7 @@ emit() { printf '%s\000' "$1"; }
 emit loaf-probe-1
 emit "$(uname -s)"; emit "$(uname -m)"; emit "$remote"; emit "$writable"; emit "$available"
 rsync=$(command -v rsync || true); emit "$rsync"; emit "$(if [ -n "$rsync" ]; then "$rsync" --version | head -n 1; fi)"
+if [ "${minimal:-no}" = yes ]; then i=0; while [ "$i" -lt 9 ]; do emit ""; i=$((i+1)); done; exit 0; fi
 python=$(command -v python3 || command -v python || true); emit "$python"; emit "$(if [ -n "$python" ]; then "$python" --version 2>&1 || true; fi)"
 uv=$(command -v uv || true); emit "$uv"; emit "$(if [ -n "$uv" ]; then "$uv" --version 2>&1 || true; fi)"
 gpu=$(command -v nvidia-smi || true); emit "$gpu"; emit "$(if [ -n "$gpu" ]; then "$gpu" --version 2>&1 | head -n 1 || true; fi)"

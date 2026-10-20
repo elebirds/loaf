@@ -133,3 +133,9 @@ A real GPU workflow is separate acceptance work on an explicitly authorized exis
 - Before handing off, inspect the complete affected diff, check public-contract consistency, and remove debug output or accidental artifacts. Update this guide when real commands or package boundaries change; keep it independently usable without local planning notes.
 - When commits are authorized, use English subjects and bodies in `type(module): description` format, for example `feat(cli): add machine connection management`. Group coherent, tested behavior changes; describe the change rather than milestone codes.
 - Summarize the result, validation actually performed, and material unresolved limitations. Separate build success from runtime evidence. Do not commit, push, tag, publish, or modify a real server without the corresponding user authorization.
+
+## Durable execution and status
+
+run includes prerequisite checks, sync, and an independent work copy prepared under the receiving lock. Never require manual check/sync. Preserve argv; project command/setup use explicit /bin/sh -c, and setup shell state does not persist. Save locations before submission and claim each remote ID once; lost confirmation must query the same ID without resubmission.
+
+ps queries saved connections/locations, not current defaults, and preserves successful rows when another query fails. Public observations omit private environments. Logs, bounded waits, public stop, and downloads remain deferred.

@@ -38,19 +38,31 @@ func main() {
     var checker cli.Checker = unavailableSSH{}
     var runner cli.RunnerVerifier
     var syncer cli.Synchronizer
+    var runs *execution.Service
+    store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
     if binary, err := exec.LookPath("ssh"); err == nil {
         client := &ssh.Client{Binary: binary}
         checker = client
         bootstrap := execution.Bootstrap{Remote: client}
         runner = bootstrap
         rsync, _ := exec.LookPath("rsync")
-        syncer = sources.Service{Check: client, Runner: func(ctx context.Context, target config.Target, arch string, batch bool) (string, error) {
+        prepare := func(ctx context.Context, target config.Target, arch string, batch bool) (string, error) {
             info, err := bootstrap.Verify(ctx, target, arch, batch)
             return info.Path, err
-        }, Send: ssh.Rsync{Client: client, Binary: rsync}}
+        }
+        sender := ssh.Rsync{Client: client, Binary: rsync}
+        runs = &execution.Service{Index: store, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
+        syncer = sources.Service{Check: client, Runner: prepare, Send: sender}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME")), Checker: checker, Runner: runner, Syncer: syncer, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
+}
+
+// executionCheck limits automatic checks to the current operation's prerequisites.
+type executionCheck struct{ client *ssh.Client }
+
+func (c executionCheck) Check(ctx context.Context, target config.Target, dir string, batch bool) (ssh.Report, error) {
+    return c.client.Preflight(ctx, target, dir, batch)
 }

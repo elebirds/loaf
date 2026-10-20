@@ -71,6 +71,8 @@ func Handle(req wire.Request) (*wire.RunRecord, error) {
     switch req.Action {
     case "start":
         return start(req, dir)
+    case "launch":
+        return launch(req, dir)
     case "status":
         return status(dir)
     case "stop":
@@ -105,13 +107,26 @@ func runPath(req wire.Request) (string, error) {
     if err != nil || root == home {
         return "", errors.New("UNSAFE_PATH")
     }
-    marker, err := os.ReadFile(filepath.Join(root, ".loaf-project"))
+    markerFile, err := os.OpenFile(filepath.Join(root, ".loaf-project"), os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+    if err != nil {
+        return "", errors.New("PROJECT_MISMATCH")
+    }
+    defer markerFile.Close()
+    markerInfo, err := markerFile.Stat()
+    if err != nil || !markerInfo.Mode().IsRegular() {
+        return "", errors.New("PROJECT_MISMATCH")
+    }
+    marker, err := io.ReadAll(io.LimitReader(markerFile, 1024))
     if err != nil || strings.TrimSpace(string(marker)) != req.ProjectID {
         return "", errors.New("PROJECT_MISMATCH")
     }
     runs := filepath.Join(root, "runs")
-    if err := os.MkdirAll(runs, 0700); err != nil {
-        return "", errors.New("WRITE_FAILED")
+    if req.Action != "status" && req.Action != "stop" {
+        if err := os.MkdirAll(runs, 0700); err != nil {
+            return "", errors.New("WRITE_FAILED")
+        }
+    } else if _, err := os.Lstat(runs); errors.Is(err, os.ErrNotExist) {
+        return "", errors.New("RUN_NOT_FOUND")
     }
     real, err := filepath.EvalSymlinks(runs)
     if err != nil || real != runs {
@@ -125,12 +140,24 @@ func runPath(req wire.Request) (string, error) {
 }
 
 func start(req wire.Request, dir string) (*wire.RunRecord, error) {
-    if len(req.Args) == 0 || req.Args[0] == "" {
-        return nil, errors.New("BAD_COMMAND")
+    if err := validateExecution(req); err != nil {
+        return nil, err
     }
     if _, err := os.Lstat(dir); err == nil {
         return existingStart(dir)
     }
+    // Legacy cache-start callers can race before either has created run.json.
+    // Claim the ID before the project lock so that race is reported as the same
+    // uncertain submission, not as an unrelated project's busy cache.
+    claim, err := os.OpenFile(filepath.Join(filepath.Dir(dir), "."+req.RunID+".claim"), os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0600)
+    if err != nil {
+        return nil, errors.New("WRITE_FAILED")
+    }
+    defer claim.Close()
+    if err := unix.Flock(int(claim.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+        return existingStart(dir)
+    }
+    defer unix.Flock(int(claim.Fd()), unix.LOCK_UN)
     projectLock, err := lockProject(req.Root)
     if err != nil {
         if _, statErr := os.Lstat(dir); statErr == nil {
@@ -139,6 +166,9 @@ func start(req wire.Request, dir string) (*wire.RunRecord, error) {
         return nil, err
     }
     defer projectLock.Close()
+    if _, err := os.Lstat(dir); err == nil {
+        return existingStart(dir)
+    }
     state, err := loadCacheState(req.Root)
     if err != nil {
         return nil, err
@@ -146,42 +176,82 @@ func start(req wire.Request, dir string) (*wire.RunRecord, error) {
     if state != nil && !state.Complete {
         return nil, errors.New("SYNC_INCOMPLETE")
     }
+    r, err := copyWork(req, dir)
+    if err != nil {
+        return r, err
+    }
+    if err := projectLock.Close(); err != nil {
+        return r, errors.New("WRITE_FAILED")
+    }
+    return launch(req, dir)
+}
+
+// copyWork runs with the project lock held by its caller. A copied directory is
+// not executable until its ready record is atomically committed.
+func copyWork(req wire.Request, dir string) (*wire.RunRecord, error) {
     if err := os.Mkdir(dir, 0700); err != nil {
         if errors.Is(err, os.ErrExist) {
-            existing, err := status(dir)
-            if err != nil && err.Error() == "RUN_NOT_FOUND" {
-                return nil, errors.New("SUBMISSION_UNKNOWN")
-            }
-            return existing, err
+            return nil, errors.New("RUN_EXISTS")
         }
         return nil, errors.New("WRITE_FAILED")
     }
-    r := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "starting", CreatedAt: time.Now().UTC()}
+    r := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "starting", Phase: "copying", CreatedAt: time.Now().UTC()}
     if err := save(dir, r); err != nil {
-        return nil, err
+        return r, err
     }
     source := filepath.Join(req.Root, "cache")
     real, err := filepath.EvalSymlinks(source)
     if err != nil || real != source {
-        r.Status = "failed"
-        r.Reason = "UNSAFE_SOURCE"
-        _ = save(dir, r)
-        return r, errors.New("UNSAFE_PATH")
+        return r, failCopy(dir, r, "UNSAFE_SOURCE")
     }
     begin := time.Now()
     if err := os.CopyFS(filepath.Join(dir, "work"), os.DirFS(source)); err != nil {
-        r.Status = "failed"
-        r.Reason = "COPY_FAILED"
-        _ = save(dir, r)
-        return r, errors.New("COPY_FAILED")
+        return r, failCopy(dir, r, "COPY_FAILED")
     }
     r.CopyMillis = time.Since(begin).Milliseconds()
+    r.Phase = "prepared"
+    return r, save(dir, r)
+}
+
+func failCopy(dir string, r *wire.RunRecord, reason string) error {
+    now := time.Now().UTC()
+    r.Status = "failed"
+    r.Reason = reason
+    r.CompletedAt = &now
+    if err := save(dir, r); err != nil {
+        return err
+    }
+    if reason == "UNSAFE_SOURCE" {
+        return errors.New("UNSAFE_PATH")
+    }
+    return errors.New(reason)
+}
+
+// launch claims a prepared copy once. The cache is no longer consulted here.
+func launch(req wire.Request, dir string) (*wire.RunRecord, error) {
+    if err := validateExecution(req); err != nil {
+        return nil, err
+    }
+    claim, err := os.OpenFile(filepath.Join(dir, "launch.lock"), os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0600)
+    if err != nil {
+        return nil, errors.New("RUN_NOT_FOUND")
+    }
+    defer claim.Close()
+    if err := unix.Flock(int(claim.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+        return existingStart(dir)
+    }
+    defer unix.Flock(int(claim.Fd()), unix.LOCK_UN)
+    r, err := read(dir)
+    if err != nil {
+        return nil, err
+    }
+    if r.Phase != "prepared" {
+        return existingStart(dir)
+    }
+    r.Request = req
+    r.Phase = "starting"
     if err := save(dir, r); err != nil {
         return r, err
-    }
-    // The source copy is now independent; training never holds the cache lock.
-    if err := projectLock.Close(); err != nil {
-        return r, errors.New("WRITE_FAILED")
     }
     exe, err := os.Executable()
     if err != nil {
@@ -223,15 +293,24 @@ func existingStart(dir string) (*wire.RunRecord, error) {
     return r, err
 }
 
-func terminal(s string) bool { return s == "succeeded" || s == "failed" || s == "stopped" }
+func terminal(s string) bool { return wire.Terminal(s) }
 
 func read(dir string) (*wire.RunRecord, error) {
-    data, err := os.ReadFile(filepath.Join(dir, "run.json"))
+    file, err := os.OpenFile(filepath.Join(dir, "run.json"), os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
     if err != nil {
+        if !errors.Is(err, os.ErrNotExist) {
+            return nil, errors.New("BAD_FORMAT")
+        }
         return nil, errors.New("RUN_NOT_FOUND")
     }
+    defer file.Close()
+    info, err := file.Stat()
+    if err != nil || !info.Mode().IsRegular() {
+        return nil, errors.New("BAD_FORMAT")
+    }
     var r wire.RunRecord
-    if json.Unmarshal(data, &r) != nil || r.FormatVersion != 1 {
+    decoder := json.NewDecoder(io.LimitReader(file, 2<<20))
+    if decoder.Decode(&r) != nil || decoder.Decode(new(any)) != io.EOF || r.FormatVersion != 1 {
         return nil, errors.New("BAD_FORMAT")
     }
     return &r, nil

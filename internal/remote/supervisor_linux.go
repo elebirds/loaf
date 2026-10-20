@@ -2,6 +2,7 @@ package remote
 
 import (
     "errors"
+    "fmt"
     "os"
     "os/exec"
     "path/filepath"
@@ -10,6 +11,7 @@ import (
     "syscall"
     "time"
 
+    "github.com/elebirds/loaf/internal/wire"
     "golang.org/x/sys/unix"
 )
 
@@ -61,18 +63,69 @@ func Supervise(dir string) error {
         return err
     }
     defer log.Close()
-    command := exec.Command(r.Request.Args[0], r.Request.Args[1:]...)
-    command.Dir = filepath.Join(dir, "work")
+    phases := []struct {
+        name string
+        args []string
+    }{}
+    if r.Request.Setup != "" {
+        phases = append(phases, struct {
+            name string
+            args []string
+        }{"setup", []string{"/bin/sh", "-c", r.Request.Setup}})
+    }
+    phases = append(phases, struct {
+        name string
+        args []string
+    }{"command", r.Request.Args})
+    for _, phase := range phases {
+        if requestedStop(dir) {
+            r.Status = "stopped"
+            r.Reason = "STOP_BEFORE_START"
+            return finish()
+        }
+        r.Phase = phase.name
+        if err := executePhase(dir, r, phase.args, log); err != nil {
+            return err
+        }
+        if r.Status != "succeeded" {
+            break
+        }
+    }
+    if err := log.Sync(); err != nil {
+        return err
+    }
+    return finish()
+}
+
+func executePhase(dir string, r *wire.RunRecord, args []string, log *os.File) error {
+    r.ExitCode = nil
+    r.Signal = ""
+    r.ChildPID = 0
+    r.Status = "running"
+    if err := save(dir, r); err != nil {
+        return err
+    }
+    work := filepath.Join(dir, "work")
+    program, err := executable(args[0], work, r.Request.Env)
+    if err != nil {
+        fmt.Fprintf(log, "%s: %v\n", args[0], err)
+        r.Status = "failed"
+        r.Reason = "EXEC_FAILED"
+        return nil
+    }
+    command := exec.Command(program, args[1:]...)
+    command.Dir = work
+    command.Env = commandEnvironment(r.Request.Env)
     command.Stdout = log
     command.Stderr = log
     command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
     if err := command.Start(); err != nil {
+        fmt.Fprintln(log, err)
         r.Status = "failed"
         r.Reason = "EXEC_FAILED"
-        return finish()
+        return nil
     }
     r.ChildPID = command.Process.Pid
-    r.Status = "running"
     if err := save(dir, r); err != nil {
         _ = unix.Kill(-r.ChildPID, unix.SIGKILL)
         _ = command.Wait()
@@ -86,7 +139,7 @@ func Supervise(dir string) error {
         if err != nil && !errors.Is(err, unix.EINTR) {
             r.Status = "unknown"
             r.Reason = "WAIT_FAILED"
-            return finish()
+            return nil
         }
         if info.Signo != 0 {
             break
@@ -128,10 +181,7 @@ func Supervise(dir string) error {
     if stopped {
         r.Status = "stopped"
     }
-    if err := log.Sync(); err != nil {
-        return err
-    }
-    return finish()
+    return nil
 }
 
 func requestedStop(dir string) bool {

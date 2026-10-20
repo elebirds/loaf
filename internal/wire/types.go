@@ -11,13 +11,15 @@ var Version = "dev"
 
 // Request is one SSH stdin control document. Args are never interpreted as Shell code.
 type Request struct {
-    FormatVersion int      `json:"format_version"`
-    Version       string   `json:"version"`
-    Action        string   `json:"action"`
-    Root          string   `json:"root,omitempty"`
-    ProjectID     string   `json:"project_id,omitempty"`
-    RunID         string   `json:"run_id,omitempty"`
-    Args          []string `json:"args,omitempty"`
+    FormatVersion int               `json:"format_version"`
+    Version       string            `json:"version"`
+    Action        string            `json:"action"`
+    Root          string            `json:"root,omitempty"`
+    ProjectID     string            `json:"project_id,omitempty"`
+    RunID         string            `json:"run_id,omitempty"`
+    Args          []string          `json:"args,omitempty"`
+    Setup         string            `json:"setup,omitempty"`
+    Env           map[string]string `json:"env,omitempty"`
 }
 
 // RunRecord is persisted by the remote execution owner.
@@ -25,6 +27,7 @@ type RunRecord struct {
     FormatVersion   int        `json:"format_version"`
     Request         Request    `json:"request"`
     Status          string     `json:"status"`
+    Phase           string     `json:"phase,omitempty"`
     CreatedAt       time.Time  `json:"created_at"`
     CompletedAt     *time.Time `json:"completed_at,omitempty"`
     SupervisorPID   int        `json:"supervisor_pid,omitempty"`
@@ -49,4 +52,9 @@ type Response struct {
     OK            bool       `json:"ok"`
     Record        *RunRecord `json:"record,omitempty"`
     Error         *Error     `json:"error,omitempty"`
+}
+
+// Terminal reports a known, retained execution outcome.
+func Terminal(status string) bool {
+    return status == "succeeded" || status == "failed" || status == "stopped"
 }

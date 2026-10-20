@@ -1,5 +1,13 @@
 [root_short]
 other = "Connect research projects to existing SSH machines."
+[invalid_wait]
+other = "Waiting must be a duration between 0s and 5m; it never stops the remote task."
+[invalid_tail]
+other = "Log tail must be between 0 and 10000 lines."
+[run_state]
+other = "Cannot read or save the local run locator. Check state file permissions and format."
+[run_sync_retry]
+other = "Resolve this sync problem, then explicitly retry loaf run; this attempt did not start training."
 [add_short]
 other = "Save an SSH machine alias."
 [use_short]
@@ -224,3 +232,146 @@ other = "Update mode leaves removed or newly excluded remote files in place."
 other = "Git ignore rules: enabled"
 [sync_ignore_off]
 other = "Git ignore rules: disabled; Loaf exclusions still apply"
+
+[run_args]
+other = "[-- <command> [args...]]"
+
+[run_id_arg]
+other = "[run-id]"
+
+[run_short]
+other = "Sync and start a durable background task."
+
+[ps_short]
+other = "Query a run or list recent runs in this project."
+
+[logs_short]
+other = "Read a bounded log tail or follow one run."
+
+[flag_wait]
+other = "Wait up to this duration after acceptance; never stop the task."
+
+[flag_ps_wait]
+other = "With a run ID, wait up to this duration for completion (0s to 5m)."
+
+[flag_limit]
+other = "Maximum recent runs to query (1 to 1000)."
+
+[flag_tail]
+other = "Initial log tail lines (0 to 10000); each response is also byte-bounded."
+
+[flag_follow]
+other = "Follow saved logs; canceling observation does not stop the task."
+
+[run_command]
+other = "Provide argv after run --, or set a nonempty project run.command. Arguments must not contain NUL and the request must fit within 900 KiB."
+
+[run_env]
+other = "Project environment names must be valid identifiers and values must not contain NUL."
+
+[run_progress_checking]
+other = "Checking execution prerequisites and the bundled runner…"
+
+[run_progress_syncing]
+other = "Synchronizing source and preparing an independent work directory…"
+
+[run_progress_submitting]
+other = "Submitting the prepared task…"
+
+[run_accepted]
+other = "Accepted: {{.ID}}"
+
+[submission_unknown]
+other = "Cannot confirm whether the remote task was accepted. Its ID and location are saved."
+
+[submission_query]
+other = "Query the same ID with loaf ps <run-id> --json. Do not submit a replacement automatically."
+
+[run_query]
+other = "Cannot obtain a complete run observation."
+[observation_canceled]
+other = "Observation canceled. Accepted remote work continues; query the saved run ID later."
+
+[run_query_hint]
+other = "Query the saved run ID again after checking SSH access. A query failure does not mean training failed."
+
+[run_query_partial]
+other = "Some runs could not be queried; successful rows are included."
+
+[run_bound_target]
+other = "Run queries use their saved machine and location; --target cannot redirect them."
+
+[run_not_found]
+other = "No matching submitted or submission-uncertain run exists in this project."
+
+[run_ambiguous]
+other = "The latest run is ambiguous. Specify its run ID instead of selecting an older task."
+
+[runs_empty]
+other = "No submitted runs in this project."
+
+[runs_truncated]
+other = "Showing recent runs only. Use --limit or a saved run ID for older tasks."
+
+[logs_truncated]
+other = "Earlier log output was omitted by the line or 256 KiB byte limit."
+
+[run_exit]
+other = "exit={{.Value}}"
+
+[run_status_starting]
+other = "starting"
+
+[run_status_running]
+other = "running"
+
+[run_status_succeeded]
+other = "succeeded"
+
+[run_status_failed]
+other = "failed"
+
+[run_status_stopped]
+other = "stopped"
+
+[run_status_unknown]
+other = "unknown"
+
+[run_phase_copying]
+other = "copying source"
+
+[run_phase_prepared]
+other = "source prepared"
+
+[run_phase_starting]
+other = "starting supervisor"
+
+[run_phase_setup]
+other = "running setup"
+
+[run_phase_command]
+other = "running command"
+
+[run_reason_EXEC_FAILED]
+other = "command could not start"
+
+[run_reason_WAIT_FAILED]
+other = "exit result unavailable"
+
+[run_reason_STOP_BEFORE_START]
+other = "stopped before command start"
+
+[run_reason_SUPERVISOR_LOST]
+other = "supervisor identity lost"
+
+[run_reason_SUBMISSION_UNCONFIRMED]
+other = "submission not yet confirmed"
+
+[run_reason_COPY_FAILED]
+other = "source copy failed"
+
+[run_reason_UNSAFE_SOURCE]
+other = "unsafe source directory"
+
+[run_reason_SUPERVISOR_START_FAILED]
+other = "supervisor could not start"

@@ -6,7 +6,7 @@
 
 Loaf 记住已有的 SSH 机器，将当前工作代码同步到远端专用源码目录。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 早期开发版本：目前可从源码使用 `add`、`use`、`check`、`sync` 和 `version`。后台运行 CLI、日志及结果下载仍在开发中。
+> 早期开发版本：目前可从源码使用 add、use、check、sync、run、ps 和 version。日志、公开停止和结果下载尚未提供。
 
 ## 从源码构建
 
@@ -46,6 +46,24 @@ loaf check --runner
 普通 `check` 只读取远端环境。`--runner` 会额外将匹配的内置封装上传到私有、带版本的 Loaf 目录，并验证版本；不启动实验，也不安装 Python、uv、CUDA 或项目依赖。
 
 Python、uv 和 GPU 工具属于可选检查项，缺失时不会让能够执行 CPU 程序的机器检查失败。缺少 rsync、不支持的平台或不可写的远端位置则会报告问题。
+
+## 运行实验
+
+```bash
+loaf run -- python3 train.py
+loaf ps
+loaf ps <任务ID>
+```
+
+run 自动检查执行前提、部署匹配封装、同步工作源码，并在同一锁内准备独立工作副本，随后由脱离连接的监督器接管，返回已保存的任务 ID。无须手动 check、sync 或初始化项目；后续同步不改变已有副本。
+
+接管成功不代表训练成功。关闭终端后仍可按原 ID 查询。ps 默认列出当前项目最近 20 个已提交或提交未确认任务，--limit 可调整数量。查询绑定提交时的连接和位置，不随默认值改变，也不能用 --target 改向。部分查询失败保留其他成功结果。
+
+回执丢失时只查询同一个已保存 ID，不重复启动。仍不确定则返回 SUBMISSION_UNKNOWN、原 ID 和操作退出码 3；应查询它，不要自动重新提交。
+
+项目 [run] 支持 command = "uv run python train.py"、setup = "uv sync" 和 [run.env]。run -- 后的 argv 替换默认命令，不经额外 Shell 解释；配置的 command 和 setup 使用 /bin/sh -c。每个任务显式运行 setup，失败不继续训练，其 cd、导出变量和环境激活不延续到独立的训练进程。公开查询不包含环境变量值。可执行设置只属于项目。
+
+执行目录是 <remote_dir>/runs/<任务ID>/work/。请明确准备工具和数据，Loaf 不自动安装依赖或上传 .env。输出暂留在远端，由原生工具收集。日志、有界观察、公开停止和下载命令尚未提供。
 
 ## 同步工作代码
 
@@ -90,7 +108,7 @@ paths = ["outputs", "checkpoints"]
 
 目标选择顺序为 `--target`、当前项目的 `loaf use` 设置、TOML 中的 `target`。个人选择不会改写项目 TOML。未设置 `remote_dir` 时，各项目使用稳定 ID，在目标的远端基目录下拥有独立路径。可以通过 `loaf add ... --remote-dir '~/projects'` 设置基目录。
 
-用户配置保存在 `~/.config/loaf/config.toml`，项目标识和个人选择保存在 `~/.local/state/loaf/index.json`。`XDG_CONFIG_HOME` 和 `XDG_STATE_HOME` 可以覆盖这些位置。
+用户配置保存在 `~/.config/loaf/config.toml`，项目标识和个人选择保存在 `~/.local/state/loaf/index.json`。私有运行位置索引保存在同目录的 `runs.json`，执行记录仍在绑定的远端机器上。`XDG_CONFIG_HOME` 和 `XDG_STATE_HOME` 可以覆盖这些位置。
 
 个人同步默认值放在已有用户配置的 `[sync]` 中，保留原来的 `format_version` 和机器条目：
 
@@ -120,7 +138,7 @@ LOAF_LANG=en loaf check --json
 
 语言选择顺序为 `--lang`、`LOAF_LANG`、用户配置中的 `language`；默认 `auto` 使用系统语言。语言偏好不属于共享项目配置。
 
-核心命令支持 `--json`，包含 `schema_version: 1`、稳定的 `ok` 字段，以及结构化数据或错误码。人类可读的 `message` 和 `hint` 可以随语言变化，命令名、字段和错误码保持不变；外部诊断保留原文。操作退出码：0 表示成功，2 表示参数或配置错误，1 表示连接或其他操作失败。
+核心命令支持 `--json`，包含 `schema_version: 1`、稳定的 `ok` 字段，以及结构化数据或错误码。人类可读的 `message` 和 `hint` 可以随语言变化，命令名、字段和错误码保持不变；外部诊断保留原文。操作退出码：0 表示成功，2 表示参数或配置错误，3 表示提交未确认，1 表示其他失败。训练退出码放在 data.exit_code，不作为 CLI 退出码。
 
 ## 开发
 

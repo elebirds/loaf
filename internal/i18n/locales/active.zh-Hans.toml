@@ -1,5 +1,13 @@
 [root_short]
 other = "连接科研项目与已有的 SSH 机器。"
+[invalid_wait]
+other = "等待时长必须在 0s 到 5m 之间；等待到期不会停止远端任务。"
+[invalid_tail]
+other = "日志尾部行数必须在 0 到 10000 之间。"
+[run_state]
+other = "无法读取或保存本地任务位置，请检查状态文件的权限和格式。"
+[run_sync_retry]
+other = "解决同步问题后再显式重试 loaf run，本次尝试没有启动训练。"
 [add_short]
 other = "保存 SSH 机器别名。"
 [use_short]
@@ -224,3 +232,146 @@ other = "只覆盖模式会保留远端已在本地删除或新被排除的旧�
 other = "Git 忽略规则：已启用"
 [sync_ignore_off]
 other = "Git 忽略规则：已关闭，Loaf 排除规则仍生效"
+
+[run_args]
+other = "[-- <命令> [参数...]]"
+
+[run_id_arg]
+other = "[任务 ID]"
+
+[run_short]
+other = "同步项目并启动可找回的后台任务。"
+
+[ps_short]
+other = "查询指定任务或列出当前项目最近的任务。"
+
+[logs_short]
+other = "读取有限日志尾部或持续查看任务日志。"
+
+[flag_wait]
+other = "远端接管后最多等待此时长；到期不停止任务。"
+
+[flag_ps_wait]
+other = "指定任务 ID 时最多等待此时长（0s 到 5m）。"
+
+[flag_limit]
+other = "最多查询多少条最近任务（1 到 1000）。"
+
+[flag_tail]
+other = "初始日志尾部行数（0 到 10000）；每次响应还限制字节数。"
+
+[flag_follow]
+other = "持续读取保存的日志；取消查看不会停止任务。"
+
+[run_command]
+other = "请在 run -- 后提供命令，或设置非空项目 run.command；参数不能包含 NUL，请求大小不能超过 900 KiB。"
+
+[run_env]
+other = "项目环境变量名必须是有效标识符，值不能包含 NUL。"
+
+[run_progress_checking]
+other = "正在检查执行前提和内置封装……"
+
+[run_progress_syncing]
+other = "正在同步源码并准备独立工作目录……"
+
+[run_progress_submitting]
+other = "正在提交已准备的任务……"
+
+[run_accepted]
+other = "远端已接管：{{.ID}}"
+
+[submission_unknown]
+other = "无法确认远端是否已接管任务，任务 ID 和位置已经保存。"
+
+[submission_query]
+other = "请用 loaf ps <任务 ID> --json 查询同一任务，不要自动重新提交。"
+
+[run_query]
+other = "无法获取完整的任务查询结果。"
+[observation_canceled]
+other = "已取消查看。远端已接管任务继续运行，可稍后查询原任务 ID。"
+
+[run_query_hint]
+other = "检查 SSH 访问后再次查询原任务 ID；查询失败不代表训练失败。"
+
+[run_query_partial]
+other = "部分任务查询失败，已保留其他任务的成功结果。"
+
+[run_bound_target]
+other = "任务查询使用提交时保存的机器和位置，不能通过 --target 改向。"
+
+[run_not_found]
+other = "当前项目中没有匹配的已提交或提交未确认任务。"
+
+[run_ambiguous]
+other = "无法唯一确定最近任务，请明确指定任务 ID，不会改选更旧任务。"
+
+[runs_empty]
+other = "当前项目尚无已提交任务。"
+
+[runs_truncated]
+other = "仅显示最近任务；可用 --limit 或已保存的任务 ID 查询更早任务。"
+
+[logs_truncated]
+other = "更早的日志因行数或 256 KiB 字节限制被省略。"
+
+[run_exit]
+other = "退出码={{.Value}}"
+
+[run_status_starting]
+other = "启动中"
+
+[run_status_running]
+other = "运行中"
+
+[run_status_succeeded]
+other = "成功"
+
+[run_status_failed]
+other = "失败"
+
+[run_status_stopped]
+other = "已停止"
+
+[run_status_unknown]
+other = "未知"
+
+[run_phase_copying]
+other = "复制源码"
+
+[run_phase_prepared]
+other = "源码已准备"
+
+[run_phase_starting]
+other = "启动监督进程"
+
+[run_phase_setup]
+other = "准备环境"
+
+[run_phase_command]
+other = "执行命令"
+
+[run_reason_EXEC_FAILED]
+other = "命令无法启动"
+
+[run_reason_WAIT_FAILED]
+other = "无法获取退出结果"
+
+[run_reason_STOP_BEFORE_START]
+other = "命令启动前已停止"
+
+[run_reason_SUPERVISOR_LOST]
+other = "监督进程身份已丢失"
+
+[run_reason_SUBMISSION_UNCONFIRMED]
+other = "提交尚未确认"
+
+[run_reason_COPY_FAILED]
+other = "源码复制失败"
+
+[run_reason_UNSAFE_SOURCE]
+other = "源码目录不安全"
+
+[run_reason_SUPERVISOR_START_FAILED]
+other = "监督进程无法启动"

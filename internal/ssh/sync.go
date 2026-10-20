@@ -28,6 +28,7 @@ type Rsync struct {
 // SyncInput is transient local invocation data, not a remote manifest or record.
 type SyncInput struct {
     Root, ProjectID, Mode string
+    RunID                 string
     Paths                 []string
 }
 
@@ -54,7 +55,11 @@ func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root stri
         return result, err
     }
     shell, destination := r.remoteShell(target, batch)
-    receiver, err := r.receiverCommand(ctx, []string{runner, "__receive", wire.Version, input.Root, input.ProjectID})
+    words := []string{runner, "__receive", wire.Version, input.Root, input.ProjectID}
+    if input.RunID != "" {
+        words = append(words, "--run", input.RunID)
+    }
+    receiver, err := r.receiverCommand(ctx, words)
     if err != nil {
         return result, err
     }

@@ -43,7 +43,19 @@ func receive(in io.Reader, out, diagnostic io.Writer, args []string) error {
     if args[0] != wire.Version {
         return errors.New("VERSION_MISMATCH")
     }
-    argv := append([]string(nil), args[3:]...)
+    runID := ""
+    native := args[3:]
+    if len(native) >= 2 && native[0] == "--run" {
+        runID = native[1]
+        if !identifier.MatchString(runID) {
+            return errors.New("BAD_RECEIVER")
+        }
+        native = native[2:]
+    }
+    if len(native) < 4 {
+        return errors.New("BAD_RECEIVER")
+    }
+    argv := append([]string(nil), native...)
     // The wrapper accepts receiving mode at one fixed destination. Other native
     // rsync options are passed transparently, not parsed or version-whitelisted.
     if argv[0] != "--server" || slices.Contains(argv, "--sender") || argv[len(argv)-2] != "." || argv[len(argv)-1] != "cache" {
@@ -66,6 +78,24 @@ func receive(in io.Reader, out, diagnostic io.Writer, args []string) error {
             return err
         }
         if err := cmd.Run(); err != nil {
+            return errors.New("TRANSFER_FAILED")
+        }
+        if ctx.Err() != nil {
+            return errors.New("TRANSFER_FAILED")
+        }
+        if runID != "" {
+            root := filepath.Dir(cache)
+            req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", Root: root, ProjectID: args[2], RunID: runID}
+            dir, err := runPath(req)
+            if err != nil {
+                return err
+            }
+            _, err = copyWork(req, dir)
+            if err != nil {
+                return err
+            }
+        }
+        if ctx.Err() != nil {
             return errors.New("TRANSFER_FAILED")
         }
         return nil

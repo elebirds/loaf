@@ -72,7 +72,7 @@ func TestCatalogCompletenessAndRendering(t *testing.T) {
             if err != nil {
                 t.Fatal(err)
             }
-            rendered := l.Text(id, map[string]any{"Value": "20s", "Command": "loaf add", "Languages": "en, zh-Hans", "Target": "demo", "Destination": "host", "Root": "/tmp/中文", "Version": "dev", "Path": "/tmp/runner", "Count": 3, "Bytes": 128, "Mode": "mirror"})
+            rendered := l.Text(id, map[string]any{"ID": "r_123", "Value": "20s", "Command": "loaf add", "Languages": "en, zh-Hans", "Target": "demo", "Destination": "host", "Root": "/tmp/中文", "Version": "dev", "Path": "/tmp/runner", "Count": 3, "Bytes": 128, "Mode": "mirror"})
             if rendered == "" || strings.Contains(rendered, "<no value>") {
                 t.Fatal(id)
             }

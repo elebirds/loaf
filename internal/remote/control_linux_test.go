@@ -14,6 +14,9 @@ import (
 func managedRoot(t *testing.T) string {
     t.Helper()
     root := t.TempDir()
+    if err := os.Mkdir(filepath.Join(root, "runs"), 0700); err != nil {
+        t.Fatal(err)
+    }
     if err := os.WriteFile(filepath.Join(root, ".loaf-project"), []byte("project"), 0600); err != nil {
         t.Fatal(err)
     }

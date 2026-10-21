@@ -51,7 +51,7 @@ func psFixture(t *testing.T) (Options, *psRemote, []config.RunRef) {
     now := time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC)
     for i, status := range []string{"running", "failed", "succeeded", "failed"} {
         attempted := now.Add(-time.Duration(i) * time.Hour)
-        ref := config.RunRef{ID: fmt.Sprintf("r_%024d", i), ProjectID: project.ID, Target: "lab", Connection: config.Target{Destination: "original", RemoteBase: "~/projects"}, RemoteDir: "/remote/project", Runner: "/runner", Version: "test", CreatedAt: attempted.Add(-time.Minute), AttemptedAt: &attempted, Submission: "submitted"}
+        ref := config.RunRef{ID: fmt.Sprintf("r_%024d", i), ProjectID: project.ID, Target: "lab", Connection: config.Target{Destination: "original", RemoteBase: "~/projects"}, RemoteDir: "/remote/project", Runner: "/runner", Version: wire.Version, CreatedAt: attempted.Add(-time.Minute), AttemptedAt: &attempted, Submission: "submitted"}
         if i == 3 {
             ref.Target = "retired"
         }

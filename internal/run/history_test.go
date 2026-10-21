@@ -48,7 +48,7 @@ func historyRefs() []config.RunRef {
     now := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
     for i := 0; i < 6; i++ {
         attempted := now.Add(-time.Duration(i) * time.Hour)
-        refs = append(refs, config.RunRef{ID: fmt.Sprintf("run-%d", i), ProjectID: "project", Target: "lab", Connection: config.Target{Destination: "saved-connection"}, CreatedAt: now.Add(-48 * time.Hour), AttemptedAt: &attempted, RemoteDir: "/remote/project", Runner: "/runner", Version: "test"})
+        refs = append(refs, config.RunRef{ID: fmt.Sprintf("run-%d", i), ProjectID: "project", Target: "lab", Connection: config.Target{Destination: "saved-connection"}, CreatedAt: now.Add(-48 * time.Hour), AttemptedAt: &attempted, RemoteDir: "/remote/project", Runner: "/runner", Version: wire.Version})
     }
     return refs
 }

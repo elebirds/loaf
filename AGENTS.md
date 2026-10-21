@@ -151,6 +151,8 @@ Use `go-i18n` templates and `x/text/language` matching in the local rendering la
 
 Automated integration uses temporary keys, directories, accounts, and CPU scripts, not personal SSH files, research data, or rented GPUs. Assert an unrelated sentinel process survives stop tests. Synchronize on observable readiness rather than relying on fixed sleeps. Clean only resources created by the test.
 
+Cloud recovery tests use fresh CLI processes and simulated HTTP to verify durable receipts without replaying ambiguous mutations. `TestLinuxCloudCredentialStores` runs the native Secret Service backend and login lifecycle in an unprivileged container with a private D-Bus session; it also checks unavailable-bus failure. Keep host vaults and real credentials out of this fixture. Run it through `scripts/integration.sh` so the Linux test binaries and packaged CLI come from the shared build path. Simulated platform HTTP is not real cloud or billing acceptance.
+
 The optional `examples/torch` uses an existing PyTorch environment and generated data; it is not a Go-test or CPU-fixture dependency. Its downloaded parameter verifier uses only Python's standard library. Choose an explicit interpreter when remote noninteractive PATH differs; never source guessed startup files or install dependencies automatically.
 
 A real GPU workflow is separate acceptance work on an explicitly authorized existing target. Do not infer authorization to connect, spend money, stop a machine, or publish from permission to edit code.

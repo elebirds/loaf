@@ -491,13 +491,16 @@ LOAF_LANG=en loaf check --json
 ```bash
 go run ./scripts/format.go    # Go 代码使用四空格格式化
 bash scripts/check.sh        # 单元、静态、竞态、格式及漏洞检查
-bash scripts/integration.sh  # 真实 SSH 与 Linux 进程测试，需要 Docker
+bash scripts/integration.sh  # SSH、Linux 进程与凭据测试，需要 Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
+bash scripts/integration.sh -run TestLinuxCloudCredentialStores
 ```
 
 集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、镜像边界、中断同步恢复、并发启动、同版本封装部署、跳板连接、断线执行、退出结果、进程组停止、有界等待、日志取消和增量下载。前台操作覆盖即时输出、字面 argv、PTY 登录、独立隧道和取消；历史及清理覆盖原目标绑定、明确删除范围、传输锁、重试和终态保留，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。
 
-云测试通过模拟 API 验证两种 AutoDL 产品，并使用隔离 SSH 服务器验证原生密码认证、未知主机密钥拒绝、固定实例绑定及结果下载。这些测试不能证明真实账号的接口可用性、当前库存或实际计费；真实租用验收需要单独授权账号及预算。
+云测试通过模拟 API 验证两种 AutoDL 产品，并使用隔离 SSH 服务器验证原生密码认证、未知主机密钥拒绝、固定实例绑定及结果下载。跨进程测试覆盖会话过期、保存摘要后的重新认证、密码变更、登出后重新登录、凭据后端选择，以及响应丢失或客户端被杀后的恢复，确保不会重复租用或重放开关机请求。
+
+Linux 凭据 fixture 在容器私有会话中以普通用户运行 Secret Service 钥匙环，验证原生读写、从文件切换至钥匙环的登录生命周期，以及会话总线不可用的情况；不会挂载宿主钥匙环。平台 HTTP 仍由模拟服务提供，这些测试不能证明真实账号的接口可用性、当前库存或实际计费；真实租用验收需要单独授权账号及预算。
 
 Loaf 不调度 GPU 任务、不自动修复环境，也不替代实验追踪工具。云租用必须显式触发，不提供队列、常驻服务、自动关机或隐式租卡。
 

@@ -491,13 +491,16 @@ For missing source files, use `loaf sync --dry-run` to inspect Git and Loaf excl
 ```bash
 go run ./scripts/format.go    # Four-space Go formatting
 bash scripts/check.sh        # Unit, static, race, format, and vulnerability checks
-bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
+bash scripts/integration.sh  # SSH, Linux process and credential tests; requires Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
+bash scripts/integration.sh -run TestLinuxCloudCredentialStores
 ```
 
 The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, mirror boundaries, interrupted sync, concurrent starts, matching runner deployment, jump hosts, disconnected execution, saved exits, process-group stopping, bounded waits, log cancellation, and incremental downloads. Foreground operations cover live output, literal argv, PTY login, isolated tunnels, and cancellation. History and cleanup cases exercise saved target bindings, explicit deletion scope, transfer locks, retry, and retained terminal outcomes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
-Cloud tests use simulated APIs for both AutoDL products and isolated SSH servers, including native password authentication, rejected unknown host keys, immutable instance binding and result downloads. These tests do not establish real-account API availability, current stock, or actual billing. Real rental acceptance requires explicit account and budget authorization.
+Cloud tests use simulated APIs for both AutoDL products and isolated SSH servers, including native password authentication, rejected unknown host keys, immutable instance binding and result downloads. Fresh-process tests cover expired sessions, saved-digest reauthentication, changed passwords, logout/login, credential-store selection, and recovery after a lost response or killed client without duplicate acquisition or power requests.
+
+The Linux credential fixture runs an unprivileged Secret Service keyring in a private container session, exercising native vault access, the file-to-keyring login lifecycle, and an unavailable session bus. It never mounts the host keyring. Platform HTTP remains simulated; these tests do not establish real-account API availability, current stock, or actual billing. Real rental acceptance requires explicit account and budget authorization.
 
 Loaf does not schedule GPU workloads, automatically repair environments, or replace experiment tracking. Cloud acquisition is explicit; there are no queues, daemon, automatic shutdown or implicit rentals.
 

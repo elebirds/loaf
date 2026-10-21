@@ -194,3 +194,20 @@ func TestNativeKeyringRoundTrip(t *testing.T) {
         t.Fatal("entry retained", err)
     }
 }
+
+func TestNativeKeyringWithoutSessionBus(t *testing.T) {
+    if os.Getenv("LOAF_TEST_KEYRING_UNAVAILABLE") != "1" {
+        t.Skip("explicit isolated missing-session-bus acceptance")
+    }
+    s := Keyring{}
+    ctx := context.Background()
+    if value, err := s.Get(ctx, "acceptance-missing-bus"); value != "" || err != ErrUnavailable {
+        t.Fatal("missing bus did not produce a redacted store error")
+    }
+    if err := s.Set(ctx, "acceptance-missing-bus", "disposable fixture secret"); err != ErrUnavailable {
+        t.Fatal("missing bus accepted a vault write")
+    }
+    if err := s.Delete(ctx, "acceptance-missing-bus"); err != ErrUnavailable {
+        t.Fatal("missing bus accepted a vault deletion")
+    }
+}

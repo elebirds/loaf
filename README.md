@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> The [v0.1.0-rc.2 release](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow. Current source adds `exec`, `ssh`, `forward`, `targets`, `remove`, `clean`, and history filters for v0.2; build from source to use these additions.
+> v0.2 adds foreground commands, native SSH forwarding, history filters, machine management, and explicit cleanup. The published [v0.1.0-rc.2 archive](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow; build from current source for the v0.2 commands.
 
 ## Install
 
@@ -280,7 +280,7 @@ Target selection follows `--target`, the current project's `loaf use` setting, t
 
 User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside it in `runs.json`; execution records and logs remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
 
-The current run index uses format 2. Previous indexes are rejected without migration or overwriting; use a separate `XDG_STATE_HOME` for this development version when retaining an earlier version's state.
+The current run index uses format 2. Previous indexes are rejected without migration or overwriting; use a separate `XDG_STATE_HOME` for v0.2 when retaining an earlier version's state.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 

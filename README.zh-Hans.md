@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> [v0.1.0-rc.2 发行版](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环。当前源码为 v0.2 新增 `exec`、`ssh`、`forward`、`targets`、`remove`、`clean` 和历史筛选；使用这些新增功能请从源码构建。
+> v0.2 新增前台命令、原生 SSH 转发、历史筛选、机器管理和显式清理。已发布的 [v0.1.0-rc.2 压缩包](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环；使用 v0.2 命令请从当前源码构建。
 
 ## 安装
 
@@ -280,7 +280,7 @@ paths = ["outputs", "checkpoints"]
 
 用户配置保存在 `~/.config/loaf/config.toml`，项目标识和个人选择保存在 `~/.local/state/loaf/index.json`，私有任务位置索引保存在同目录的 `runs.json`；执行记录和日志仍保存在绑定的远端机器上。`XDG_CONFIG_HOME` 和 `XDG_STATE_HOME` 可以覆盖这些位置。
 
-当前任务索引使用格式 2，不迁移或覆盖之前的索引；如需保留早期版本的状态，请为当前开发版设置独立的 `XDG_STATE_HOME`。
+当前任务索引使用格式 2，不迁移或覆盖之前的索引；如需保留早期版本的状态，请为 v0.2 设置独立的 `XDG_STATE_HOME`。
 
 个人同步默认值放在已有用户配置的 `[sync]` 中，保留原来的 `format_version` 和机器条目：
 

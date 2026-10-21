@@ -28,19 +28,35 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     command(t, "docker", "cp", config, f.id+":/tmp/linux-client/config")
     command(t, "docker", "exec", f.id, "chown", "-R", "researcher:researcher", "/tmp/linux-client")
     root := "/home/researcher/linux 'quoted' mirror space"
-    f.shell(`tar -xzf /tmp/linux-client/package.tar.gz -C /tmp/linux-client; cd /tmp/linux-project; printf code >'中文 space.py'; printf literal >'back\slash[1]*?.py'; printf secret >.env; ln -s '中文 space.py' linked.py; printf 'remote_dir = "%s"\n' "$1" >loaf.toml`, root)
-    invoke := func(args ...string) []byte {
+    f.shell(`set -eu; tar -xzf /tmp/linux-client/package.tar.gz -C /tmp/linux-client; cd /tmp/linux-project; printf code >'中文 space.py'; printf literal >'back\slash[1]*?.py'; printf secret >.env; ln -s '中文 space.py' linked.py; printf 'remote_dir = "%s"\n' "$1" >loaf.toml`, root)
+    invokeRaw := func(args ...string) []byte {
         t.Helper()
         // All client configuration, credentials, and project data are fixture-owned.
         argv := []string{"exec", "--user", "researcher", "-w", "/tmp/linux-project", "-e", "XDG_CONFIG_HOME=/tmp/linux-config", "-e", "XDG_STATE_HOME=/tmp/linux-state", f.id, "/tmp/linux-client/loaf"}
-        out := command(t, "docker", append(argv, args...)...)
-        if !json.Valid([]byte(out)) {
-            t.Fatal(out)
+        return []byte(command(t, "docker", append(argv, args...)...))
+    }
+    invoke := func(args ...string) []byte {
+        t.Helper()
+        out := invokeRaw(args...)
+        if !json.Valid(out) {
+            t.Fatal(string(out))
         }
-        return []byte(out)
+        return out
     }
     invoke("add", "self", "--ssh", "ssh -F /tmp/linux-client/config self", "--json")
     invoke("use", "self", "--json")
+    if out := invokeRaw("exec", "--", "printf", "%s", "linux 前台"); string(out) != "linux 前台" {
+        t.Fatal(string(out))
+    }
+    f.shell(`test ! -e "$HOME/.local/share/loaf"`)
+    var targets struct {
+        Data struct {
+            Targets []struct{ Name string } `json:"targets"`
+        } `json:"data"`
+    }
+    if out := invoke("targets", "--json"); json.Unmarshal(out, &targets) != nil || len(targets.Data.Targets) != 1 || targets.Data.Targets[0].Name != "self" {
+        t.Fatal(string(out))
+    }
     invoke("sync", "--json")
     out := invoke("sync", "--json")
     var result struct {
@@ -52,12 +68,19 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     if json.Unmarshal(out, &result) != nil || result.Data.ChangedFiles != 0 || result.Data.Policy.Mode != "mirror" {
         t.Fatal(string(out))
     }
-    f.shell(`test -f "$1/cache/中文 space.py"; test -f "$1/cache/back\slash[1]*?.py"; test ! -e "$1/cache/.env"; test "$(readlink "$1/cache/linked.py")" = '中文 space.py'`, root)
+    f.shell(`set -eu; test -f "$1/cache/中文 space.py"; test -f "$1/cache/back\slash[1]*?.py"; test ! -e "$1/cache/.env"; test "$(readlink "$1/cache/linked.py")" = '中文 space.py'`, root)
     out = invoke("run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", "mkdir outputs; printf result >outputs/result.txt; printf 'linux 中文\\n'; exit 7")
     var ran struct {
         Data execution.View `json:"data"`
     }
     if json.Unmarshal(out, &ran) != nil || ran.Data.Status != "failed" || ran.Data.ExitCode == nil || *ran.Data.ExitCode != 7 || ran.Data.Log == nil || !strings.Contains(ran.Data.Log.Text, "linux 中文") {
+        t.Fatal(string(out))
+    }
+    failed := ran.Data
+    var history struct {
+        Data execution.History `json:"data"`
+    }
+    if out := invoke("ps", "--status", "failed", "--target", "self", "--json"); json.Unmarshal(out, &history) != nil || history.Data.Matched != 1 || history.Data.Unresolved != 0 || len(history.Data.Runs) != 1 || history.Data.Runs[0].ID != failed.ID {
         t.Fatal(string(out))
     }
     invoke("ps", ran.Data.ID, "--json")
@@ -77,7 +100,7 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     }
     // The fixture's separate 1 MiB tmpfs creates real ENOSPC without filling a
     // host disk. The previous completed file must survive the failed update.
-    f.shell(`dd if=/dev/urandom of="$1/runs/$2/work/outputs/result.txt" bs=1048576 count=2 2>/dev/null; mkdir -p /tmp/loaf-full/result/outputs; printf previous >/tmp/loaf-full/result/outputs/result.txt`, ran.Data.RemoteDir, ran.Data.ID)
+    f.shell(`set -eu; dd if=/dev/urandom of="$1/runs/$2/work/outputs/result.txt" bs=1048576 count=2 2>/dev/null; mkdir -p /tmp/loaf-full/result/outputs; printf previous >/tmp/loaf-full/result/outputs/result.txt`, ran.Data.RemoteDir, ran.Data.ID)
     failure := f.shell(`set -eu; cd /tmp/linux-project; if XDG_CONFIG_HOME=/tmp/linux-config XDG_STATE_HOME=/tmp/linux-state /tmp/linux-client/loaf pull "$1" --to /tmp/loaf-full/result --json >/tmp/disk-full.json; then exit 1; else test "$?" -eq 1; fi; test "$(cat /tmp/loaf-full/result/outputs/result.txt)" = previous; cat /tmp/disk-full.json`, ran.Data.ID)
     if !strings.Contains(failure, `"code":"PULL_FAILED"`) || !strings.Contains(failure, "No space left on device") {
         t.Fatal("disk-full error not retained", failure)
@@ -97,4 +120,34 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     if json.Unmarshal(out, &ran) != nil || ran.Data.Status != "stopped" || ran.Data.Signal == "" || ran.Data.StopGraceMillis == nil || *ran.Data.StopGraceMillis != 0 {
         t.Fatal(string(out))
     }
+    stopped := ran.Data
+    var preview struct {
+        Data struct {
+            DryRun bool                    `json:"dry_run"`
+            Runs   []execution.CleanResult `json:"runs"`
+        } `json:"data"`
+    }
+    out = invoke("clean", failed.ID, "--dry-run", "--json")
+    if json.Unmarshal(out, &preview) != nil || !preview.Data.DryRun || len(preview.Data.Runs) != 1 || !preview.Data.Runs[0].Eligible || preview.Data.Runs[0].Cleaned {
+        t.Fatal(string(out))
+    }
+    f.shell(`test -d "$1/runs/$2/work"`, failed.RemoteDir, failed.ID)
+    invoke("clean", failed.ID, "--yes", "--json")
+    invoke("clean", failed.ID, "--yes", "--json")
+    out = invoke("ps", failed.ID, "--json")
+    if json.Unmarshal(out, &ran) != nil || ran.Data.Status != "failed" || ran.Data.ExitCode == nil || *ran.Data.ExitCode != 7 || ran.Data.CleanedAt == nil || ran.Data.CleanupPending {
+        t.Fatal(string(out))
+    }
+    f.shell(`set -eu; test ! -e "$1/runs/$2"; test -d "$1/runs/$3/work"; test "$(wc -c </tmp/linux-retry/outputs/result.txt)" -eq 2097152`, failed.RemoteDir, failed.ID, stopped.ID)
+    invoke("remove", "self", "--json")
+    out = invoke("ps", stopped.ID, "--json")
+    // Decode into a fresh view: omitted cleanup fields must not leak from the
+    // preceding cleaned-run response through encoding/json's merge semantics.
+    var retained struct {
+        Data execution.View `json:"data"`
+    }
+    if json.Unmarshal(out, &retained) != nil || retained.Data.ID != stopped.ID || retained.Data.Status != "stopped" || retained.Data.CleanedAt != nil {
+        t.Fatal(string(out))
+    }
+    t.Log("packaged Linux client: foreground exec, history, machine aliases, cleanup, retained outcomes and local downloads passed")
 }

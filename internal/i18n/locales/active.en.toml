@@ -489,3 +489,42 @@ other = "Transferred file contents or link targets: {{.Count}}"
 
 [pull_missing_paths]
 other = "Missing output paths:"
+
+[targets_name_arg]
+other = "[name]"
+
+[targets_short]
+other = "List saved machines or show one connection; do not connect."
+
+[remove_short]
+other = "Remove a local machine alias, preserving runs and remote files."
+
+[targets_flag_target]
+other = "Use targets [name] or remove <name> instead of --target."
+
+[targets_no_choice]
+other = "No machine selected for this project."
+
+[targets_missing_choice]
+other = "Selected machine {{.Target}} is no longer registered. Choose one with loaf use <name>."
+
+[targets_choice]
+other = "Current project machine: {{.Target}}"
+
+[targets_empty]
+other = "No saved machines."
+
+[targets_destination]
+other = "SSH destination"
+
+[targets_remote_base]
+other = "Remote project base"
+
+[targets_ssh_args]
+other = "SSH arguments"
+
+[remove_done]
+other = "Removed local machine alias {{.Target}}. Runs and remote files were kept."
+
+[remove_reselect]
+other = "This project still names the removed alias. Select another with loaf use <name> before new remote operations."

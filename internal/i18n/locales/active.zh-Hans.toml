@@ -489,3 +489,42 @@ other = "传输的文件内容或链接目标：{{.Count}}"
 
 [pull_missing_paths]
 other = "缺失的输出路径："
+
+[targets_name_arg]
+other = "[名称]"
+
+[targets_short]
+other = "列出已保存的机器或查看连接，不发起远程连接。"
+
+[remove_short]
+other = "移除本地机器别名，保留任务和远端文件。"
+
+[targets_flag_target]
+other = "请使用 targets [名称] 或 remove <名称>，不要使用 --target。"
+
+[targets_no_choice]
+other = "当前项目尚未选择机器。"
+
+[targets_missing_choice]
+other = "当前选择的机器 {{.Target}} 已移除。请使用 loaf use <名称> 重新选择。"
+
+[targets_choice]
+other = "当前项目机器：{{.Target}}"
+
+[targets_empty]
+other = "尚未保存机器。"
+
+[targets_destination]
+other = "SSH 目标"
+
+[targets_remote_base]
+other = "远端项目基目录"
+
+[targets_ssh_args]
+other = "SSH 参数"
+
+[remove_done]
+other = "已移除本地机器别名 {{.Target}}，保留任务和远端文件。"
+
+[remove_reselect]
+other = "当前项目仍引用已移除的别名。发起新的远程操作前，请使用 loaf use <名称> 重新选择。"

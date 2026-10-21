@@ -231,6 +231,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     }}
     root.SetHelpCommand(help)
     root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
+    root.AddCommand(newTargetCommands(o, cfg, l, func(value any) { result = value })...)
     root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     err := earlyErr
@@ -362,7 +363,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull") {
+        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove") {
             return
         }
         name := "--" + f.Name
@@ -397,6 +398,13 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
     switch r := data.(type) {
     case addResult:
         fmt.Fprintln(out, l.Text("added", map[string]any{"Target": r.Target, "Destination": r.Destination}))
+    case targetsResult:
+        printTargets(out, r, l)
+    case removeResult:
+        fmt.Fprintln(out, l.Text("remove_done", map[string]any{"Target": r.Target}))
+        if r.Selected {
+            fmt.Fprintln(out, l.Text("remove_reselect"))
+        }
     case useResult:
         fmt.Fprintln(out, l.Text("selected", map[string]any{"Root": r.Root, "Target": r.Target}))
     case syncResult:

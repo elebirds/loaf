@@ -134,6 +134,32 @@ func TestPasswordLoginRejectsIdentityMismatch(t *testing.T) {
     }
 }
 
+func TestMainLoginWithSuppliedVerificationCodeDoesNotRepeatPreflight(t *testing.T) {
+    calls := []string{}
+    f := passwordFactory(func(r *http.Request) *http.Response {
+        calls = append(calls, r.URL.Path)
+        switch r.URL.Path {
+        case "/api/v1/new_login":
+            var body object
+            if json.NewDecoder(r.Body).Decode(&body) != nil || text(body, "v_code") != "123456" || text(body, "phone_area") != "+86" {
+                t.Fatal("verification input was not preserved")
+            }
+            return response(200, `{"code":"Success","data":{"ticket":"ticket-private","user":{"uuid":"main-id","username":"13800000000"}}}`)
+        case "/api/v1/passport":
+            return response(200, `{"code":"Success","data":{"token":"token-private"}}`)
+        case "/api/v1/user/detail":
+            return response(200, `{"code":"Success","data":{"uuid":"main-id","username":"13800000000"}}`)
+        default:
+            t.Fatal("unexpected replay or preflight", r.URL.Path)
+            return nil
+        }
+    })
+    session, err := f.Login(context.Background(), cloud.LoginInput{Username: "13800000000", Password: []byte("fixture-password"), Code: "123456"})
+    if err != nil || len(calls) != 3 || session.Identity.Kind != "main" {
+        t.Fatal(err, calls)
+    }
+}
+
 func TestSubaccountIdentityRequiresItsOwnPositiveIntegerID(t *testing.T) {
     for _, id := range []string{`null`, `0`, `-1`, `1.5`, `"123"`, `18446744073709551616`} {
         var data object

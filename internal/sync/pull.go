@@ -78,6 +78,17 @@ func (s PullService) Pull(ctx context.Context, ref config.RunRef, destination st
             err = f
         }
     }()
+    if ref.Cleanup != nil {
+        code, message := "CLEAN_UNCONFIRMED", "clean_unconfirmed"
+        if ref.Cleanup.CleanedAt != nil {
+            code, message = "RUN_CLEANED", "clean_run_cleaned"
+        }
+        f := fault.New(code, message, nil)
+        if ref.Cleanup.CleanedAt == nil {
+            f.Hint = "clean_retry"
+        }
+        return result, f
+    }
     result.Paths, err = OutputPaths(paths)
     if err != nil {
         return result, err

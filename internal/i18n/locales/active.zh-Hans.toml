@@ -602,3 +602,49 @@ other = "已查询 {{.Total}} 个符合本地筛选条件的任务中的 {{.Coun
 
 [ps_unresolved]
 other = "保留查询失败的任务；无法确认它们是否符合状态筛选。"
+[clean_ids_arg]
+other = "<任务 ID>..."
+[clean_short]
+other = "清理明确指定的已结束任务的远端数据"
+[clean_flag_dry_run]
+other = "只读预览所选路径和终态，不修改文件"
+[clean_flag_yes]
+other = "确认删除明确指定的远端任务数据"
+[clean_confirmation_required]
+other = "非交互清理必须指定 --yes；可先用 --dry-run 预览。"
+[clean_confirm]
+other = "删除这些远端日志、工作副本和输出？[y/N] "
+[clean_preview]
+other = "{{.ID}}（{{.Target}}）：将清理 {{.Path}} 内的任务数据"
+[clean_preview_note]
+other = "这仅是预览；实际删除时会重新检查归属、终态和锁。"
+[clean_retained]
+other = "保留已下载的本地结果。已删除的任务目录外保留少量终态回执，避免同一任务重复执行。"
+[clean_done]
+other = "{{.ID}}（{{.Target}}）：已清理 {{.Path}} 内的任务数据"
+[clean_incomplete]
+other = "{{.ID}}（{{.Target}}）：{{.Path}} 内的任务数据尚未完成清理"
+[clean_failed]
+other = "无法验证或清理所选远端任务数据。"
+[clean_not_terminal]
+other = "只能清理已确认结束的任务；运行中或结果未知的任务不能清理。"
+[clean_not_confirmed]
+other = "所选任务的提交尚未确认，不能清理。"
+[clean_busy]
+other = "任务仍被监督器持有、正在下载输出或处理其他操作，本次未进行清理。"
+[clean_unsafe]
+other = "无法验证任务路径、归属或记录格式，已拒绝清理。"
+[clean_unconfirmed]
+other = "清理未确认或未完成；部分远端任务数据可能已被删除。"
+[clean_run_cleaned]
+other = "此任务的远端数据已清理，原执行结果仍保留。"
+[clean_canceled]
+other = "已取消清理。"
+[clean_retry]
+other = "使用同一明确任务 ID 重试 clean，以确认或完成清理。本地下载不受影响。"
+[clean_status_cleaned]
+other = "数据已清理"
+[clean_status_pending]
+other = "清理未确认"
+[clean_confirm_submission]
+other = "先用 loaf ps 查询同一任务 ID，确认已接受后再清理；不要提交替代任务。"

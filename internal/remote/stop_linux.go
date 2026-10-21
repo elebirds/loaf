@@ -85,6 +85,9 @@ func stop(req wire.Request, dir string) (*wire.RunRecord, error) {
         }
         grace = time.Duration(*req.GraceMillis) * time.Millisecond
     }
+    if _, err := read(dir); err != nil {
+        return nil, err
+    }
     lock, err := lockRun(dir)
     if err != nil {
         return nil, err

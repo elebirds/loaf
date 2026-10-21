@@ -38,6 +38,7 @@ func main() {
     var checker cli.Checker = unavailableSSH{}
     var runner cli.RunnerVerifier
     var syncer cli.Synchronizer
+    var cleaner cli.RunCleaner
     var puller cli.OutputPuller
     var runs *execution.Service
     var operations cli.MachineOperations
@@ -56,11 +57,12 @@ func main() {
         sender := ssh.Rsync{Client: client, Binary: rsync}
         runs = &execution.Service{Index: store, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
         syncer = sources.Service{Check: client, Runner: prepare, Send: sender}
+        cleaner = execution.CleanupService{Runs: runs, Index: store, Remote: client, Runner: prepare}
         puller = sources.PullService{Remote: client, Runner: prepare, Receive: sender}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
 }
 

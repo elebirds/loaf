@@ -39,7 +39,11 @@ func Serve(in io.Reader, out io.Writer) int {
         err = errors.New("BAD_REQUEST")
     }
     response := wire.Response{FormatVersion: 1, Version: wire.Version}
-    if err == nil && req.Action == "outputs" {
+    if err == nil && (req.Action == "clean" || req.Action == "clean-preview") {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        response.Cleanup, err = Clean(ctx, req, req.Action == "clean-preview")
+    } else if err == nil && req.Action == "outputs" {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()
         selection, selectionErr := Outputs(ctx, req)
@@ -93,6 +97,11 @@ func Handle(req wire.Request) (*wire.RunRecord, error) {
     dir, err := runPath(req)
     if err != nil {
         return nil, err
+    }
+    if req.Action == "status" || req.Action == "stop" || req.Action == "start" || req.Action == "launch" {
+        if err := cleanedAvailability(req, dir); err != nil {
+            return nil, err
+        }
     }
     switch req.Action {
     case "start":
@@ -202,6 +211,9 @@ func start(req wire.Request, dir string) (*wire.RunRecord, error) {
 // copyWork runs with the project lock held by its caller. A copied directory is
 // not executable until its ready record is atomically committed.
 func copyWork(req wire.Request, dir string) (*wire.RunRecord, error) {
+    if err := cleanedAvailability(req, dir); err != nil {
+        return nil, err
+    }
     if err := os.Mkdir(dir, 0700); err != nil {
         if errors.Is(err, os.ErrExist) {
             return nil, errors.New("RUN_EXISTS")
@@ -243,6 +255,9 @@ func failCopy(dir string, r *wire.RunRecord, reason string) error {
 // launch claims a prepared copy once. The cache is no longer consulted here.
 func launch(req wire.Request, dir string) (*wire.RunRecord, error) {
     if err := validateExecution(req); err != nil {
+        return nil, err
+    }
+    if _, err := read(dir); err != nil {
         return nil, err
     }
     claim, err := os.OpenFile(filepath.Join(dir, "launch.lock"), os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0600)
@@ -325,6 +340,9 @@ func read(dir string) (*wire.RunRecord, error) {
     decoder := json.NewDecoder(io.LimitReader(file, 2<<20))
     if decoder.Decode(&r) != nil || decoder.Decode(new(any)) != io.EOF || r.FormatVersion != 1 {
         return nil, errors.New("BAD_FORMAT")
+    }
+    if r.Request.Version != wire.Version {
+        return nil, errors.New("VERSION_MISMATCH")
     }
     return &r, nil
 }

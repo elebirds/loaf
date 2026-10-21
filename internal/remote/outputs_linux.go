@@ -48,6 +48,9 @@ func Outputs(ctx context.Context, req wire.Request) (wire.OutputSelection, error
     if err != nil {
         return selection, err
     }
+    if err := cleanedAvailability(req, dir); err != nil {
+        return selection, err
+    }
     record, err := read(dir)
     if err != nil {
         return selection, err
@@ -172,6 +175,19 @@ func sendOutputs(in io.Reader, out, diagnostic io.Writer, args []string) error {
     }
     ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
     defer cancel()
+    req.Action = "status"
+    dir, err := runPath(req)
+    if err != nil {
+        return err
+    }
+    dataLock, err := lockData(dir, false)
+    if err != nil {
+        if availability := cleanedAvailability(req, dir); availability != nil {
+            return availability
+        }
+        return err
+    }
+    defer dataLock.Close()
     selection, err := Outputs(ctx, req)
     if err != nil {
         return err
@@ -182,6 +198,8 @@ func sendOutputs(in io.Reader, out, diagnostic io.Writer, args []string) error {
     cmd := exec.CommandContext(ctx, "rsync", native...)
     cmd.Dir = filepath.Join(req.Root, "runs", req.RunID, "work")
     cmd.Stdin, cmd.Stdout, cmd.Stderr = in, out, diagnostic
+    // If the wrapper dies first, native rsync retains the shared data lock.
+    cmd.ExtraFiles = []*os.File{dataLock}
     cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
     cmd.Cancel = func() error {
         err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

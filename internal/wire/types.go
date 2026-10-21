@@ -66,6 +66,7 @@ type Response struct {
     Error         *Error           `json:"error,omitempty"`
     Log           *LogChunk        `json:"log,omitempty"`
     Outputs       *OutputSelection `json:"outputs,omitempty"`
+    Cleanup       *CleanupReceipt  `json:"cleanup,omitempty"`
 }
 
 // OutputSelection is a transient read-only selection, not an artifact inventory.

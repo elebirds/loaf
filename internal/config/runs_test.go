@@ -8,6 +8,8 @@ import (
     "sync"
     "testing"
     "time"
+
+    "github.com/elebirds/loaf/internal/wire"
 )
 
 func reference(n int) RunRef {
@@ -90,5 +92,90 @@ func TestExecutionPreferencesAndProjectOnlyCommands(t *testing.T) {
     _, project, err := Discover(context.Background(), root)
     if err != nil || project.Run.Env["EXPERIMENT"] != "baseline" || project.Run.Wait != "0s" {
         t.Fatal(project, err)
+    }
+}
+
+func TestCleanupMetadataSurvivesStaleSavesAndKeepsLatest(t *testing.T) {
+    store := testStore(t)
+    ref := reference(1)
+    ref.Submission = "submitted"
+    ref.AttemptedAt = &ref.CreatedAt
+    stale := ref
+    if err := store.SaveRun(context.Background(), ref); err != nil {
+        t.Fatal(err)
+    }
+    completed := ref.CreatedAt.Add(time.Second)
+    cleanup := &RunCleanup{RequestedAt: completed.Add(time.Second), Summary: wire.RunSummary{Status: "failed", CreatedAt: ref.CreatedAt, CompletedAt: &completed, ExitCode: new(7)}}
+    if err := store.RecordCleanup(context.Background(), ref, cleanup); err != nil {
+        t.Fatal(err)
+    }
+    ref.Cleanup = cleanup
+    later := *cleanup
+    later.RequestedAt = cleanup.RequestedAt.Add(time.Second)
+    // A second concurrent attempt cannot replace the pending attempt identity.
+    if err := store.RecordCleanup(context.Background(), ref, &later); err != nil {
+        t.Fatal(err)
+    }
+    wrongAttempt := ref
+    wrongAttempt.Cleanup = &later
+    if err := store.RecordCleanup(context.Background(), wrongAttempt, nil); err != nil {
+        t.Fatal(err)
+    }
+    refs, _ := store.Runs(ref.ProjectID)
+    if len(refs) != 1 || refs[0].Cleanup == nil || !refs[0].Cleanup.RequestedAt.Equal(cleanup.RequestedAt) {
+        t.Fatal(refs)
+    }
+    cleaned := completed.Add(2 * time.Second)
+    confirmed := *cleanup
+    confirmed.CleanedAt = &cleaned
+    if err := store.RecordCleanup(context.Background(), ref, &confirmed); err != nil {
+        t.Fatal(err)
+    }
+    var wg sync.WaitGroup
+    for n := 0; n < 8; n++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            copy := stale
+            copy.Submission = "preparing"
+            copy.AttemptedAt = nil
+            if err := store.SaveRun(context.Background(), copy); err != nil {
+                t.Error(err)
+            }
+        }()
+    }
+    wg.Wait()
+    if err := store.RecordCleanup(context.Background(), ref, nil); err != nil {
+        t.Fatal(err)
+    }
+    refs, err := store.Runs(ref.ProjectID)
+    if err != nil || len(refs) != 1 || refs[0].Cleanup == nil || refs[0].Cleanup.CleanedAt == nil || refs[0].Cleanup.Summary.ExitCode == nil || *refs[0].Cleanup.Summary.ExitCode != 7 || refs[0].Submission != "submitted" {
+        t.Fatal(refs, err)
+    }
+}
+
+func TestCleanupMetadataDoesNotOverwriteUnknownIndexOrUnknownOutcome(t *testing.T) {
+    store := testStore(t)
+    ref := reference(2)
+    ref.Submission, ref.AttemptedAt = "submitted", &ref.CreatedAt
+    if err := store.SaveRun(context.Background(), ref); err != nil {
+        t.Fatal(err)
+    }
+    bad := &RunCleanup{RequestedAt: time.Now(), Summary: wire.RunSummary{Status: "unknown"}}
+    if err := store.RecordCleanup(context.Background(), ref, bad); err == nil {
+        t.Fatal("retained an unconfirmed outcome")
+    }
+    original := `{"format_version":99,"runs":{}}`
+    if err := os.WriteFile(store.runsFile(), []byte(original), 0600); err != nil {
+        t.Fatal(err)
+    }
+    completed := ref.CreatedAt.Add(time.Second)
+    cleanup := &RunCleanup{RequestedAt: completed, Summary: wire.RunSummary{Status: "succeeded", CreatedAt: ref.CreatedAt, CompletedAt: &completed}}
+    if err := store.RecordCleanup(context.Background(), ref, cleanup); err == nil {
+        t.Fatal("overwrote unknown index format")
+    }
+    data, _ := os.ReadFile(store.runsFile())
+    if string(data) != original {
+        t.Fatal(string(data))
     }
 }

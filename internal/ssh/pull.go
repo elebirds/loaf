@@ -160,6 +160,10 @@ func pullFailure(code string, cause error, diagnostic string) *fault.Error {
         message = "pull_read"
     case "PULL_CANCELED":
         message = "pull_canceled"
+    case "RUN_CLEANED":
+        message, hint = "clean_run_cleaned", ""
+    case "CLEAN_UNCONFIRMED", "CLEAN_BUSY":
+        message, hint = "clean_unconfirmed", "clean_retry"
     }
     f := fault.Wrap(code, message, cause)
     f.Hint = hint

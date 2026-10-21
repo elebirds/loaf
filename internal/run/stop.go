@@ -14,6 +14,14 @@ import (
 // Neither lost confirmation nor cancellation replays or withdraws the request.
 func (s Service) Stop(ctx context.Context, ref config.RunRef, grace *time.Duration, batch bool) (View, error) {
     result := view(ref, nil)
+    if err := AvailabilityError(ref); err != nil {
+        return result, err
+    }
+    prepared, prepareErr := s.prepareRef(ctx, ref, batch)
+    if prepareErr != nil {
+        return result, prepareErr
+    }
+    ref = prepared
     req := request(ref, 0, 0)
     req.Action = "stop"
     if grace != nil {
@@ -36,24 +44,7 @@ func (s Service) Stop(ctx context.Context, ref config.RunRef, grace *time.Durati
     }
     if err != nil {
         switch errorCode(err) {
-        case "BAD_REQUEST":
-            if grace != nil {
-                // Older strict decoders reject the new option before looking
-                // up the run. A completed run still needs no stopping policy.
-                observed, observeErr := s.Observe(ctx, ref, 0, 0, batch)
-                observed.Log = nil
-                if observeErr == nil {
-                    result = observed
-                    if wire.Terminal(observed.Status) {
-                        return observed, nil
-                    }
-                }
-                f := fault.New("STOP_OPTIONS_UNSUPPORTED", "stop_grace_unsupported", nil)
-                f.Hint = "stop_grace_unsupported_hint"
-                return result, f
-            }
-            return result, remoteFault(err)
-        case "BAD_FORMAT", "VERSION_MISMATCH", "UNSAFE_PATH", "PROJECT_MISMATCH", "RUN_NOT_FOUND":
+        case "BAD_REQUEST", "BAD_FORMAT", "VERSION_MISMATCH", "UNSAFE_PATH", "PROJECT_MISMATCH", "RUN_NOT_FOUND":
             return result, remoteFault(err)
         case "STOP_UNCONFIRMED":
             return result, unconfirmedStop(err)
@@ -75,7 +66,9 @@ func (s Service) Stop(ctx context.Context, ref config.RunRef, grace *time.Durati
         budget = time.Duration(*result.StopGraceMillis) * time.Millisecond
     }
     budget = min(budget+5*time.Second, 5*time.Minute)
-    observed, observeErr := s.Observe(ctx, ref, budget, 0, batch)
+    observer := s
+    observer.Runner = nil // This request already verified the same helper.
+    observed, observeErr := observer.Observe(ctx, ref, budget, 0, batch)
     observed.Log = nil
     if observed.StopGraceMillis == nil {
         observed.StopGraceMillis = result.StopGraceMillis

@@ -41,6 +41,7 @@ type Options struct {
     Checker     Checker
     Runner      RunnerVerifier
     Syncer      Synchronizer
+    Cleaner     RunCleaner
     Puller      OutputPuller
     Runs        *execution.Service
     Operations  MachineOperations
@@ -236,6 +237,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
+    root.AddCommand(newCleanCommand(o, &target, l, func(value any) { result = value }))
     err := earlyErr
     if err == nil {
         err = langErr
@@ -270,7 +272,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         if f.Code == "BAD_CONFIG" || f.Code == "STOP_OPTIONS_UNSUPPORTED" {
             code = 2
         }
-        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" {
+        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" || f.Code == "CLEAN_UNCONFIRMED" {
             code = 3
         }
     }
@@ -369,7 +371,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove") {
+        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean") {
             return
         }
         name := "--" + f.Name
@@ -423,6 +425,8 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         printSync(out, r, l)
     case sources.PullResult:
         printPull(out, r, l, ok)
+    case cleanBatch:
+        printClean(out, r, l)
     case execution.View:
         printRun(out, r, l)
     case runList:

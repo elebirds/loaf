@@ -23,7 +23,6 @@ func outputFixture(t *testing.T) (wire.Request, string) {
     writeSource(t, work, "outputs/中文 space.json", "metrics")
     writeSource(t, work, "checkpoints/model.bin", "weights")
     record := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "unknown"}
-    record.Request.Version = "previous-runner"
     record.Request.Env = map[string]string{"SECRET": "must-not-leak"}
     if err := save(dir, record); err != nil {
         t.Fatal(err)
@@ -114,7 +113,8 @@ func TestOutputsRejectUnsafeSelectionsAndLinksBeforeTransfer(t *testing.T) {
 func TestOutputFormatsAndIdentityAreNotRewritten(t *testing.T) {
     req, work := outputFixture(t)
     record := filepath.Join(filepath.Dir(work), "run.json")
-    for _, text := range []string{`{"format_version":99}`, `{"format_version":1,"request":{"format_version":1,"project_id":"other"}}`} {
+    mismatch, _ := json.Marshal(wire.RunRecord{FormatVersion: 1, Request: wire.Request{FormatVersion: 1, Version: wire.Version, ProjectID: "other"}})
+    for _, text := range []string{`{"format_version":99}`, string(mismatch)} {
         if err := os.WriteFile(record, []byte(text), 0600); err != nil {
             t.Fatal(err)
         }
@@ -147,5 +147,23 @@ func TestOutputSenderPassesNativeStreamAndOptionsWithoutFraming(t *testing.T) {
     diagnostic.Reset()
     if SendOutputs(strings.NewReader("native protocol unchanged"), &out, &diagnostic, args) != 0 || out.String() != "native protocol unchanged" {
         t.Fatal(out.String(), diagnostic.String())
+    }
+}
+
+func TestOutputsRejectMismatchedRecordVersionWithoutMutation(t *testing.T) {
+    req, work := outputFixture(t)
+    record, err := read(filepath.Dir(work))
+    if err != nil {
+        t.Fatal(err)
+    }
+    record.Request.Version = "mismatched-version"
+    if err := save(filepath.Dir(work), record); err != nil {
+        t.Fatal(err)
+    }
+    before := treeContents(t, req.Root)
+    _, err = Outputs(context.Background(), req)
+    expectCode(t, err, "VERSION_MISMATCH")
+    if !reflect.DeepEqual(before, treeContents(t, req.Root)) {
+        t.Fatal("changed incompatible run")
     }
 }

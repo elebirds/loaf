@@ -264,6 +264,9 @@ func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
         if err != nil {
             return err
         }
+        if err := execution.AvailabilityError(ref); err != nil {
+            return err
+        }
         jsonMode, _ := cmd.Flags().GetBool("json")
         if follow {
             if jsonMode {
@@ -324,6 +327,11 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
     }
     if v.Reason != "" {
         fmt.Fprintf(out, "  %s", l.Text("run_reason_"+v.Reason))
+    }
+    if v.CleanedAt != nil {
+        fmt.Fprintf(out, "  %s", l.Text("clean_status_cleaned"))
+    } else if v.CleanupPending {
+        fmt.Fprintf(out, "  %s", l.Text("clean_status_pending"))
     }
     if v.QueryError != "" {
         fmt.Fprintf(out, "  %s: %s", l.Text("run_query"), v.QueryError)

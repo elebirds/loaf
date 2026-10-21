@@ -65,11 +65,22 @@ type View struct {
     QueryError      string         `json:"query_error,omitempty"`
     Log             *wire.LogChunk `json:"log,omitempty"`
     StopGraceMillis *int64         `json:"stop_grace_millis,omitempty"`
+    CleanedAt       *time.Time     `json:"cleaned_at,omitempty"`
+    CleanupPending  bool           `json:"cleanup_pending,omitempty"`
     Ref             config.RunRef  `json:"-"`
 }
 
 func view(ref config.RunRef, r *wire.RunRecord) View {
     v := View{ID: ref.ID, Target: ref.Target, RemoteDir: ref.RemoteDir, CreatedAt: ref.CreatedAt, Status: "unknown", Ref: ref}
+    if ref.Cleanup != nil {
+        summary := ref.Cleanup.Summary
+        v.Status, v.Phase, v.CreatedAt = summary.Status, summary.Phase, summary.CreatedAt
+        v.CompletedAt, v.ExitCode = summary.CompletedAt, summary.ExitCode
+        v.Signal, v.Reason, v.StopGraceMillis = summary.Signal, summary.Reason, summary.StopGraceMillis
+        v.CleanedAt = ref.Cleanup.CleanedAt
+        v.CleanupPending = v.CleanedAt == nil
+        return v
+    }
     if r != nil {
         v.Status = r.Status
         v.Phase = r.Phase
@@ -224,7 +235,7 @@ func definiteRejection(code string) bool {
 }
 
 func matching(ref config.RunRef, r *wire.RunRecord) bool {
-    return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir
+    return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.Version == wire.Version && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir
 }
 func accepted(ref config.RunRef, r *wire.RunRecord) bool {
     return matching(ref, r) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
@@ -255,11 +266,23 @@ func (s Service) Select(projectID, id string) (config.RunRef, error) {
 }
 
 func request(ref config.RunRef, wait time.Duration, tail int) wire.Request {
-    return wire.Request{FormatVersion: wire.FormatVersion, Version: ref.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, WaitMillis: int64((wait + time.Millisecond - 1) / time.Millisecond), Tail: tail}
+    return wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, WaitMillis: int64((wait + time.Millisecond - 1) / time.Millisecond), Tail: tail}
 }
 
 // Observe queries a bound locator without reading today's target configuration.
 func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool) (View, error) {
+    if err := currentVersion(ref); err != nil {
+        return view(ref, nil), err
+    }
+    if ref.Cleanup != nil {
+        return view(ref, nil), nil
+    }
+    bound := ref
+    prepared, prepareErr := s.prepareRef(ctx, ref, batch)
+    if prepareErr != nil {
+        return view(ref, nil), prepareErr
+    }
+    ref = prepared
     timeout, cancel := context.WithTimeout(ctx, wait+20*time.Second)
     defer cancel()
     observed, err := s.Remote.Observe(timeout, ref.Connection, ref.Runner, request(ref, wait, tail), batch)
@@ -271,8 +294,20 @@ func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Durat
         result.QueryError = errorCode(err)
         return result, remoteFault(err)
     }
+    if observed.Record != nil && observed.Record.Request.Version != wire.Version {
+        return result, versionMismatch(observed.Record.Request.Version)
+    }
     if !matching(ref, observed.Record) {
         return result, fault.New("BAD_RESPONSE", "run_query", nil)
+    }
+    if ref.Submission == "uncertain" && result.Status != "unknown" && accepted(ref, observed.Record) {
+        // Confirm the saved ID after a successful observation. This changes
+        // only its local submission locator, never sends another start.
+        bound.Submission = "submitted"
+        if err := s.Index.SaveRun(ctx, bound); err != nil {
+            return result, err
+        }
+        result.Ref = bound
     }
     result.Log = &observed.Log
     return result, nil
@@ -280,8 +315,19 @@ func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Durat
 
 // Follow observes one run over one SSH connection; callback errors only close it.
 func (s Service) Follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, emit func(View, string) error) (View, error) {
+    if err := AvailabilityError(ref); err != nil {
+        return view(ref, nil), err
+    }
+    prepared, prepareErr := s.prepareRef(ctx, ref, batch)
+    if prepareErr != nil {
+        return view(ref, nil), prepareErr
+    }
+    ref = prepared
     last := view(ref, nil)
     err := s.Remote.Follow(ctx, ref.Connection, ref.Runner, request(ref, wait, tail), batch, func(event wire.LogEvent) error {
+        if event.Record != nil && event.Record.Request.Version != wire.Version {
+            return versionMismatch(event.Record.Request.Version)
+        }
         if !matching(ref, event.Record) {
             return errors.New("BAD_RESPONSE")
         }
@@ -313,6 +359,9 @@ func remoteFault(err error) error {
     var f *fault.Error
     if errors.As(err, &f) {
         return err
+    }
+    if errorCode(err) == "VERSION_MISMATCH" {
+        return versionMismatch("unknown")
     }
     f = fault.Wrap(errorCode(err), "run_query", err)
     f.Hint = "run_query_hint"

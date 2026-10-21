@@ -67,7 +67,6 @@ func TestStopConfirmationAndBoundPolicy(t *testing.T) {
                 t.Fatal(err)
             }
             ref := started.Ref
-            ref.Version = "bound-old-version"
             req := request(ref, 0, 0)
             req.Env = map[string]string{"PRIVATE_TOKEN": "secret-value"}
             remote := &stopRemote{accepted: &wire.RunRecord{FormatVersion: 1, Request: req, Status: "running", SupervisorPID: 123, StopGraceMillis: tc.acceptedGrace}, final: &wire.RunRecord{FormatVersion: 1, Request: req, Status: "stopped", Signal: "terminated"}}
@@ -135,34 +134,25 @@ func TestStopUnconfirmedDoesNotReplay(t *testing.T) {
     }
 }
 
-func TestStopLegacyCompatibilityAndRetainedNaturalExit(t *testing.T) {
+func TestStopBadRequestAndRetainedNaturalExit(t *testing.T) {
     service, input, _, _ := executionFixture(t)
     started, err := service.Submit(context.Background(), input, nil)
     if err != nil {
         t.Fatal(err)
     }
-    remote := &stopRemote{controlErr: &ssh.RemoteError{Code: "BAD_REQUEST"}, final: &wire.RunRecord{FormatVersion: 1, Request: request(started.Ref, 0, 0), Status: "running", SupervisorPID: 123}}
+    remote := &stopRemote{controlErr: &ssh.RemoteError{Code: "BAD_REQUEST"}}
     service.Remote = remote
     grace := time.Second
     _, err = service.Stop(context.Background(), started.Ref, &grace, true)
     var f *fault.Error
-    if !errors.As(err, &f) || f.Code != "STOP_OPTIONS_UNSUPPORTED" || remote.observations != 1 || remote.observed.WaitMillis != 0 {
+    if !errors.As(err, &f) || f.Code != "BAD_REQUEST" || remote.observations != 0 {
         t.Fatal(err, remote)
     }
     code := 7
-    remote.final = &wire.RunRecord{FormatVersion: 1, Request: request(started.Ref, 0, 0), Status: "failed", ExitCode: &code}
-    got, err := service.Stop(context.Background(), started.Ref, &grace, true)
-    if err != nil || got.Status != "failed" || got.ExitCode == nil || *got.ExitCode != code || remote.observations != 2 {
-        t.Fatal("legacy terminal run required an unsupported policy", got, err)
-    }
     remote.controlErr = nil
     remote.accepted = &wire.RunRecord{FormatVersion: 1, Request: request(started.Ref, 0, 0), Status: "failed", ExitCode: &code}
-    got, err = service.Stop(context.Background(), started.Ref, nil, true)
-    if err != nil || got.Status != "failed" || got.ExitCode == nil || *got.ExitCode != code || remote.observations != 2 || remote.received.GraceMillis != nil {
+    got, err := service.Stop(context.Background(), started.Ref, nil, true)
+    if err != nil || got.Status != "failed" || got.ExitCode == nil || *got.ExitCode != code || remote.observations != 0 {
         t.Fatal("natural terminal result changed", got, err, remote)
-    }
-    data, err := json.Marshal(remote.received)
-    if err != nil || strings.Contains(string(data), "grace_millis") {
-        t.Fatal("default stop broke strict legacy decoding", string(data), err)
     }
 }

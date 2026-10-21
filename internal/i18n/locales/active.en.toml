@@ -602,3 +602,49 @@ other = "Examined {{.Count}} of {{.Total}} eligible saved runs; {{.Matched}} mat
 
 [ps_unresolved]
 other = "Rows with query errors are retained; their status filter match could not be confirmed."
+[clean_ids_arg]
+other = "<run-id>..."
+[clean_short]
+other = "Remove explicitly selected completed runs' remote data"
+[clean_flag_dry_run]
+other = "Preview selected paths and terminal outcomes without changing files"
+[clean_flag_yes]
+other = "Confirm removal of the explicitly selected remote run data"
+[clean_confirmation_required]
+other = "Noninteractive cleanup requires --yes; use --dry-run to preview first."
+[clean_confirm]
+other = "Remove these remote logs, work copies and outputs? [y/N] "
+[clean_preview]
+other = "{{.ID}} on {{.Target}}: remove run data in {{.Path}}"
+[clean_preview_note]
+other = "Preview only: deletion will recheck ownership, terminal outcome and locks."
+[clean_retained]
+other = "Downloaded local results are kept. A small terminal receipt remains outside the removed run directory to prevent duplicate execution."
+[clean_done]
+other = "{{.ID}} on {{.Target}}: run data cleaned in {{.Path}}"
+[clean_incomplete]
+other = "{{.ID}} on {{.Target}}: cleanup not completed in {{.Path}}"
+[clean_failed]
+other = "Could not verify or clean the selected remote run data."
+[clean_not_terminal]
+other = "Cleanup requires a confirmed completed run; running or unknown outcomes cannot be cleaned."
+[clean_not_confirmed]
+other = "The selected submission is not confirmed; cleanup cannot proceed."
+[clean_busy]
+other = "The run is still owned, transferring outputs, or handling another operation; nothing was cleaned."
+[clean_unsafe]
+other = "The run's path, ownership or saved format could not be verified; cleanup was refused."
+[clean_unconfirmed]
+other = "Cleanup is unconfirmed or incomplete; some remote run data may already be removed."
+[clean_run_cleaned]
+other = "This run's remote data has been cleaned; its original execution result is retained."
+[clean_canceled]
+other = "Cleanup canceled."
+[clean_retry]
+other = "Retry clean with the same explicit run ID to confirm or complete cleanup. Local downloads are unaffected."
+[clean_status_cleaned]
+other = "data cleaned"
+[clean_status_pending]
+other = "cleanup unconfirmed"
+[clean_confirm_submission]
+other = "Query the same run ID with loaf ps to confirm acceptance before cleaning; do not submit a replacement run."

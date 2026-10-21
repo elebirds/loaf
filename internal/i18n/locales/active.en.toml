@@ -96,6 +96,10 @@ other = "Runner assets are unavailable. Build the complete CLI with bash scripts
 other = "Runner deployment or version verification failed. Check the private executable directory and SSH access."
 [runner_verified]
 other = "Runner {{.Version}} verified: {{.Path}}"
+[runner_version_mismatch]
+other = "The task or runner version {{.Actual}} does not match CLI version {{.Expected}}."
+[runner_version_hint]
+other = "Update Loaf on the controlling machine. Remote helpers update automatically; tasks created by another version require their matching CLI and are not migrated while running."
 [invalid_flags]
 other = "Cannot parse command options. Check option names and values."
 [invalid_command]
@@ -437,12 +441,6 @@ other = "Task termination is not confirmed. An accepted stop request remains act
 
 [stop_query_hint]
 other = "Query the same ID with loaf ps <run-id> --json to check its current result."
-
-[stop_grace_unsupported]
-other = "This task's saved runner does not support configurable stop grace."
-
-[stop_grace_unsupported_hint]
-other = "Remove --grace and project/user stop.grace settings, then retry stop using the task's original runner default."
 
 [pull_base_dir]
 other = "The result base must be a separate directory, not the project root or an ancestor."

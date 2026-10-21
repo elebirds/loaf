@@ -341,39 +341,3 @@ exit $?
         t.Fatal("stop was automatically replayed", string(calls), err)
     }
 }
-
-func TestPreviousRunnerStopCompatibility(t *testing.T) {
-    previous := os.Getenv("LOAF_PREVIOUS_BIN")
-    if os.Getenv("LOAF_INTEGRATION") != "1" || previous == "" {
-        t.Skip("set LOAF_PREVIOUS_BIN to a previous packaged host CLI for upgrade testing")
-    }
-    current := os.Getenv("LOAF_BIN")
-    f := newFixture(t)
-    t.Setenv("LOAF_BIN", previous)
-    project := stopProject(t, f)
-    for _, explicitGrace := range []bool{false, true} {
-        t.Setenv("LOAF_BIN", previous)
-        started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while :; do sleep .02; done")
-        waitRunFile(t, f, started, "work/ready")
-        t.Setenv("LOAF_BIN", current)
-        if explicitGrace {
-            code, out := cli(t, project, "stop", started.ID, "--grace", "0s", "--json")
-            if code != 2 || !bytes.Contains(out, []byte(`"code":"STOP_OPTIONS_UNSUPPORTED"`)) {
-                t.Fatal("legacy runner ignored unsupported grace", code, string(out))
-            }
-            f.shell(`test ! -e "$1/runs/$2/stop.request"`, started.RemoteDir, started.ID)
-        }
-        stopped := runCLI(t, project, "stop", started.ID, "--json")
-        if stopped.Status != "stopped" || stopped.StopGraceMillis != nil {
-            t.Fatal("legacy default stop failed", stopped)
-        }
-        observed := runCLI(t, project, "ps", started.ID, "--json")
-        if observed.Status != "stopped" {
-            t.Fatal("saved legacy run could not be queried", observed)
-        }
-        completed := runCLI(t, project, "stop", started.ID, "--grace", "0s", "--json")
-        if completed.Status != "stopped" {
-            t.Fatal("completed legacy run required an unsupported grace", completed)
-        }
-    }
-}

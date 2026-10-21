@@ -32,8 +32,8 @@ func (c *Client) RunnerArch(ctx context.Context, target config.Target, batch boo
     return fields[1], nil
 }
 
-// Outputs reads a transient selection using the current helper, including for
-// runs whose original runner predates downloads. It never requests execution.
+// Outputs reads a transient selection using the matching current helper.
+// It never requests execution.
 func (c *Client) Outputs(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (wire.OutputSelection, error) {
     req.Action = "outputs"
     data, err := json.Marshal(req)
@@ -48,8 +48,11 @@ func (c *Client) Outputs(ctx context.Context, target config.Target, runner strin
         }
         return wire.OutputSelection{}, pullFailure("BAD_RESPONSE", err, "")
     }
-    if response.FormatVersion != wire.FormatVersion || response.Version != req.Version {
+    if response.FormatVersion != wire.FormatVersion {
         return wire.OutputSelection{}, pullFailure("BAD_FORMAT", nil, "")
+    }
+    if response.Version != wire.Version || req.Version != wire.Version {
+        return wire.OutputSelection{}, pullFailure("VERSION_MISMATCH", nil, "")
     }
     if !response.OK {
         if response.Error == nil {

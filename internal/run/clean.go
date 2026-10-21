@@ -17,8 +17,7 @@ type CleanupIndex interface {
     RecordCleanup(context.Context, config.RunRef, *config.RunCleanup) error
 }
 
-// CleanupRemote is the current-helper boundary, independent of the bound
-// runner that must remain in place for active and older runs.
+// CleanupRemote is the current-helper boundary, independent of live supervisors.
 type CleanupRemote interface {
     RunnerArch(context.Context, config.Target, bool) (string, error)
     Clean(context.Context, config.Target, string, wire.Request, bool) (*wire.CleanupReceipt, error)

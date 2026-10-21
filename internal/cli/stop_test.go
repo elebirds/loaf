@@ -98,7 +98,7 @@ func (r stopFailureRemote) Observe(_ context.Context, _ config.Target, _ string,
     return wire.Observation{Record: &wire.RunRecord{FormatVersion: 1, Request: req, Status: "running", SupervisorPID: 123}}, nil
 }
 
-func TestStopUncertaintyAndUnsupportedOptions(t *testing.T) {
+func TestStopUncertaintyAndRejectedRequests(t *testing.T) {
     o, _ := runFixture(t)
     if code, out, stderr := run(t, o, "run", "--json", "--", "python", "train.py"); code != 0 {
         t.Fatal(code, out, stderr)
@@ -109,7 +109,7 @@ func TestStopUncertaintyAndUnsupportedOptions(t *testing.T) {
         flags        []string
     }{
         {"STOP_UNCONFIRMED", "STOP_UNCONFIRMED", 3, nil},
-        {"BAD_REQUEST", "STOP_OPTIONS_UNSUPPORTED", 2, []string{"--grace", "0s"}},
+        {"BAD_REQUEST", "BAD_REQUEST", 1, []string{"--grace", "0s"}},
         {"RUN_NOT_FOUND", "RUN_NOT_FOUND", 1, nil},
     } {
         o.Runs.Remote = stopFailureRemote{code: tc.remote}

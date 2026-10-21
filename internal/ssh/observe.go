@@ -21,6 +21,9 @@ func (e *RemoteError) Error() string { return e.Code }
 
 // Observe returns a finite remote observation, optionally after bounded waiting.
 func (c *Client) Observe(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (wire.Observation, error) {
+    if req.Version != wire.Version {
+        return wire.Observation{}, &RemoteError{Code: "VERSION_MISMATCH"}
+    }
     req.Action = "observe"
     data, err := json.Marshal(req)
     if err != nil {
@@ -38,8 +41,11 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
     if response.Log != nil {
         result.Log = *response.Log
     }
-    if response.FormatVersion != wire.FormatVersion || response.Version != req.Version {
-        return result, errors.New("VERSION_MISMATCH")
+    if response.FormatVersion != wire.FormatVersion {
+        return result, &RemoteError{Code: "BAD_FORMAT"}
+    }
+    if response.Version != wire.Version {
+        return result, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     if !response.OK {
         if response.Error == nil {
@@ -58,6 +64,9 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
 
 // Follow decodes one cancellable SSH stream. It never signals a remote run.
 func (c *Client) Follow(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool, emit func(wire.LogEvent) error) error {
+    if req.Version != wire.Version {
+        return &RemoteError{Code: "VERSION_MISMATCH"}
+    }
     if err := Validate(target); err != nil {
         return err
     }
@@ -93,6 +102,10 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
         }
         if err != nil {
             streamErr = err
+            break
+        }
+        if event.Record != nil && event.Record.Request.Version != wire.Version {
+            streamErr = &RemoteError{Code: "VERSION_MISMATCH"}
             break
         }
         if event.Error != nil {

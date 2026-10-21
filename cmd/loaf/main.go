@@ -51,6 +51,13 @@ func main() {
         runner = bootstrap
         rsync, _ := exec.LookPath("rsync")
         prepare := func(ctx context.Context, target config.Target, arch string, batch bool) (string, error) {
+            if arch == "" {
+                var err error
+                arch, err = client.RunnerArch(ctx, target, batch)
+                if err != nil {
+                    return "", err
+                }
+            }
             info, err := bootstrap.Verify(ctx, target, arch, batch)
             return info.Path, err
         }

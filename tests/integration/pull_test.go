@@ -303,35 +303,3 @@ func TestInterruptedPullDoesNotStopTrainingOrBlockSyncAndStop(t *testing.T) {
     }
     f.shell(`test ! -e "$1/cache/loaf-results"`, started.RemoteDir)
 }
-
-func TestPreviousRunnerPullCompatibility(t *testing.T) {
-    previous := os.Getenv("LOAF_PREVIOUS_PULL_BIN")
-    if previous == "" {
-        previous = os.Getenv("LOAF_PREVIOUS_BIN")
-    }
-    if os.Getenv("LOAF_INTEGRATION") != "1" || previous == "" {
-        t.Skip("set LOAF_PREVIOUS_PULL_BIN to a previous packaged host CLI")
-    }
-    current := os.Getenv("LOAF_BIN")
-    f := newFixture(t)
-    t.Setenv("LOAF_BIN", previous)
-    project := stopProject(t, f)
-    started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", `mkdir outputs; printf legacy >outputs/result.txt; echo ready >ready; while :; do sleep .05; done`)
-    waitRunFile(t, f, started, "work/ready")
-    before := f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID)
-    t.Setenv("LOAF_BIN", current)
-    result := pullCLI(t, project, 0, started.ID, "--json")
-    if result.ChangedFiles == nil || *result.ChangedFiles != 1 {
-        t.Fatal(result)
-    }
-    if after := f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID); after != before {
-        t.Fatal("download changed old task record")
-    }
-    if observed := runCLI(t, project, "ps", started.ID, "--json"); observed.Status != "running" {
-        t.Fatal("old supervisor was replaced", observed)
-    }
-    if stopped := runCLI(t, project, "stop", started.ID, "--json"); stopped.Status != "stopped" {
-        t.Fatal(stopped)
-    }
-    pullCLI(t, project, 0, started.ID, "--json")
-}

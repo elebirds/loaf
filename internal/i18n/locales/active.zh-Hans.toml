@@ -96,6 +96,10 @@ other = "缺少远端封装资源，请使用 bash scripts/build.sh 构建完整
 other = "远端封装部署或版本验证失败，请检查私有目录的执行权限及 SSH 访问。"
 [runner_verified]
 other = "已验证远端封装 {{.Version}}：{{.Path}}"
+[runner_version_mismatch]
+other = "任务或远端封装版本 {{.Actual}} 与本地 CLI 版本 {{.Expected}} 不一致。"
+[runner_version_hint]
+other = "请更新控制端 Loaf，远端辅助程序会自动更新。其他版本创建的任务需要对应版本的 CLI，运行中不会迁移。"
 [invalid_flags]
 other = "无法解析命令选项，请检查选项名称及取值。"
 [invalid_command]
@@ -437,12 +441,6 @@ other = "尚未确认任务已结束；远端已接收的停止请求仍然有�
 
 [stop_query_hint]
 other = "请用 loaf ps <任务 ID> --json 查询同一任务的当前结果。"
-
-[stop_grace_unsupported]
-other = "此任务绑定的旧封装不支持配置停止宽限期。"
-
-[stop_grace_unsupported_hint]
-other = "移除 --grace 及项目或用户 stop.grace 设置，再按任务原封装的默认策略重试停止。"
 
 [pull_base_dir]
 other = "结果根目录必须是独立目录，不能是项目根目录或其上级目录。"

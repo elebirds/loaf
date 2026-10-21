@@ -71,6 +71,11 @@ func OutputPaths(paths []string) ([]string, error) {
 // partial failure. It never waits for training or mutates its records/locator.
 func (s PullService) Pull(ctx context.Context, ref config.RunRef, destination string, paths []string, policy config.PullPolicy, batch bool) (result PullResult, err error) {
     result = PullResult{RunID: ref.ID, Target: ref.Target, Destination: destination, Paths: []string{}, DownloadedPaths: []string{}, MissingPaths: []string{}, Policy: policy}
+    if ref.Version != wire.Version {
+        f := fault.New("VERSION_MISMATCH", "runner_version_mismatch", map[string]any{"Expected": wire.Version, "Actual": ref.Version})
+        f.Hint = "runner_version_hint"
+        return result, f
+    }
     defer func() {
         if err != nil && ctx.Err() != nil {
             f := fault.Wrap("PULL_CANCELED", "pull_canceled", ctx.Err())
@@ -97,8 +102,6 @@ func (s PullService) Pull(ctx context.Context, ref config.RunRef, destination st
     arch, err := s.Remote.RunnerArch(preflight, ref.Connection, batch)
     var runner string
     if err == nil {
-        // A current helper may read old supported record formats, but does not
-        // replace the old bound runner or its live supervisor.
         runner, err = s.Runner(preflight, ref.Connection, arch, batch)
     }
     cancel()

@@ -52,7 +52,7 @@ func TestPullUsesSavedLocationAndKeepsPartialResult(t *testing.T) {
         }
         return "/current-helper", nil
     }}
-    ref := config.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Runner: "/old-runner", Version: "old-version"}
+    ref := config.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Runner: "/saved-runner", Version: wire.Version}
     destination := canonicalTemp(t)
     result, err := svc.Pull(context.Background(), ref, destination, []string{"outputs/", "checkpoints"}, config.PullPolicy{Checksum: true}, true)
     var f *fault.Error
@@ -81,6 +81,14 @@ func TestPullUsesSavedLocationAndKeepsPartialResult(t *testing.T) {
     _, err = svc.Pull(context.Background(), ref, destination, []string{"outputs"}, config.PullPolicy{}, true)
     if !errors.As(err, &f) || f.Code != "BAD_RESPONSE" || downloader.calls != before {
         t.Fatal("trusted an invalid remote selection", err)
+    }
+}
+
+func TestPullRejectsAnotherVersionBeforeConnecting(t *testing.T) {
+    result, err := (PullService{}).Pull(context.Background(), config.RunRef{ID: "run", Version: "another-version"}, t.TempDir(), []string{"outputs"}, config.PullPolicy{}, true)
+    var f *fault.Error
+    if !errors.As(err, &f) || f.Code != "VERSION_MISMATCH" || result.RunID != "run" || result.ChangedFiles != nil {
+        t.Fatal(result, err)
     }
 }
 

@@ -111,7 +111,7 @@ func closeLock(lock *os.File) {
 }
 
 // Clean removes only one explicitly identified, owned and confirmed terminal
-// run payload. Its small receipt and terminal placeholder survive so lost
+// run payload. Its small external receipt survives so lost
 // confirmation can be retried without widening the deletion scope.
 func Clean(ctx context.Context, req wire.Request, dryRun bool) (*wire.CleanupReceipt, error) {
     if req.FormatVersion != wire.FormatVersion {

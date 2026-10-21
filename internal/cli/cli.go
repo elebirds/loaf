@@ -269,7 +269,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
             view.Detail = detail
         }
         code = 1
-        if f.Code == "BAD_CONFIG" || f.Code == "STOP_OPTIONS_UNSUPPORTED" {
+        if f.Code == "BAD_CONFIG" {
             code = 2
         }
         if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" || f.Code == "CLEAN_UNCONFIRMED" {

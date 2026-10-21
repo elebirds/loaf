@@ -25,7 +25,7 @@ type RunnerInfo struct {
     Bytes   int    `json:"bytes"`
 }
 
-// Verify deploys and checks the matching runner only when explicitly requested.
+// Verify ensures the packaged current runner is deployed and version-checked.
 func (b Bootstrap) Verify(ctx context.Context, target config.Target, arch string, batch bool) (RunnerInfo, error) {
     goarch := map[string]string{"x86_64": "amd64", "aarch64": "arm64"}[arch]
     binary, err := bundle.Runner(goarch)

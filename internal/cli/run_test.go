@@ -92,7 +92,7 @@ func TestRunPublicContractsAndLiteralArgv(t *testing.T) {
         for _, command := range []string{"run", "ps", "logs"} {
             if code, out, stderr := run(t, o, "--lang", lang, command, "--help"); code != 0 || out == "" || stderr != "" {
                 t.Fatal(command, out, stderr)
-            } else if command != "run" && strings.Contains(out, "--target") {
+            } else if command == "logs" && strings.Contains(out, "--target") {
                 t.Fatal("query help advertises target redirection", out)
             }
         }

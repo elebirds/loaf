@@ -528,3 +528,39 @@ other = "已移除本地机器别名 {{.Target}}，保留任务和远端文件�
 
 [remove_reselect]
 other = "当前项目仍引用已移除的别名。发起新的远程操作前，请使用 loaf use <名称> 重新选择。"
+
+[ps_flag_status]
+other = "按状态筛选，可重复指定多个状态；查询失败的任务仍会显示。"
+
+[ps_flag_since]
+other = "包含此 RFC3339 时间及之后的已保存提交尝试。"
+
+[ps_flag_until]
+other = "包含此 RFC3339 时间及之前的已保存提交尝试。"
+
+[ps_flag_target]
+other = "列表模式按已保存的机器别名筛选，不改变任务连接。"
+
+[ps_invalid_status]
+other = "状态必须为 starting、running、succeeded、failed、stopped 或 unknown；可重复指定 --status。"
+
+[ps_invalid_time]
+other = "提交时间筛选需要包含时区的 RFC3339 时间，例如 2026-10-21T00:00:00Z。"
+
+[ps_invalid_range]
+other = "--since 不能晚于 --until。"
+
+[ps_invalid_limit]
+other = "ps.limit 和 --limit 必须在 1 到 1000 之间；零不表示无限查询。"
+
+[ps_list_only]
+other = "--status、--since、--until、--target 和 --limit 仅适用于不带任务 ID 的 ps 列表。"
+
+[ps_no_matches]
+other = "本次有界查询中没有匹配的观测结果。"
+
+[ps_scan_summary]
+other = "已查询 {{.Total}} 个符合本地筛选条件的任务中的 {{.Count}} 个，匹配 {{.Matched}} 个。"
+
+[ps_unresolved]
+other = "保留查询失败的任务；无法确认它们是否符合状态筛选。"

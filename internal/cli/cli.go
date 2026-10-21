@@ -305,7 +305,7 @@ func earlyOptions(args []string) (bool, string, error) {
         if a == "--" {
             break
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" {
             i++
             continue
         }
@@ -363,7 +363,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && (c.Name() == "ps" || c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove") {
+        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove") {
             return
         }
         name := "--" + f.Name
@@ -418,7 +418,17 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
             printRun(out, run, l)
         }
         if len(r.Runs) == 0 {
-            fmt.Fprintln(out, l.Text("runs_empty"))
+            if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Since != nil || r.Filters.Until != nil {
+                fmt.Fprintln(out, l.Text("ps_no_matches"))
+            } else {
+                fmt.Fprintln(out, l.Text("runs_empty"))
+            }
+        }
+        if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Since != nil || r.Filters.Until != nil || r.Truncated {
+            fmt.Fprintln(out, l.Text("ps_scan_summary", map[string]any{"Count": r.Examined, "Total": r.Eligible, "Matched": r.Matched}))
+        }
+        if r.Unresolved > 0 {
+            fmt.Fprintln(out, l.Text("ps_unresolved"))
         }
         if r.Truncated {
             fmt.Fprintln(out, l.Text("runs_truncated"))

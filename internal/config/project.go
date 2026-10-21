@@ -16,6 +16,7 @@ type ProjectFile struct {
     Target    string       `toml:"target"`
     RemoteDir string       `toml:"remote_dir"`
     Run       RunSettings  `toml:"run"`
+    PS        PSSettings   `toml:"ps"`
     Logs      LogSettings  `toml:"logs"`
     Stop      StopSettings `toml:"stop"`
     Pull      PullSettings `toml:"pull"`
@@ -49,6 +50,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
                 return "", c, err
             }
             if _, err := ResolveWait(c.Run.Wait); err != nil {
+                return "", c, err
+            }
+            if _, err := ResolvePSLimit(c.PS); err != nil {
                 return "", c, err
             }
             if _, err := ResolveTail(c.Logs); err != nil {

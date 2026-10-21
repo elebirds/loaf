@@ -1,7 +1,6 @@
 package cli
 
 import (
-    "context"
     "encoding/json"
     "fmt"
     "io"
@@ -17,11 +16,7 @@ import (
     "github.com/spf13/cobra"
 )
 
-type runList struct {
-    Runs      []execution.View `json:"runs"`
-    Total     int              `json:"total"`
-    Truncated bool             `json:"truncated"`
-}
+type runList = execution.History
 
 func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any), streamed *bool) []*cobra.Command {
     run := &cobra.Command{Use: "run " + l.Text("run_args"), Short: l.Text("run_short")}
@@ -146,20 +141,42 @@ func runProject(cmd *cobra.Command, o Options, target *string) (config.Project, 
 }
 
 func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any)) *cobra.Command {
-    var wait string
+    var wait, since, until, listTarget string
     var limit int
+    var statuses []string
     cmd := &cobra.Command{Use: "ps " + l.Text("run_id_arg"), Short: l.Text("ps_short"), Args: arguments(0, 1)}
     cmd.Flags().StringVar(&wait, "wait", "0s", l.Text("flag_ps_wait"))
     cmd.Flags().IntVar(&limit, "limit", 20, l.Text("flag_limit"))
+    cmd.Flags().StringArrayVar(&statuses, "status", nil, l.Text("ps_flag_status"))
+    cmd.Flags().StringVar(&since, "since", "", l.Text("ps_flag_since"))
+    cmd.Flags().StringVar(&until, "until", "", l.Text("ps_flag_until"))
+    // A local flag replaces the inherited selector only for list filtering. It
+    // never changes a saved run's connection and is rejected with a run ID.
+    cmd.Flags().StringVar(&listTarget, "target", "", l.Text("ps_flag_target"))
     cmd.RunE = func(cmd *cobra.Command, args []string) error {
         budget, err := config.ResolveWait(wait)
         if err != nil {
             return err
         }
-        if limit < 1 || limit > 1000 || len(args) == 0 && budget > 0 {
+        if len(args) == 0 && budget > 0 {
             return fault.New("BAD_CONFIG", "invalid_flags", nil)
         }
-        project, file, err := runProject(cmd, o, target)
+        listFlags := []string{"status", "since", "until", "target", "limit"}
+        if len(args) == 1 {
+            for _, flag := range listFlags {
+                if cmd.Flags().Changed(flag) {
+                    return fault.New("BAD_CONFIG", "ps_list_only", nil)
+                }
+            }
+        }
+        if o.Runs == nil {
+            return fault.New("SSH_FAILED", "ssh_missing", nil)
+        }
+        root, file, err := config.Discover(cmd.Context(), o.CWD)
+        if err != nil {
+            return err
+        }
+        project, err := o.Store.Existing(root)
         if err != nil {
             return err
         }
@@ -183,27 +200,39 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
             result(observed)
             return err
         }
-        refs, err := o.Runs.Index.Runs(project.ID)
+        layers := []config.PSSettings{cfg.PS, file.PS}
+        if cmd.Flags().Changed("limit") {
+            layers = append(layers, config.PSSettings{Limit: &limit})
+        }
+        maximum, err := config.ResolvePSLimit(layers...)
         if err != nil {
             return err
         }
-        list := runList{Runs: []execution.View{}, Total: len(refs), Truncated: len(refs) > limit}
-        ctx, cancel := context.WithTimeout(cmd.Context(), 20*time.Second)
-        defer cancel()
-        failed := false
-        for _, ref := range refs[:min(len(refs), limit)] {
-            observed, err := o.Runs.Observe(ctx, ref, 0, 0, jsonMode || !o.Interactive)
-            observed.Log = nil
-            if err != nil {
-                failed = true
+        filters := execution.HistoryFilters{Statuses: statuses, Target: listTarget}
+        for _, boundary := range []struct {
+            value   string
+            changed bool
+            dst     **time.Time
+        }{
+            {since, cmd.Flags().Changed("since"), &filters.Since},
+            {until, cmd.Flags().Changed("until"), &filters.Until},
+        } {
+            if !boundary.changed {
+                continue
             }
-            list.Runs = append(list.Runs, observed)
+            value, err := time.Parse(time.RFC3339Nano, boundary.value)
+            if err != nil {
+                return fault.New("BAD_CONFIG", "ps_invalid_time", nil)
+            }
+            value = value.UTC()
+            *boundary.dst = &value
         }
+        if cmd.Flags().Changed("target") && !config.ValidName(listTarget) {
+            return fault.New("BAD_CONFIG", "invalid_target", nil)
+        }
+        list, err := o.Runs.History(cmd.Context(), project.ID, filters, maximum, jsonMode || !o.Interactive)
         result(list)
-        if failed {
-            return fault.New("QUERY_PARTIAL", "run_query_partial", nil)
-        }
-        return nil
+        return err
     }
     return cmd
 }

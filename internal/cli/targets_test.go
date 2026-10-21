@@ -116,3 +116,34 @@ func TestRemovingSelectedMachinePreservesRunBindingsAndTOML(t *testing.T) {
         t.Fatal(name, err)
     }
 }
+
+func TestRemovingSharedChoiceDoesNotCreatePersonalFallback(t *testing.T) {
+    o := fixture(t)
+    original := "target = 'lab'\n"
+    if err := os.WriteFile(filepath.Join(o.CWD, "loaf.toml"), []byte(original), 0600); err != nil {
+        t.Fatal(err)
+    }
+    for _, name := range []string{"lab", "other"} {
+        if code, out, stderr := run(t, o, "add", name, "--ssh", name, "--json"); code != 0 {
+            t.Fatal(code, out, stderr)
+        }
+    }
+    if code, out, stderr := run(t, o, "targets", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"source":"project"`) || !strings.Contains(out, `"selected":true`) {
+        t.Fatal(code, out, stderr)
+    }
+    if code, out, stderr := run(t, o, "remove", "lab", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"selected":true`) {
+        t.Fatal(code, out, stderr)
+    }
+    if code, out, stderr := run(t, o, "check", "--json"); code != 2 || stderr != "" {
+        t.Fatal(code, out, stderr)
+    }
+    if code, out, stderr := run(t, o, "targets", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"target":"lab"`) || !strings.Contains(out, `"available":false`) {
+        t.Fatal(code, out, stderr)
+    }
+    if _, err := os.Stat(o.Store.IndexFile); !os.IsNotExist(err) {
+        t.Fatal("local management created personal project selection", err)
+    }
+    if data, err := os.ReadFile(filepath.Join(o.CWD, "loaf.toml")); err != nil || string(data) != original {
+        t.Fatal(string(data), err)
+    }
+}

@@ -528,3 +528,39 @@ other = "Removed local machine alias {{.Target}}. Runs and remote files were kep
 
 [remove_reselect]
 other = "This project still names the removed alias. Select another with loaf use <name> before new remote operations."
+
+[ps_flag_status]
+other = "Keep observations with this status; repeat for alternatives. Query failures remain visible."
+
+[ps_flag_since]
+other = "Include saved submission attempts at or after this RFC3339 timestamp."
+
+[ps_flag_until]
+other = "Include saved submission attempts at or before this RFC3339 timestamp."
+
+[ps_flag_target]
+other = "Filter saved machine aliases in list mode; never redirect a run."
+
+[ps_invalid_status]
+other = "Status must be starting, running, succeeded, failed, stopped, or unknown; repeat --status for alternatives."
+
+[ps_invalid_time]
+other = "Submission time filters require an RFC3339 timestamp with a timezone, for example 2026-10-21T00:00:00Z."
+
+[ps_invalid_range]
+other = "--since must not be later than --until."
+
+[ps_invalid_limit]
+other = "ps.limit and --limit must be between 1 and 1000; zero is not an unlimited query."
+
+[ps_list_only]
+other = "--status, --since, --until, --target, and --limit apply only to ps without a run ID."
+
+[ps_no_matches]
+other = "No matching observations in this bounded scan."
+
+[ps_scan_summary]
+other = "Examined {{.Count}} of {{.Total}} eligible saved runs; {{.Matched}} matched."
+
+[ps_unresolved]
+other = "Rows with query errors are retained; their status filter match could not be confirmed."

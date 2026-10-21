@@ -35,6 +35,7 @@ type Global struct {
     Language      string            `toml:"language,omitempty"`
     Sync          SyncSettings      `toml:"sync,omitempty"`
     Run           RunPreferences    `toml:"run,omitempty"`
+    PS            PSSettings        `toml:"ps,omitempty"`
     Logs          LogSettings       `toml:"logs,omitempty"`
     Stop          StopSettings      `toml:"stop,omitempty"`
     Pull          PullSettings      `toml:"pull,omitempty"`
@@ -94,6 +95,9 @@ func (s *Store) Load() (Global, error) {
         return c, err
     }
     if _, err := ResolveWait(c.Run.Wait); err != nil {
+        return c, err
+    }
+    if _, err := ResolvePSLimit(c.PS); err != nil {
         return c, err
     }
     if _, err := ResolveTail(c.Logs); err != nil {

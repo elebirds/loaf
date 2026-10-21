@@ -77,7 +77,7 @@ other = "显示帮助。"
 [flag_lang]
 other = "界面语言：auto、en 或 zh-Hans。"
 [flag_json]
-other = "输出结构化 JSON，不进行交互；exec 和 logs -f 使用 NDJSON 流。"
+other = "输出结构化 JSON，不进行交互；exec、logs -f 和 cloud watch 使用 NDJSON 流。"
 [flag_target]
 other = "覆盖当前项目的目标别名。"
 [flag_ssh]
@@ -646,3 +646,498 @@ other = "数据已清理"
 other = "清理未确认"
 [clean_confirm_submission]
 other = "先用 loaf ps 查询同一任务 ID，确认已接受后再清理；不要提交替代任务。"
+
+[cloud_short]
+other = "管理显式授权的云实例租用并接入 SSH 机器"
+
+[cloud_config]
+other = "云配置无效，请检查账号、资源条件、镜像、单位和时间范围。"
+
+[cloud_failed]
+other = "云操作失败，未自动申请替代实例。"
+
+[cloud_unconfirmed]
+other = "云操作结果未确认，实例可能已经创建或开始计费。"
+
+[cloud_auth_required]
+other = "云凭据缺失、过期或权限不足。请用 cloud login <账号> 重新认证，或检查显式配置的环境令牌引用。"
+
+[cloud_credential_store_unavailable]
+other = "选定的凭据存储不可用或不安全，未切换到其他存储。若要明确选择未加密的私有文件，请使用 --credential-store file --prompt 重新登录。"
+
+[cloud_auth_product_unsupported]
+other = "当前凭据类型与所选产品尚无可用的适配器。Loaf 未切换 API 地址或认证方式。"
+
+[cloud_unsupported]
+other = "此产品未提供已验证的只读库存或报价，无法验证这些条件。Pro 尝试分配需要显式 --allow-unquoted，不能放宽不支持的硬件条件。"
+
+[cloud_price_unverifiable]
+other = "无法核实整实例每小时计算价格，未发送付费请求。--allow-unquoted 不能绕过已配置的价格上限。"
+
+[cloud_unquoted_required]
+other = "未报价的分配需要显式 --allow-unquoted，且不能存在有效价格上限。"
+
+[cloud_reconcile_hint]
+other = "请查看 loaf cloud requests 并核对平台控制台，再用同一个请求 ID 执行 reconcile；确认前不要租用替代实例。"
+
+[cloud_pending]
+other = "请求 {{.ID}} 尚未确认，或其已创建实例仍需接入。"
+
+[cloud_busy]
+other = "另一个云操作正在使用此账号或机器别名，请等待其完成。"
+
+[cloud_receipt]
+other = "无法读取云操作凭据或其格式不受支持，原文件未修改。"
+
+[cloud_account_unknown]
+other = "请通过 --account 选择已配置的云账号，或在用户配置中设置 cloud.default_account。"
+
+[cloud_account_mismatch]
+other = "指定账号与此机器保存的实例绑定不一致。"
+
+[cloud_product_mismatch]
+other = "指定产品与此机器保存的实例绑定不一致。"
+
+[cloud_flag_auth]
+other = "凭据类型：session 或 developer；不根据产品推断"
+
+[cloud_target_flag]
+other = "云命令使用显式实例 ID 或别名，不接受 --target。"
+
+[cloud_profile_unknown]
+other = "项目或用户配置中不存在所选资源模板。"
+
+[cloud_no_match]
+other = "授权时间范围内未获得符合条件的实例。"
+
+[cloud_not_ready]
+other = "实例已存在，但尚未确认 SSH 可连接，平台可能已开始计费。"
+
+[cloud_connect_hint]
+other = "请用 cloud credentials 查看连接地址，通过原生 SSH 确认主机信任，再用同一个 --instance 或 --request 重试 cloud bind；不要重新租卡。"
+
+[cloud_confirm_required]
+other = "此操作需要明确授权：非交互时传入 --yes，或在提示时输入 yes。"
+
+[cloud_power_confirm]
+other = "对整个实例 {{.ID}} 执行 {{.Value}}？这可能开始计费或停止实例上的所有实验。输入 yes 继续。"
+
+[cloud_acquire_confirm]
+other = "是否按这些条件授权租用最多一台按量计费实例？存储另计，没有总费用上限或自动关机。输入 yes 继续。"
+
+[cloud_no_instance_confirm]
+other = "是否已在平台控制台确认此请求未创建实例？此操作将解除重复计费保护。输入 yes 继续。"
+
+[cloud_list_short]
+other = "分页查看此账号的实例"
+
+[cloud_info_short]
+other = "查看实例信息，不暴露凭据"
+
+[cloud_credentials_short]
+other = "获取当前 SSH 连接信息，默认隐藏密码"
+
+[cloud_start_short]
+other = "明确授权后启动整个已有实例"
+
+[cloud_stop_short]
+other = "关闭整个实例，而不只是 Loaf 实验"
+
+[cloud_search_short]
+other = "只读查询一次库存并筛选排序"
+
+[cloud_watch_short]
+other = "前台只读监测库存，不租用实例"
+
+[cloud_acquire_short]
+other = "租用最多一台实例并接入 SSH 机器"
+
+[cloud_bind_short]
+other = "绑定已有实例并验证 SSH 身份认证"
+
+[cloud_requests_short]
+other = "查看本地租用及开关机操作凭据"
+
+[cloud_reconcile_short]
+other = "核对未确认请求，不重放创建或开关机操作"
+
+[cloud_account_short]
+other = "管理用户私有的云账号凭据引用"
+
+[cloud_account_list_short]
+other = "列出账号引用，不读取令牌"
+
+[cloud_account_add_short]
+other = "保存平台产品及令牌环境变量引用"
+
+[cloud_account_remove_short]
+other = "删除账号别名，保留已有实例绑定"
+
+[cloud_instance_arg]
+other = "<实例ID或别名>"
+
+[cloud_request_arg]
+other = "[请求ID]"
+
+[cloud_accounts_empty]
+other = "尚未配置云账号。"
+
+[cloud_requests_empty]
+other = "尚无云操作记录。"
+
+[cloud_price_unknown]
+other = "未报价"
+
+[cloud_coverage]
+other = "已检查 {{.Count}} 条记录；列表完整：{{.Value}}。"
+
+[cloud_binding]
+other = "{{.Target}} → {{.ID}}：{{.Value}}"
+
+[cloud_plan_summary]
+other = "{{.Count}} 张 GPU；每小时计算费用上限：{{.Value}}；租用等待范围：{{.Mode}}。"
+
+[cloud_billing_warning]
+other = "上限仅针对整实例计算费用，不包含存储或总费用。库存查询不是预留，也不代表服务端锁价。"
+
+[cloud_matches]
+other = "符合条件的资源：{{.Count}}。"
+
+[cloud_observed]
+other = "最近成功查询时间：{{.Value}}。"
+
+[cloud_progress_waiting]
+other = "正在检查符合条件的库存……"
+
+[cloud_progress_creating]
+other = "正在提交一次已授权的分配请求……"
+
+[cloud_progress_created]
+other = "实例已创建，正在检查 SSH 连接。"
+
+[cloud_progress_change]
+other = "库存已变化。"
+
+[cloud_progress_heartbeat]
+other = "仍在监测，库存未变化。"
+
+[cloud_flag_account]
+other = "云账号名称（用户配置）"
+
+[cloud_flag_product]
+other = "AutoDL 产品：standard 或 pro"
+
+[cloud_flag_limit]
+other = "每次查询最多检查的条数（1–1000）"
+
+[cloud_flag_yes]
+other = "非交互式授权显示的云操作"
+
+[cloud_flag_password]
+other = "明确要求在此次结果中显示当前 SSH 密码"
+
+[cloud_flag_power_wait]
+other = "请求接受后观察同一实例的最长时间"
+
+[cloud_flag_unquoted]
+other = "显式允许未报价的分配，不能覆盖价格上限"
+
+[cloud_flag_ready]
+other = "绑定后等待平台运行及 SSH 认证的最长时间"
+
+[cloud_flag_instance]
+other = "已有的平台实例 ID"
+
+[cloud_flag_request]
+other = "已有租用凭据 ID，不会创建新实例"
+
+[cloud_flag_no_instance]
+other = "在核对控制台后确认未创建实例"
+
+[cloud_flag_profile]
+other = "loaf.toml 或用户配置中的可选资源模板"
+
+[cloud_flag_gpu_vendor]
+other = "要求的 GPU 厂商（例如 nvidia）"
+
+[cloud_flag_gpu_model]
+other = "允许的型号，整体替换配置中的型号列表"
+
+[cloud_flag_gpu_count]
+other = "要求的 GPU 卡数（内置默认值：1）"
+
+[cloud_flag_min_gpu_memory]
+other = "每张 GPU 最小显存，必须带 GiB 单位（如 24GiB）"
+
+[cloud_flag_min_cpus]
+other = "最小分配 CPU 数量"
+
+[cloud_flag_min_memory]
+other = "实例最小内存，必须带 GiB 单位"
+
+[cloud_flag_min_disk]
+other = "最小分配磁盘容量，必须带 GiB 单位"
+
+[cloud_flag_region]
+other = "允许的地区 ID，整体替换配置中的地区列表"
+
+[cloud_flag_max_compute_hourly_price]
+other = "整实例每小时计算费用上限，十进制小数（存储另计）"
+
+[cloud_flag_currency]
+other = "价格币种（CNY）"
+
+[cloud_flag_wait]
+other = "授权的前台监测或分配等待范围（0s–24h）"
+
+[cloud_flag_poll_interval]
+other = "最小查询间隔（10s–10m），退避可能增大间隔"
+
+[cloud_flag_image]
+other = "显式指定普通实例基础镜像 UUID 或 Pro 镜像 UUID"
+
+[cloud_flag_private_image]
+other = "适用时指定普通实例的私有镜像 UUID"
+
+[cloud_flag_gpu_spec]
+other = "显式指定 Pro 算力规格 UUID"
+
+[cloud_flag_cuda_from]
+other = "Pro 驱动 CUDA 最低版本代码，如 118"
+
+[cloud_flag_expand_system_disk]
+other = "Pro 系统盘扩容，平台 GB 单位（0–500）"
+
+[cloud_flag_expand_data_disk]
+other = "普通实例数据盘扩容，平台 GB 单位（存储另计）"
+
+[cloud_flag_app_version]
+other = "可选的普通控制台 appversion 请求头"
+
+[cloud_flag_default]
+other = "将此账号设为用户默认账号"
+
+[cloud_flag_token_env]
+other = "保存所选凭据的环境变量名"
+
+[cloud_status_running]
+other = "运行中"
+
+[cloud_status_stopped]
+other = "已关机"
+
+[cloud_status_starting]
+other = "启动中"
+
+[cloud_status_stopping]
+other = "关机中"
+
+[cloud_status_unknown]
+other = "未知"
+
+[cloud_status_bound]
+other = "已绑定，SSH 未确认"
+
+[cloud_status_ready]
+other = "SSH 已就绪"
+
+[cloud_status_intent]
+other = "已记录请求意图，重试前需核对"
+
+[cloud_status_uncertain]
+other = "未确认"
+
+[cloud_status_created]
+other = "已创建，需接入"
+
+[cloud_status_accepted]
+other = "已接受，尚未观察完成"
+
+[cloud_status_completed]
+other = "已完成"
+
+[cloud_status_rejected]
+other = "已拒绝"
+
+[cloud_status_no_stock]
+other = "已确认无库存"
+
+[cloud_status_not_created]
+other = "未创建实例"
+
+[cloud_reject_availability_unknown]
+other = "可用性未知"
+
+[cloud_reject_no_stock]
+other = "无库存"
+
+[cloud_reject_gpu_vendor]
+other = "GPU 厂商不符或未知"
+
+[cloud_reject_gpu_model]
+other = "GPU 型号不符或未知"
+
+[cloud_reject_gpu_count]
+other = "GPU 卡数不符"
+
+[cloud_reject_gpu_memory]
+other = "单卡显存不足"
+
+[cloud_reject_gpu_memory_unknown]
+other = "单卡显存未知"
+
+[cloud_reject_cpus]
+other = "CPU 数量不足"
+
+[cloud_reject_cpus_unknown]
+other = "分配 CPU 数量未知"
+
+[cloud_reject_memory]
+other = "内存不足"
+
+[cloud_reject_memory_unknown]
+other = "分配内存未知"
+
+[cloud_reject_disk]
+other = "磁盘不足"
+
+[cloud_reject_disk_unknown]
+other = "分配磁盘未知"
+
+[cloud_reject_region]
+other = "地区不符或未知"
+
+[cloud_reject_image_unavailable]
+other = "镜像不可用"
+
+[cloud_reject_price_unknown]
+other = "每小时价格未知"
+
+[cloud_reject_price]
+other = "价格超限或币种不符"
+
+[cloud_status_not_bound]
+other = "尚未绑定"
+
+[cloud_progress_allocation_attempt]
+other = "Pro 将执行已授权的分配尝试，而非只读库存监测；租前价格未报价。"
+
+[cloud_no_observation]
+other = "监测时间范围已结束，但没有成功获取库存。"
+
+[cloud_required_request_arg]
+other = "<请求ID>"
+
+[cloud_flag_account_replace]
+other = "显式替换已有云账号引用"
+
+[cloud_login_short]
+other = "通过 AutoDL 主账号或子账号密码登录"
+
+[cloud_logout_short]
+other = "清除所选账号保存的会话和登录摘要"
+
+[cloud_flag_username]
+other = "手机号，或子账号的 用户名@主账户ID"
+
+[cloud_flag_phone_area]
+other = "主账号登录手机号的国家区号"
+
+[cloud_flag_password_stdin]
+other = "从标准输入读取一行密码，不进行提示"
+
+[cloud_flag_prompt_password]
+other = "重新输入密码，不使用保存的登录摘要"
+
+[cloud_flag_verify]
+other = "提示输入已从 AutoDL 获取的短信验证码"
+
+[cloud_flag_remember]
+other = "在选定的凭据存储中保存可重用的密码摘要"
+
+[cloud_username_required]
+other = "首次登录请指定 --username。"
+
+[cloud_password_required]
+other = "请使用交互终端或显式 --password-stdin，不接受命令行参数中的密码。"
+
+[cloud_verification_required]
+other = "短信验证码输入需要交互终端。"
+
+[cloud_username_prompt]
+other = "AutoDL 用户名："
+
+[cloud_password_prompt]
+other = "密码（不回显）："
+
+[cloud_verification_prompt]
+other = "短信验证码（不回显）："
+
+[cloud_login_done]
+other = "已保存 {{.Account}} 的登录（{{.Username}}）。"
+
+[cloud_logout_done]
+other = "已清除 {{.Account}} 保存的登录，已有实例不受影响。"
+
+[cloud_auth_challenge]
+other = "AutoDL 要求短信或人机验证。请在官网完成验证；已获取短信码时可使用 login --verify。未重试密码请求。"
+
+[cloud_auth_failed]
+other = "AutoDL 未接受此次登录，请检查用户名和密码；原保存的登录未被替换。"
+
+[cloud_identity_mismatch]
+other = "认证身份与保存的身份不同。请使用新账号别名，或显式 login --replace；历史绑定不会改变。"
+
+[cloud_credential_invalid]
+other = "保存的凭据记录无效或格式未知，未修改该记录。请使用 --prompt 重新登录。"
+
+[cloud_saved_login_required]
+other = "此操作需要系统凭据库中的登录。环境变量凭据请取消设置或吊销外部令牌。"
+
+[cloud_login_changed]
+other = "登录期间账号配置发生变化，未保存新的引用，请重新登录。"
+
+[cloud_flag_credential_store]
+other = "凭据存储：keyring（默认）或 file（未加密的私有文件）"
+
+[cloud_flag_gpu_spec_id]
+other = "Pro 网页规格的数字 ID（可选，不同于开发者 API 的 --gpu-spec）"
+
+[cloud_storage_daily]
+other = "存储：{{.Price}} {{.Currency}}/天"
+
+[cloud_login_failed]
+other = "AutoDL 登录未完成。"
+
+[cloud_login_diagnostic]
+other = "阶段：{{.Stage}}；错误码：{{.ProviderCode}}；HTTP 状态：{{.HTTPStatus}}。未自动重试密码。"
+
+[cloud_auth_stage_input]
+other = "输入校验"
+
+[cloud_auth_stage_challenge]
+other = "验证要求检查"
+
+[cloud_auth_stage_password]
+other = "密码认证"
+
+[cloud_auth_stage_login_response]
+other = "登录响应校验"
+
+[cloud_auth_stage_passport]
+other = "票据交换"
+
+[cloud_auth_stage_passport_response]
+other = "会话响应校验"
+
+[cloud_auth_stage_identity]
+other = "身份及权限核验"
+
+[cloud_http_status_unavailable]
+other = "未记录"
+
+[cloud_auth_stage_storage]
+other = "凭据保存"
+
+[cloud_auth_stage_settings]
+other = "账号配置保存"

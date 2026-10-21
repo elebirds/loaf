@@ -5,10 +5,14 @@ import (
     "os"
     "os/exec"
     "os/signal"
+    "path/filepath"
     "syscall"
 
+    "github.com/elebirds/loaf/internal/autodl"
     "github.com/elebirds/loaf/internal/cli"
+    "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/credentials"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
@@ -23,6 +27,9 @@ func (unavailableSSH) Check(context.Context, config.Target, string, bool) (ssh.R
 }
 
 func main() {
+    if len(os.Args) == 3 && os.Args[1] == "__ssh-askpass" {
+        os.Exit(ssh.AskpassMain(os.Args[2], os.Stdout))
+    }
     home, err := os.UserHomeDir()
     if err != nil {
         os.Exit(1)
@@ -43,8 +50,20 @@ func main() {
     var runs *execution.Service
     var operations cli.MachineOperations
     store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
+    authentication := &cloud.Authentication{Keyring: credentials.Keyring{}, Files: credentials.File{Dir: filepath.Join(filepath.Dir(store.IndexFile), "credentials")}}
+    factory := autodl.Factory{LookupEnv: os.LookupEnv, ReadSecret: authentication.Token}
+    authentication.Authenticate = factory.Login
+    cloudService := cli.DefaultCloudService(store, factory.Open)
     if binary, err := exec.LookPath("ssh"); err == nil {
         client := &ssh.Client{Binary: binary}
+        client.Resolve = cloudConnection(factory.Open)
+        if cfg, err := store.Load(); err == nil {
+            for _, account := range cfg.Cloud.Accounts {
+                if account.Credential.Env != "" {
+                    client.SensitiveEnv = append(client.SensitiveEnv, account.Credential.Env)
+                }
+            }
+        }
         checker = client
         operations = client
         bootstrap := execution.Bootstrap{Remote: client}
@@ -69,7 +88,7 @@ func main() {
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Cloud: cloudService, Auth: authentication, ReadPassword: terminalPassword, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
 }
 

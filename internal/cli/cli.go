@@ -14,6 +14,7 @@ import (
     "strings"
     "time"
 
+    "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/i18n"
@@ -37,26 +38,32 @@ type RunnerVerifier interface {
 
 // Options are assembled by the executable, not looked up inside command handlers.
 type Options struct {
-    Store       *config.Store
-    Checker     Checker
-    Runner      RunnerVerifier
-    Syncer      Synchronizer
-    Cleaner     RunCleaner
-    Puller      OutputPuller
-    Runs        *execution.Service
-    Operations  MachineOperations
-    CWD         string
-    Env         map[string]string
-    In          io.Reader
-    Out, Err    io.Writer
-    Interactive bool
+    Store        *config.Store
+    Checker      Checker
+    Runner       RunnerVerifier
+    Syncer       Synchronizer
+    Cleaner      RunCleaner
+    Puller       OutputPuller
+    Runs         *execution.Service
+    Operations   MachineOperations
+    Cloud        *cloud.Service
+    Auth         *cloud.Authentication
+    ReadPassword func(context.Context) ([]byte, error)
+    CWD          string
+    Env          map[string]string
+    In           io.Reader
+    Out, Err     io.Writer
+    Interactive  bool
 }
 
 type errorView struct {
-    Code    string `json:"code"`
-    Message string `json:"message"`
-    Hint    string `json:"hint,omitempty"`
-    Detail  string `json:"detail,omitempty"`
+    Code         string `json:"code"`
+    Message      string `json:"message"`
+    Hint         string `json:"hint,omitempty"`
+    Detail       string `json:"detail,omitempty"`
+    ProviderCode string `json:"provider_code,omitempty"`
+    AuthStage    string `json:"auth_stage,omitempty"`
+    HTTPStatus   int    `json:"http_status,omitempty"`
 }
 type envelope struct {
     SchemaVersion int        `json:"schema_version"`
@@ -224,7 +231,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         result = versionData(info)
         return nil
     }}
-    help := &cobra.Command{Use: "help " + l.Text("command_arg"), Short: l.Text("help_short"), Args: arguments(0, 1), RunE: func(_ *cobra.Command, args []string) error {
+    help := &cobra.Command{Use: "help " + l.Text("command_arg"), Short: l.Text("help_short"), Args: arguments(0, 4), RunE: func(_ *cobra.Command, args []string) error {
         c, _, err := root.Find(args)
         if err != nil {
             return fault.New("BAD_CONFIG", "invalid_command", nil)
@@ -238,6 +245,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     root.AddCommand(newCleanCommand(o, &target, l, func(value any) { result = value }))
+    root.AddCommand(newCloudCommand(o, cfg, l, func(value any) { result = value }, &streamed))
     err := earlyErr
     if err == nil {
         err = langErr
@@ -262,8 +270,22 @@ func Execute(ctx context.Context, args []string, o Options) int {
             f = fault.Wrap("OPERATION_FAILED", "internal_error", err)
         }
         view = &errorView{Code: f.Code, Message: l.Text(f.Message, f.Params)}
+        view.ProviderCode, _ = f.Params["ProviderCode"].(string)
+        view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
+        view.AuthStage, _ = f.Params["AuthStage"].(string)
         if f.Hint != "" {
-            view.Hint = l.Text(f.Hint, f.Params)
+            parameters := f.Params
+            if view.AuthStage != "" {
+                parameters = map[string]any{}
+                for key, value := range f.Params {
+                    parameters[key] = value
+                }
+                parameters["Stage"] = l.Text("cloud_auth_stage_" + view.AuthStage)
+                if view.HTTPStatus == 0 {
+                    parameters["HTTPStatus"] = l.Text("cloud_http_status_unavailable")
+                }
+            }
+            view.Hint = l.Text(f.Hint, parameters)
         }
         if detail, ok := f.Params["Detail"].(string); ok {
             view.Detail = detail
@@ -272,7 +294,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         if f.Code == "BAD_CONFIG" {
             code = 2
         }
-        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" || f.Code == "CLEAN_UNCONFIRMED" {
+        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" || f.Code == "CLEAN_UNCONFIRMED" || f.Code == "CLOUD_UNCONFIRMED" {
             code = 3
         }
     }
@@ -308,6 +330,10 @@ func earlyOptions(args []string) (bool, string, error) {
         a := args[i]
         if a == "--" {
             break
+        }
+        if cloudValueFlags[strings.SplitN(a, "=", 2)[0]] && !strings.Contains(a, "=") {
+            i++
+            continue
         }
         if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" {
             i++
@@ -360,9 +386,15 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     fmt.Fprintf(out, "%s\n\n%s\n  %s\n", c.Short, l.Text("usage"), usage)
     if c.HasAvailableSubCommands() {
         fmt.Fprintf(out, "\n%s\n", l.Text("commands"))
+        commandWidth := 10
         for _, sub := range c.Commands() {
             if !sub.Hidden {
-                fmt.Fprintf(out, "  %-10s %s\n", sub.Name(), sub.Short)
+                commandWidth = max(commandWidth, len(sub.Name()))
+            }
+        }
+        for _, sub := range c.Commands() {
+            if !sub.Hidden {
+                fmt.Fprintf(out, "  %-*s %s\n", commandWidth, sub.Name(), sub.Short)
             }
         }
     }
@@ -371,6 +403,9 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     flags.AddFlagSet(c.InheritedFlags())
     flags.AddFlagSet(c.LocalFlags())
     flags.VisitAll(func(f *pflag.Flag) {
+        if f.Name == "target" && strings.HasPrefix(c.CommandPath(), "loaf cloud") {
+            return
+        }
         if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean") {
             return
         }
@@ -409,6 +444,9 @@ func padFlag(s string, cells int) string {
 }
 
 func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
+    if printCloud(out, data, l) {
+        return
+    }
     switch r := data.(type) {
     case addResult:
         fmt.Fprintln(out, l.Text("added", map[string]any{"Target": r.Target, "Destination": r.Destination}))

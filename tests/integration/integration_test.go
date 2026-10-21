@@ -39,6 +39,10 @@ func command(t *testing.T, name string, args ...string) string {
 }
 
 func newFixture(t *testing.T) *fixture {
+    return newSSHFixture(t, false)
+}
+
+func newSSHFixture(t *testing.T, password bool) *fixture {
     t.Helper()
     f := &fixture{t: t, dir: t.TempDir(), client: &ssh.Client{Binary: "ssh"}}
     keyDir := filepath.Join(f.dir, "SSH 中文 config")
@@ -49,7 +53,11 @@ func newFixture(t *testing.T) *fixture {
     f.config = filepath.Join(f.dir, "config")
     f.known = filepath.Join(keyDir, "known_hosts")
     command(t, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", f.key)
-    f.id = command(t, "docker", "run", "-d", "--init", "--rm", "--tmpfs", "/tmp/loaf-full:rw,size=1m,mode=0777", "-p", "127.0.0.1::22", "loaf-sshd-test:local")
+    containerArgs := []string{"run", "-d", "--init", "--rm", "--tmpfs", "/tmp/loaf-full:rw,size=1m,mode=0777", "-p", "127.0.0.1::22", "loaf-sshd-test:local"}
+    if password {
+        containerArgs = append(containerArgs, "/bin/sh", "-c", "ssh-keygen -A && printf 'researcher:loaf-fixture-password\\n' | chpasswd && exec /usr/sbin/sshd -D -e -o PasswordAuthentication=yes -o PermitRootLogin=no -o AllowTcpForwarding=yes -o AuthorizedKeysFile=.ssh/authorized_keys")
+    }
+    f.id = command(t, "docker", containerArgs...)
     t.Cleanup(func() {
         if t.Failed() {
             out, err := exec.Command("docker", "logs", f.id).CombinedOutput()

@@ -77,7 +77,7 @@ other = "Show help."
 [flag_lang]
 other = "Interface language: auto, en, or zh-Hans."
 [flag_json]
-other = "Write structured JSON without interaction; exec and logs -f stream NDJSON."
+other = "Write structured JSON without interaction; exec, logs -f and cloud watch stream NDJSON."
 [flag_target]
 other = "Override the project's target alias."
 [flag_ssh]
@@ -646,3 +646,498 @@ other = "data cleaned"
 other = "cleanup unconfirmed"
 [clean_confirm_submission]
 other = "Query the same run ID with loaf ps to confirm acceptance before cleaning; do not submit a replacement run."
+
+[cloud_short]
+other = "Manage explicit cloud rentals and connect them to SSH targets"
+
+[cloud_config]
+other = "Invalid cloud settings. Check the account, resource conditions, image, units and time bounds."
+
+[cloud_failed]
+other = "The cloud operation failed. No replacement resource was requested automatically."
+
+[cloud_unconfirmed]
+other = "The cloud operation is unconfirmed. A resource may exist or billing may have started."
+
+[cloud_auth_required]
+other = "Cloud credentials are missing, expired or unauthorized. Reauthenticate with cloud login <account>, or check the explicit environment-token reference."
+
+[cloud_credential_store_unavailable]
+other = "The selected credential store is unavailable or unsafe. No other store was used. To choose unencrypted private files explicitly, log in with --credential-store file --prompt."
+
+[cloud_auth_product_unsupported]
+other = "This credential mode cannot access the selected product through an implemented adapter. Loaf did not switch API hosts or credential modes."
+
+[cloud_unsupported]
+other = "This product has no verified read-only inventory/quote for these conditions. Pro allocation attempts require explicit --allow-unquoted; unsupported hardware filters cannot be relaxed."
+
+[cloud_price_unverifiable]
+other = "The whole-instance hourly compute price cannot be verified. No paid request was sent. A configured price cap cannot be bypassed with --allow-unquoted."
+
+[cloud_unquoted_required]
+other = "An unquoted allocation requires explicit --allow-unquoted and no effective price cap."
+
+[cloud_reconcile_hint]
+other = "Inspect loaf cloud requests, check the platform console, then reconcile the same request ID. Do not acquire a replacement before resolving it."
+
+[cloud_pending]
+other = "Request {{.ID}} is unresolved or its created instance still needs binding."
+
+[cloud_busy]
+other = "Another cloud operation owns this account or target. Try again after it finishes."
+
+[cloud_receipt]
+other = "Could not read this cloud receipt, or its format is unsupported. The receipt was not changed."
+
+[cloud_account_unknown]
+other = "Choose a configured cloud account with --account, or set cloud.default_account in user settings."
+
+[cloud_account_mismatch]
+other = "The account does not match this target’s immutable instance binding."
+
+[cloud_product_mismatch]
+other = "The product does not match this target’s immutable instance binding."
+
+[cloud_flag_auth]
+other = "Credential mode: session or developer; never inferred from the product"
+
+[cloud_target_flag]
+other = "Cloud commands use an explicit instance ID or alias, not --target."
+
+[cloud_profile_unknown]
+other = "The selected resource profile does not exist in project or user settings."
+
+[cloud_no_match]
+other = "No eligible resource was acquired within the authorized window."
+
+[cloud_not_ready]
+other = "The instance exists but SSH readiness is not confirmed. It may already be billing."
+
+[cloud_connect_hint]
+other = "Use cloud credentials to inspect the endpoint, establish host trust with native SSH, then retry cloud bind with the same --instance or --request. Do not rent a replacement."
+
+[cloud_confirm_required]
+other = "This operation needs explicit approval: pass --yes noninteractively, or type yes at the prompt."
+
+[cloud_power_confirm]
+other = "Apply {{.Value}} to the entire instance {{.ID}}? This may start billing or stop every experiment on it. Type yes to continue."
+
+[cloud_acquire_confirm]
+other = "Authorize at most one pay-as-you-go instance under these conditions? Storage is extra; there is no total-spend limit or automatic shutdown. Type yes to continue."
+
+[cloud_no_instance_confirm]
+other = "Have you verified in the platform console that this request created no instance? This clears the duplicate-charge guard. Type yes to continue."
+
+[cloud_list_short]
+other = "List this account’s instances with bounded pagination"
+
+[cloud_info_short]
+other = "Inspect an instance without exposing secrets"
+
+[cloud_credentials_short]
+other = "Fetch current SSH connection details; redact passwords by default"
+
+[cloud_start_short]
+other = "Start an existing whole instance after explicit approval"
+
+[cloud_stop_short]
+other = "Stop a whole instance, not just a Loaf experiment"
+
+[cloud_search_short]
+other = "Read inventory once and filter/rank matching offers"
+
+[cloud_watch_short]
+other = "Monitor inventory in the foreground without renting"
+
+[cloud_acquire_short]
+other = "Acquire at most one instance and bind its SSH target"
+
+[cloud_bind_short]
+other = "Bind an existing instance and verify SSH authentication"
+
+[cloud_requests_short]
+other = "Inspect local allocation and power-operation receipts"
+
+[cloud_reconcile_short]
+other = "Resolve an uncertain request without replaying its mutation"
+
+[cloud_account_short]
+other = "Manage user-owned account credential references"
+
+[cloud_account_list_short]
+other = "List account references without reading tokens"
+
+[cloud_account_add_short]
+other = "Save a platform product and token environment-variable reference"
+
+[cloud_account_remove_short]
+other = "Remove an account alias, keeping frozen instance bindings"
+
+[cloud_instance_arg]
+other = "<instance-id|alias>"
+
+[cloud_request_arg]
+other = "[request-id]"
+
+[cloud_accounts_empty]
+other = "No cloud accounts configured."
+
+[cloud_requests_empty]
+other = "No cloud requests recorded."
+
+[cloud_price_unknown]
+other = "unquoted"
+
+[cloud_coverage]
+other = "Examined {{.Count}} entries; complete: {{.Value}}."
+
+[cloud_binding]
+other = "{{.Target}} → {{.ID}}: {{.Value}}"
+
+[cloud_plan_summary]
+other = "{{.Count}} GPU(s); compute hourly cap: {{.Value}}; acquisition window: {{.Mode}}."
+
+[cloud_billing_warning]
+other = "The cap covers whole-instance compute only, not storage or total spend. Inventory is not a reservation or a server-enforced price lock."
+
+[cloud_matches]
+other = "Eligible offers: {{.Count}}."
+
+[cloud_observed]
+other = "Last successful observation: {{.Value}}."
+
+[cloud_progress_waiting]
+other = "Checking eligible inventory…"
+
+[cloud_progress_creating]
+other = "Submitting one authorized allocation…"
+
+[cloud_progress_created]
+other = "Instance created; checking its SSH connection."
+
+[cloud_progress_change]
+other = "Inventory changed."
+
+[cloud_progress_heartbeat]
+other = "Still monitoring; inventory is unchanged."
+
+[cloud_flag_account]
+other = "Cloud account name (user settings)"
+
+[cloud_flag_product]
+other = "AutoDL product: standard or pro"
+
+[cloud_flag_limit]
+other = "Maximum entries examined per query (1–1000)"
+
+[cloud_flag_yes]
+other = "Authorize the displayed cloud operation noninteractively"
+
+[cloud_flag_password]
+other = "Explicitly reveal the current SSH password in this result"
+
+[cloud_flag_power_wait]
+other = "Observe the same instance for this long after acceptance"
+
+[cloud_flag_unquoted]
+other = "Explicitly permit unquoted allocation; cannot override a price cap"
+
+[cloud_flag_ready]
+other = "Wait for platform running and authenticated SSH after binding"
+
+[cloud_flag_instance]
+other = "Existing platform instance ID"
+
+[cloud_flag_request]
+other = "Existing acquisition receipt ID; never creates another instance"
+
+[cloud_flag_no_instance]
+other = "Attest after console verification that no instance was created"
+
+[cloud_flag_profile]
+other = "Optional named resource profile in loaf.toml or user settings"
+
+[cloud_flag_gpu_vendor]
+other = "Required GPU vendor (for example nvidia)"
+
+[cloud_flag_gpu_model]
+other = "Allowed model names; replaces the configured model list"
+
+[cloud_flag_gpu_count]
+other = "Required GPU card count (built-in: 1)"
+
+[cloud_flag_min_gpu_memory]
+other = "Minimum memory per GPU, with GiB suffix (for example 24GiB)"
+
+[cloud_flag_min_cpus]
+other = "Minimum allocated CPU count"
+
+[cloud_flag_min_memory]
+other = "Minimum instance RAM with GiB suffix"
+
+[cloud_flag_min_disk]
+other = "Minimum allocated disk capacity with GiB suffix"
+
+[cloud_flag_region]
+other = "Allowed region IDs; replaces the configured region list"
+
+[cloud_flag_max_compute_hourly_price]
+other = "Whole-instance compute hourly cap, exact decimal (storage extra)"
+
+[cloud_flag_currency]
+other = "Price currency (CNY)"
+
+[cloud_flag_wait]
+other = "Authorized foreground monitoring/allocation window (0s–24h)"
+
+[cloud_flag_poll_interval]
+other = "Minimum query interval (10s–10m); backoff may increase it"
+
+[cloud_flag_image]
+other = "Explicit ordinary base-image UUID or Pro image UUID"
+
+[cloud_flag_private_image]
+other = "Ordinary private image UUID when applicable"
+
+[cloud_flag_gpu_spec]
+other = "Explicit Pro GPU specification UUID"
+
+[cloud_flag_cuda_from]
+other = "Pro driver CUDA lower-bound code, for example 118"
+
+[cloud_flag_expand_system_disk]
+other = "Pro system-disk expansion in platform GB (0–500)"
+
+[cloud_flag_expand_data_disk]
+other = "Ordinary data-disk expansion in platform GB (storage extra)"
+
+[cloud_flag_app_version]
+other = "Optional ordinary-console appversion header"
+
+[cloud_flag_default]
+other = "Select this account as the user default"
+
+[cloud_flag_token_env]
+other = "Name of the environment variable holding the selected credential"
+
+[cloud_status_running]
+other = "running"
+
+[cloud_status_stopped]
+other = "stopped"
+
+[cloud_status_starting]
+other = "starting"
+
+[cloud_status_stopping]
+other = "stopping"
+
+[cloud_status_unknown]
+other = "unknown"
+
+[cloud_status_bound]
+other = "bound; SSH unconfirmed"
+
+[cloud_status_ready]
+other = "SSH ready"
+
+[cloud_status_intent]
+other = "request intent; reconcile before retry"
+
+[cloud_status_uncertain]
+other = "unconfirmed"
+
+[cloud_status_created]
+other = "created; binding needed"
+
+[cloud_status_accepted]
+other = "accepted; completion not observed"
+
+[cloud_status_completed]
+other = "completed"
+
+[cloud_status_rejected]
+other = "rejected"
+
+[cloud_status_no_stock]
+other = "confirmed no stock"
+
+[cloud_status_not_created]
+other = "no instance created"
+
+[cloud_reject_availability_unknown]
+other = "availability unknown"
+
+[cloud_reject_no_stock]
+other = "no stock"
+
+[cloud_reject_gpu_vendor]
+other = "GPU vendor mismatch or unknown"
+
+[cloud_reject_gpu_model]
+other = "GPU model mismatch or unknown"
+
+[cloud_reject_gpu_count]
+other = "GPU count mismatch"
+
+[cloud_reject_gpu_memory]
+other = "insufficient per-card memory"
+
+[cloud_reject_gpu_memory_unknown]
+other = "per-card memory unknown"
+
+[cloud_reject_cpus]
+other = "insufficient CPUs"
+
+[cloud_reject_cpus_unknown]
+other = "allocated CPUs unknown"
+
+[cloud_reject_memory]
+other = "insufficient RAM"
+
+[cloud_reject_memory_unknown]
+other = "allocated RAM unknown"
+
+[cloud_reject_disk]
+other = "insufficient disk"
+
+[cloud_reject_disk_unknown]
+other = "allocated disk unknown"
+
+[cloud_reject_region]
+other = "region mismatch or unknown"
+
+[cloud_reject_image_unavailable]
+other = "image unavailable"
+
+[cloud_reject_price_unknown]
+other = "hourly price unknown"
+
+[cloud_reject_price]
+other = "price exceeds cap or currency mismatch"
+
+[cloud_status_not_bound]
+other = "not bound"
+
+[cloud_progress_allocation_attempt]
+other = "Pro uses authorized allocation attempts, not read-only stock monitoring. The price is unquoted."
+
+[cloud_no_observation]
+other = "The monitoring window ended without a successful inventory observation."
+
+[cloud_required_request_arg]
+other = "<request-id>"
+
+[cloud_flag_account_replace]
+other = "Replace an existing cloud account reference explicitly"
+
+[cloud_login_short]
+other = "Log in with an AutoDL main or subaccount password"
+
+[cloud_logout_short]
+other = "Clear the selected saved session and login digest"
+
+[cloud_flag_username]
+other = "Phone number, or subaccount username@master-ID"
+
+[cloud_flag_phone_area]
+other = "Phone country code for main-account login"
+
+[cloud_flag_password_stdin]
+other = "Read one password line from stdin without prompting"
+
+[cloud_flag_prompt_password]
+other = "Enter a password instead of reusing a saved login digest"
+
+[cloud_flag_verify]
+other = "Prompt for an SMS verification code already obtained from AutoDL"
+
+[cloud_flag_remember]
+other = "Save the replayable password digest in the selected credential store"
+
+[cloud_username_required]
+other = "Provide --username for the first login."
+
+[cloud_password_required]
+other = "Use an interactive terminal or explicit --password-stdin. Passwords are not accepted in command arguments."
+
+[cloud_verification_required]
+other = "SMS code input requires an interactive terminal."
+
+[cloud_username_prompt]
+other = "AutoDL username: "
+
+[cloud_password_prompt]
+other = "Password (hidden): "
+
+[cloud_verification_prompt]
+other = "SMS code (hidden): "
+
+[cloud_login_done]
+other = "Saved login for {{.Account}} ({{.Username}})."
+
+[cloud_logout_done]
+other = "Cleared the saved login for {{.Account}}. Existing instances are unchanged."
+
+[cloud_auth_challenge]
+other = "AutoDL requires SMS or human verification. Complete the challenge on the official site; use login --verify for an obtained SMS code. No password request was retried."
+
+[cloud_auth_failed]
+other = "AutoDL did not accept this login. Check the username/password; the saved login was not replaced."
+
+[cloud_identity_mismatch]
+other = "The authenticated identity differs from the saved identity. Use a separate account alias or explicit login --replace; historical bindings remain unchanged."
+
+[cloud_credential_invalid]
+other = "The saved credential record is invalid or has an unknown format. It was not changed. Log in again with --prompt."
+
+[cloud_saved_login_required]
+other = "This action requires a system-vault login. For environment credentials, unset or revoke the external token."
+
+[cloud_login_changed]
+other = "The account changed while login was in progress. The new reference was not published; retry login."
+
+[cloud_flag_credential_store]
+other = "Credential storage: keyring (default) or file (unencrypted private files)"
+
+[cloud_flag_gpu_spec_id]
+other = "Numeric Pro web spec ID (optional; distinct from developer --gpu-spec)"
+
+[cloud_storage_daily]
+other = "Storage: {{.Price}} {{.Currency}}/day"
+
+[cloud_login_failed]
+other = "AutoDL login did not complete."
+
+[cloud_login_diagnostic]
+other = "Stage: {{.Stage}}; code: {{.ProviderCode}}; HTTP status: {{.HTTPStatus}}. No password was retried automatically."
+
+[cloud_auth_stage_input]
+other = "input validation"
+
+[cloud_auth_stage_challenge]
+other = "verification requirements"
+
+[cloud_auth_stage_password]
+other = "password verification"
+
+[cloud_auth_stage_login_response]
+other = "login response validation"
+
+[cloud_auth_stage_passport]
+other = "ticket exchange"
+
+[cloud_auth_stage_passport_response]
+other = "session response validation"
+
+[cloud_auth_stage_identity]
+other = "identity and permission checks"
+
+[cloud_http_status_unavailable]
+other = "not recorded"
+
+[cloud_auth_stage_storage]
+other = "credential storage"
+
+[cloud_auth_stage_settings]
+other = "account settings save"

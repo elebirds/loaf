@@ -17,30 +17,34 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/atomicfile"
+    "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/pelletier/go-toml/v2"
     "golang.org/x/sys/unix"
 )
 
-// Target is an existing SSH connection, not a provisioned machine.
+// Target is a static SSH connection or an immutable cloud instance binding.
 type Target struct {
-    Destination string   `toml:"destination" json:"destination"`
-    Args        []string `toml:"args,omitempty" json:"args,omitempty"`
-    RemoteBase  string   `toml:"remote_base" json:"remote_base"`
+    Destination string         `toml:"destination,omitempty" json:"destination,omitempty"`
+    Args        []string       `toml:"args,omitempty" json:"args,omitempty"`
+    RemoteBase  string         `toml:"remote_base" json:"remote_base"`
+    Cloud       *cloud.Binding `toml:"cloud,omitempty" json:"cloud,omitempty"`
 }
 
 // Global is the user-owned configuration, independent of project TOML.
 type Global struct {
-    FormatVersion int               `toml:"format_version"`
-    Language      string            `toml:"language,omitempty"`
-    Sync          SyncSettings      `toml:"sync,omitempty"`
-    Run           RunPreferences    `toml:"run,omitempty"`
-    PS            PSSettings        `toml:"ps,omitempty"`
-    Logs          LogSettings       `toml:"logs,omitempty"`
-    Stop          StopSettings      `toml:"stop,omitempty"`
-    Pull          PullSettings      `toml:"pull,omitempty"`
-    Exec          ExecSettings      `toml:"exec,omitempty"`
-    Targets       map[string]Target `toml:"targets"`
+    FormatVersion int                      `toml:"format_version"`
+    Language      string                   `toml:"language,omitempty"`
+    Sync          SyncSettings             `toml:"sync,omitempty"`
+    Run           RunPreferences           `toml:"run,omitempty"`
+    PS            PSSettings               `toml:"ps,omitempty"`
+    Logs          LogSettings              `toml:"logs,omitempty"`
+    Stop          StopSettings             `toml:"stop,omitempty"`
+    Pull          PullSettings             `toml:"pull,omitempty"`
+    Exec          ExecSettings             `toml:"exec,omitempty"`
+    Cloud         cloud.Settings           `toml:"cloud,omitempty"`
+    Resources     map[string]cloud.Profile `toml:"resources,omitempty"`
+    Targets       map[string]Target        `toml:"targets"`
 }
 
 // Project is one local working directory and its personal default target.
@@ -113,6 +117,14 @@ func (s *Store) Load() (Global, error) {
     if _, err := ResolveExecCWD(c.Exec); err != nil {
         return c, err
     }
+    if err := validateCloud(c.Cloud, c.Resources); err != nil {
+        return c, err
+    }
+    for _, target := range c.Targets {
+        if target.Cloud != nil && !ValidCloudBinding(*target.Cloud) {
+            return c, fault.New("BAD_CONFIG", "cloud_config", nil)
+        }
+    }
     return c, nil
 }
 
@@ -144,6 +156,9 @@ func cleanRemote(value string) bool {
 func (s *Store) Add(ctx context.Context, name string, target Target, replace bool) error {
     if !ValidName(name) || !ValidRemotePath(target.RemoteBase) {
         return fault.New("BAD_CONFIG", "invalid_target", nil)
+    }
+    if target.Cloud != nil && (!ValidCloudBinding(*target.Cloud) || target.Destination != "") {
+        return fault.New("BAD_CONFIG", "cloud_config", nil)
     }
     return locked(ctx, s.ConfigFile, func() error {
         c, err := s.Load()

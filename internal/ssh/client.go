@@ -13,14 +13,23 @@ import (
 )
 
 // Client invokes a specific system SSH executable. Streams are supplied by the caller.
-type Client struct{ Binary string }
+type Client struct {
+    Binary            string
+    Resolve           ResolveConnection
+    AskpassExecutable string
+    SensitiveEnv      []string
+}
 
 // Execute invokes a fixed remote operation with separately encoded input.
 func (c *Client) Execute(ctx context.Context, target config.Target, command string, input io.Reader, noninteractive bool) ([]byte, error) {
-    if err := Validate(target); err != nil {
+    session, err := c.prepare(ctx, target, noninteractive)
+    if err != nil {
         return nil, err
     }
+    defer session.close()
+    target, noninteractive = session.target, session.batch
     cmd := exec.CommandContext(ctx, c.Binary, arguments(target, command, noninteractive)...)
+    cmd.Env = session.env
     cmd.Stdin = input
     var stderr bytes.Buffer
     cmd.Stderr = &stderr

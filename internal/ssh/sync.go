@@ -41,15 +41,18 @@ type Transfer struct {
 // Sync mirrors or updates selected working files. Only rsync carries the payload.
 func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root string, input SyncInput, batch bool) (Transfer, error) {
     var result Transfer
-    if err := Validate(target); err != nil {
-        return result, err
-    }
     if r.Client == nil || r.Client.Binary == "" {
         return result, fault.New("SSH_FAILED", "ssh_missing", nil)
     }
     if r.Binary == "" {
         return result, fault.New("SYNC_FAILED", "sync_rsync_missing", nil)
     }
+    session, err := r.Client.prepare(ctx, target, batch)
+    if err != nil {
+        return result, err
+    }
+    defer session.close()
+    target, batch = session.target, session.batch
     filters, err := sourceFilters(input.Paths)
     if err != nil {
         return result, err
@@ -73,6 +76,7 @@ func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root stri
     }
     args = append(args, "--", root+"/", destination+":cache")
     cmd := exec.CommandContext(ctx, r.Binary, args...)
+    cmd.Env = session.env
     cmd.Stdin = strings.NewReader(filters)
     var output, diagnostic bytes.Buffer
     cmd.Stdout, cmd.Stderr = &output, &diagnostic

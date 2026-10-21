@@ -8,20 +8,22 @@ import (
     "path/filepath"
     "strings"
 
+    "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/fault"
 )
 
 // ProjectFile is the optional shared project configuration.
 type ProjectFile struct {
-    Target    string       `toml:"target"`
-    RemoteDir string       `toml:"remote_dir"`
-    Run       RunSettings  `toml:"run"`
-    PS        PSSettings   `toml:"ps"`
-    Logs      LogSettings  `toml:"logs"`
-    Stop      StopSettings `toml:"stop"`
-    Pull      PullSettings `toml:"pull"`
-    Exec      ExecSettings `toml:"exec"`
-    Sync      SyncSettings `toml:"sync"`
+    Target    string                   `toml:"target"`
+    RemoteDir string                   `toml:"remote_dir"`
+    Run       RunSettings              `toml:"run"`
+    PS        PSSettings               `toml:"ps"`
+    Logs      LogSettings              `toml:"logs"`
+    Stop      StopSettings             `toml:"stop"`
+    Pull      PullSettings             `toml:"pull"`
+    Exec      ExecSettings             `toml:"exec"`
+    Sync      SyncSettings             `toml:"sync"`
+    Resources map[string]cloud.Profile `toml:"resources,omitempty"`
     Outputs   struct {
         Paths []string `toml:"paths"`
     }   `toml:"outputs"`
@@ -66,6 +68,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
                 return "", c, err
             }
             if _, err := ResolveExecCWD(c.Exec); err != nil {
+                return "", c, err
+            }
+            if err := validateCloud(cloud.Settings{}, c.Resources); err != nil {
                 return "", c, err
             }
             return dir, c, nil

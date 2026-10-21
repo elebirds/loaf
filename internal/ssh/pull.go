@@ -84,15 +84,18 @@ type PullInput struct {
 // writes. files-from uses rsync's native protocol and treats names literally.
 func (r Rsync) Pull(ctx context.Context, target config.Target, runner, destination string, input PullInput, batch bool) (Transfer, error) {
     var result Transfer
-    if err := Validate(target); err != nil {
-        return result, err
-    }
     if r.Client == nil || r.Client.Binary == "" {
         return result, fault.New("SSH_FAILED", "ssh_missing", nil)
     }
     if r.Binary == "" {
         return result, fault.New("PULL_FAILED", "pull_rsync_missing", nil)
     }
+    session, err := r.Client.prepare(ctx, target, batch)
+    if err != nil {
+        return result, err
+    }
+    defer session.close()
+    target, batch = session.target, session.batch
     if len(input.Paths) == 0 {
         return result, pullFailure("BAD_REQUEST", nil, "")
     }
@@ -116,6 +119,7 @@ func (r Rsync) Pull(ctx context.Context, target config.Target, runner, destinati
     }
     args = append(args, "--", host+":.", destination+"/")
     cmd := exec.CommandContext(ctx, r.Binary, args...)
+    cmd.Env = session.env
     cmd.Stdin = strings.NewReader(strings.Join(input.Paths, "\x00") + "\x00")
     var changes changeCounter
     diagnostic := &diagnosticTail{}

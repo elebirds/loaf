@@ -32,9 +32,12 @@ type ExecResult struct {
 // SSH uses 255 for transport errors, so that value cannot confirm a command result.
 func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, stdin io.Reader, stdout, stderr io.Writer) (ExecResult, error) {
     result := ExecResult{Status: "not_started"}
-    if err := Validate(target); err != nil {
+    session, err := c.prepare(ctx, target, in.Batch)
+    if err != nil {
         return result, err
     }
+    defer session.close()
+    target, in.Batch = session.target, session.batch
     command, err := execCommand(in.Args, in.CWD)
     if err != nil {
         return result, err
@@ -42,6 +45,7 @@ func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, s
     args := []string{"-o", "ForkAfterAuthentication=no", "-o", "RemoteCommand=none", "-o", "SessionType=default"}
     args = append(args, arguments(target, command, in.Batch)...)
     cmd := foregroundProcess(ctx, c.Binary, args...)
+    cmd.Env = session.env
     cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
     if err := cmd.Start(); err != nil {
         return result, fault.Wrap("SSH_FAILED", "ssh_failed", err)
@@ -66,14 +70,25 @@ func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, s
 // Interactive opens the SSH user's native interactive shell. The caller supplies
 // real terminal descriptors so OpenSSH owns terminal modes and window resizing.
 func (c *Client) Interactive(ctx context.Context, target config.Target, stdin io.Reader, stdout, stderr io.Writer) error {
-    if err := Validate(target); err != nil {
+    cloudTarget := target.Cloud != nil
+    session, err := c.prepare(ctx, target, false)
+    if err != nil {
         return err
     }
+    defer session.close()
+    target = session.target
     args := []string{"-o", "ForkAfterAuthentication=no", "-o", "RemoteCommand=none", "-o", "SessionType=default", "-t"}
+    if cloudTarget {
+        // The explicit human terminal is the one place native SSH may ask for
+        // first-host trust. It also owns its native password/key prompts.
+        args = append(args, "-o", "StrictHostKeyChecking=ask")
+        session.env = append(withoutEnv(session.env, "SSH_ASKPASS_REQUIRE"), "SSH_ASKPASS_REQUIRE=never")
+    }
     // Unlike options, interactive login intentionally allows OpenSSH prompts and PTY.
     args = append(args, target.Args...)
     args = append(args, "--", target.Destination)
     cmd := foregroundProcess(ctx, c.Binary, args...)
+    cmd.Env = session.env
     cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
     if err := cmd.Run(); err != nil {
         return fault.Wrap("SSH_FAILED", "interactive_failed", err)
@@ -84,16 +99,20 @@ func (c *Client) Interactive(ctx context.Context, target config.Target, stdin io
 // Forward keeps a local loopback forwarding on its own foreground SSH connection.
 // No ControlMaster socket is used or closed, even if SSH Config enables sharing.
 func (c *Client) Forward(ctx context.Context, target config.Target, local, remote int, batch bool, stderr io.Writer) error {
-    if err := Validate(target); err != nil {
+    session, err := c.prepare(ctx, target, batch)
+    if err != nil {
         return err
     }
+    defer session.close()
+    target, batch = session.target, session.batch
     if local < 1 || local > 65535 || remote < 1 || remote > 65535 {
         return fault.New("BAD_CONFIG", "forward_port", nil)
     }
     args := forwardArguments(target, local, remote, batch)
     cmd := foregroundProcess(ctx, c.Binary, args...)
+    cmd.Env = session.env
     cmd.Stderr = stderr
-    err := cmd.Run()
+    err = cmd.Run()
     if errors.Is(ctx.Err(), context.Canceled) {
         return nil
     }

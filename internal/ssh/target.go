@@ -174,6 +174,14 @@ func safeOption(value string) bool {
 
 // Validate rechecks manually edited connection configuration before invoking SSH.
 func Validate(t config.Target) error {
+    if t.Cloud != nil {
+        if !config.ValidCloudBinding(*t.Cloud) || t.Destination != "" {
+            return fault.New("BAD_CONFIG", "cloud_config", nil)
+        }
+        // Local SSH preferences may accompany the binding, but the endpoint is
+        // always refreshed from the same immutable cloud instance.
+        t.Destination = "bound-instance"
+    }
     if _, err := connectionArgs(append(append([]string{}, t.Args...), t.Destination)); err != nil {
         return fault.New("BAD_CONFIG", "ssh_input", nil)
     }

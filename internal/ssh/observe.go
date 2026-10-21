@@ -67,9 +67,12 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     if req.Version != wire.Version {
         return &RemoteError{Code: "VERSION_MISMATCH"}
     }
-    if err := Validate(target); err != nil {
+    session, err := c.prepare(ctx, target, batch)
+    if err != nil {
         return err
     }
+    defer session.close()
+    target, batch = session.target, session.batch
     req.Action = "follow"
     data, err := json.Marshal(req)
     if err != nil {
@@ -78,6 +81,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     streamCtx, cancel := context.WithCancel(ctx)
     defer cancel()
     cmd := exec.CommandContext(streamCtx, c.Binary, arguments(target, Quote(runner), batch)...)
+    cmd.Env = session.env
     cmd.Stdin = bytes.NewReader(data)
     var diagnostic bytes.Buffer
     cmd.Stderr = &diagnostic

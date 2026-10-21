@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Pre-release: `add`, `use`, `check`, `sync`, `run`, `ps`, `logs`, `stop`, `pull`, and `version` are available in [v0.1.0-rc.2](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) and from source.
+> The [v0.1.0-rc.2 release](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow. Current source adds `exec`, `ssh`, `forward`, `targets`, `remove`, `clean`, and history filters for v0.2; build from source to use these additions.
 
 ## Install
 
@@ -60,6 +60,8 @@ loaf check
 
 Already have an SSH Host alias? Use `loaf add lab --ssh lab-gpu`. Connections involving jump hosts remain in your SSH Config; `-J`, keys, ports, and an explicit `-F` config file are also accepted. Pasted input must contain only connection arguments, not a remote command or Shell expression. To change an existing alias, use `--replace`.
 
+List saved machines with `loaf targets`, inspect one with `loaf targets lab`, and remove an alias with `loaf remove lab`. These commands only read or update local settings, not remote machines. Removing an alias leaves saved runs and remote data intact. A project still selecting that alias requires explicit reselection; its TOML is not rewritten and another machine is never chosen implicitly.
+
 `add` saves the connection locally; `check` actually connects. JSON and non-TTY commands do not ask for passwords or host trust. Establish host trust with native SSH first. Authentication must then work through a key, SSH agent, or native SSH connection sharing; a one-off password login without connection sharing does not authenticate later commands. Loaf never saves passwords or disables host-key verification.
 
 ### Check runner deployment explicitly
@@ -91,7 +93,18 @@ loaf ps <run-id>
 loaf logs <run-id> -f
 ```
 
-`ps` lists the latest 20 submitted or submission-uncertain runs in this project (`--limit` changes the bound). An ID queries that run only. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection, remote location, and runner version when project defaults change; `--target` cannot redirect queries.
+`ps` lists the latest submitted or submission-uncertain runs in this project, bounded to 20 by default (`--limit` or `[ps].limit` changes the bound). An ID queries that run only. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection and remote location when project defaults change; `--target` cannot redirect an ID query.
+
+Runner operations require the same software version as the local CLI. Loaf automatically deploys and verifies its bundled runner, repairing a missing or mismatched executable. It does not download an arbitrary release or hot-replace a running supervisor. Tasks created by another version return `VERSION_MISMATCH`; finish them with their matching CLI before upgrading. Unknown record formats are rejected without rewriting them.
+
+### Filter task history
+
+```bash
+loaf ps --status failed --status stopped --limit 50 --json
+loaf ps --since 2026-10-01T00:00:00Z --target lab --json
+```
+
+`--since` and `--until` use RFC3339 timestamps and filter the saved submission-attempt time, not completion time. A list's `--target` matches the saved alias, including removed aliases. Time and alias filters run before the bounded remote queries; status filters apply to those observations without searching arbitrarily far back to fill the limit. JSON reports how many entries were eligible, examined, matched, unresolved, or left unexamined. Failed observations remain visible with `query_error`, even when filtering statuses. A single-ID query rejects list filters.
 
 ### Short tasks: wait for a result, not forever
 
@@ -140,6 +153,22 @@ The [PyTorch example](examples/torch/) trains a classifier on generated data wit
 
 Outputs include a PyTorch checkpoint, metrics, model parameters, and held-out inference cases. The training script reloads its checkpoint. Run `python3 verify.py` with the downloaded run directory to independently use the collected parameters for inference on your laptop; this verification needs only Python's standard library, not local PyTorch. GPU examples are opt-in and never run in the CPU-only CI fixture.
 
+## Inspect a machine and forward a service
+
+```bash
+loaf exec -- nvidia-smi
+loaf ssh
+loaf forward 6006 --local-port 16006
+```
+
+`exec` is a foreground machine command: output appears as it is produced, and the result includes the remote exit code. It defaults to the remote user's home; `--cwd` selects another directory, with relative paths resolved from that home. It does not synchronize code, run setup, create a task ID, or promise durable execution. Use `run`, optionally with `--wait`, for experiments that need those capabilities. Arguments after `exec --` receive no implicit Shell interpretation; invoke a Shell explicitly when needed.
+
+`exec --json` emits bounded NDJSON output chunks and a final result/error. Chunks identify stdout/stderr and preserve source bytes with text or base64 encoding. A confirmed nonzero remote exit returns `EXEC_FAILED` (operation exit 1); an SSH 255 result or canceled observation is conservatively `EXEC_UNCONFIRMED` (exit 3). Do not automatically replay a command whose result is unconfirmed.
+
+`ssh` opens the selected machine's native interactive terminal, not a running experiment. `forward` uses native OpenSSH to expose an already-running remote loopback service on a local loopback port; omit `--local-port` to use the same port on both ends. The example exposes remote port 6006 at `http://127.0.0.1:16006`. It does not start TensorBoard/Jupyter, and a listening tunnel does not prove the application is healthy.
+
+Forwarding stays in the foreground and uses a dedicated connection with SSH backgrounding/connection sharing disabled. Exiting removes this forward without closing another SSH master or stopping training. Keys, agents, jump hosts, and host-key checks still apply; a noninteractive dedicated connection cannot borrow authentication from a separate password-only master. Interactive `ssh` and `forward` reject `--json`.
+
 ## Stop an experiment
 
 ```bash
@@ -163,8 +192,6 @@ loaf stop <run-id> --grace 30s
 Precedence is the explicit flag, project setting, user setting, then the runner default. Grace accepts 0s to 5m; `0s` allows immediate escalation. The first accepted request fixes the grace interval; repeated requests do not reset or change it. Stopping an already completed run returns its original result.
 
 Confirmation waits for up to grace plus 5 seconds, capped at 5 minutes, in addition to SSH connection time. A timeout, lost confirmation, or canceled client returns `STOP_UNCONFIRMED` with operation exit 3; an accepted remote request continues. Check the same ID with `loaf ps <run-id> --json`. An unknown supervisor identity is reported rather than signaling a possibly reused PID. JSON includes `data.stop_grace_millis` when the accepted policy is known.
-
-Existing runs keep their original runner and default grace. If that runner cannot honor an explicit grace setting, stop returns `STOP_OPTIONS_UNSUPPORTED` (exit 2). Remove `--grace` and project/user `stop.grace` settings to use its original default; the client does not replace active supervisors.
 
 ## Retrieve experiment outputs
 
@@ -192,7 +219,21 @@ Default change detection compares size and modification time. Enable `--checksum
 
 Missing paths produce `OUTPUT_MISSING` (exit 1). Existing selections are downloaded when possible; JSON retains `paths`, `downloaded_paths`, `missing_paths`, destination, and effective policy in `data` alongside the error. `changed_files` is present only after a successful rsync transfer. An all-missing selection is never an empty success. Unsafe paths or special files reject the selection before transfer; relative links must resolve within the selected trees. Existing destination links cannot redirect writes outside the result directory.
 
-Running, failed, and stopped tasks can all have useful outputs. A running pull copies current contents, not a consistent checkpoint snapshot; wait for completion or have training publish checkpoints atomically when consistency matters. Older supported task records can be read using a separately versioned helper without replacing their supervisor or rewriting their records. Two downloads to the same destination are rejected with `PULL_BUSY`; downloads do not hold the remote source-sync or execution-control locks.
+Running, failed, and stopped tasks can all have useful outputs. A running pull copies current contents, not a consistent checkpoint snapshot; wait for completion or have training publish checkpoints atomically when consistency matters. Two downloads to the same destination are rejected with `PULL_BUSY`; downloads coordinate with cleanup through a separate data lock, without holding the remote source-sync or execution-control locks.
+
+## Reclaim completed task data
+
+```bash
+loaf clean <run-id> --dry-run --json
+loaf clean <run-id>
+loaf clean <run-id> --yes --json
+```
+
+Cleanup requires explicit IDs; it never selects the latest task or all tasks implicitly. The preview names the bound machine and remote data that would be removed without deploying a helper or deleting files. Actual cleanup rechecks ownership, completion, and locks; a preview is not a reserved deletion permit. Human output asks once for confirmation. JSON and noninteractive deletion require `--yes`.
+
+Cleanup removes the selected task's remote working files, logs, and outputs. Collect anything you need first: downloaded local results are kept, but remote payload deletion cannot be undone. Active, submission-uncertain, unowned, or unconfirmed tasks are refused rather than stopped implicitly. Other runs, source caches, shared data, and environments are not removed.
+
+A small deletion receipt and ID claim remain to prevent a delayed request from executing the same task again. `ps` retains the original execution outcome and reports cleanup metadata; `logs`, `pull`, and `stop` return `RUN_CLEANED`. Cleaning the newest run does not make those commands silently select an older one. For partial failure or lost confirmation, inspect the reported IDs and retry only those same explicit IDs.
 
 ## Sync working code
 
@@ -239,6 +280,8 @@ Target selection follows `--target`, the current project's `loaf use` setting, t
 
 User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside it in `runs.json`; execution records and logs remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
 
+The current run index uses format 2. Previous indexes are rejected without migration or overwriting; use a separate `XDG_STATE_HOME` for this development version when retaining an earlier version's state.
+
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 
 ```toml
@@ -249,6 +292,8 @@ exclude = ["scratch/"]
 ```
 
 Personal `[run] wait = "10s"` and `[logs] tail = 100` defaults are also supported. Explicit flags override project preferences, then user preferences, then built-ins (`wait = "0s"`, `tail = 100`). Zero is an explicit override. Executable command, setup, and environment settings are project-only, never inherited from global configuration.
+
+Project and user settings also support `[ps] limit = 20` and `[exec] cwd = ""`. List limits accept 1–1000, so an explicit zero is an error rather than a request for the default. An empty exec directory explicitly restores the remote home, even when a lower-priority setting selected another directory. Both settings use flag, project, user, then built-in precedence.
 
 `run.wait` applies to submission only. `ps <run-id>` waits only when explicitly given `--wait`; list queries never wait for tasks to finish.
 
@@ -271,7 +316,7 @@ LOAF_LANG=en loaf check --json
 
 Language precedence is `--lang`, `LOAF_LANG`, then `language` in the user configuration. The default `auto` uses the system locale. Language preference is not a shared project setting.
 
-Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration or unsupported stop options, 3 for unconfirmed submission or stopping, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
+Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration, 3 for unconfirmed submission, stopping, foreground execution, or cleanup, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
 
 ## Troubleshooting
 
@@ -284,13 +329,9 @@ go run ./scripts/format.go    # Four-space Go formatting
 bash scripts/check.sh        # Unit, static, race, format, and vulnerability checks
 bash scripts/integration.sh  # Real SSH and Linux process tests; requires Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
-# Optional: test runs submitted by an older packaged host CLI
-LOAF_PREVIOUS_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerStopCompatibility
-# Optional: retrieve outputs from a task submitted by a previous packaged CLI
-LOAF_PREVIOUS_PULL_BIN=/path/to/previous/loaf bash scripts/integration.sh -run TestPreviousRunnerPullCompatibility
 ```
 
-The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, policy overrides, mirror deletion boundaries, interrupted-sync recovery, concurrent starts, runner deployment, jump hosts, disconnected execution, saved exits, duplicate submissions, stopping child processes, bounded waits, setup failures, log cancellation, lost-confirmation recovery, and incremental output retrieval. Download cases include missing/unsafe paths, disk full, cancellation, retry, destination isolation, and old-run compatibility without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
+The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, mirror boundaries, interrupted sync, concurrent starts, matching runner deployment, jump hosts, disconnected execution, saved exits, process-group stopping, bounded waits, log cancellation, and incremental downloads. Foreground operations cover live output, literal argv, PTY login, isolated tunnels, and cancellation. History and cleanup cases exercise saved target bindings, explicit deletion scope, transfer locks, retry, and retained terminal outcomes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 
 Loaf does not provision machines, schedule GPUs, automatically repair environments, or replace experiment tracking.
 

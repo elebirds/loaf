@@ -40,10 +40,12 @@ func main() {
     var syncer cli.Synchronizer
     var puller cli.OutputPuller
     var runs *execution.Service
+    var operations cli.MachineOperations
     store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
     if binary, err := exec.LookPath("ssh"); err == nil {
         client := &ssh.Client{Binary: binary}
         checker = client
+        operations = client
         bootstrap := execution.Bootstrap{Remote: client}
         runner = bootstrap
         rsync, _ := exec.LookPath("rsync")
@@ -58,7 +60,7 @@ func main() {
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     os.Exit(code)
 }
 

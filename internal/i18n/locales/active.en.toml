@@ -1,5 +1,43 @@
 [root_short]
 other = "Connect research projects to existing SSH machines."
+[exec_short]
+other = "Run a foreground machine command without source sync or a task ID."
+[exec_args]
+other = "-- <command> [args...]"
+[exec_flag_cwd]
+other = "Remote working directory; empty means the user's home, relative paths start there."
+[exec_command]
+other = "Provide a literal command after exec --. NUL bytes are not allowed."
+[exec_directory]
+other = "The remote exec working directory must not contain NUL bytes."
+[exec_failed]
+other = "The remote command exited with code {{.Value}}."
+[exec_unconfirmed]
+other = "The remote command's completion could not be confirmed."
+[exec_unconfirmed_hint]
+other = "Inspect the remote effects before retrying. SSH exit 255 and cancellation cannot confirm whether the command ran or is still running; Loaf never replays it."
+[interactive_short]
+other = "Open the selected machine's native interactive SSH shell."
+[interactive_json]
+other = "Interactive SSH does not support --json. Use exec --json for machine-readable command output."
+[interactive_terminal]
+other = "Interactive SSH requires a terminal. Use loaf exec -- <command> for noninteractive operations."
+[interactive_failed]
+other = "The interactive SSH session failed or exited with a nonzero status."
+[forward_short]
+other = "Forward a local loopback port over a foreground SSH connection."
+[forward_port_arg]
+other = "<remote-port>"
+[forward_flag_local_port]
+other = "Local loopback port; defaults to the remote port."
+[forward_port]
+other = "Local and remote ports must be integers between 1 and 65535."
+[forward_json]
+other = "Port forwarding does not support --json. Run it in the foreground and stop it with Ctrl-C."
+[forward_opening]
+other = "Opening SSH forwarding on {{.Target}}: {{.Value}}. Keep this process running; Ctrl-C closes this tunnel. The remote application must already be running."
+[forward_failed]
+other = "The SSH forwarding connection failed. Check authentication, the local port, and the server's forwarding policy."
 [invalid_wait]
 other = "Waiting must be a duration between 0s and 5m; it never stops the remote task."
 [invalid_tail]
@@ -39,7 +77,7 @@ other = "Show help."
 [flag_lang]
 other = "Interface language: auto, en, or zh-Hans."
 [flag_json]
-other = "Write a structured JSON result without interaction."
+other = "Write structured JSON without interaction; exec and logs -f stream NDJSON."
 [flag_target]
 other = "Override the project's target alias."
 [flag_ssh]

@@ -43,6 +43,7 @@ type Options struct {
     Syncer      Synchronizer
     Puller      OutputPuller
     Runs        *execution.Service
+    Operations  MachineOperations
     CWD         string
     Env         map[string]string
     In          io.Reader
@@ -234,6 +235,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.AddCommand(newTargetCommands(o, cfg, l, func(value any) { result = value })...)
     root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
+    root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     err := earlyErr
     if err == nil {
         err = langErr
@@ -268,7 +270,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         if f.Code == "BAD_CONFIG" || f.Code == "STOP_OPTIONS_UNSUPPORTED" {
             code = 2
         }
-        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" {
+        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" {
             code = 3
         }
     }
@@ -305,7 +307,7 @@ func earlyOptions(args []string) (bool, string, error) {
         if a == "--" {
             break
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" {
             i++
             continue
         }
@@ -349,7 +351,11 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
     if parts := strings.SplitN(c.Use, " ", 2); len(parts) == 2 {
         use += " " + parts[1]
     }
-    fmt.Fprintf(out, "%s\n\n%s\n  %s %s\n", c.Short, l.Text("usage"), use, l.Text("options_arg"))
+    usage := use + " " + l.Text("options_arg")
+    if c.Name() == "exec" {
+        usage = c.CommandPath() + " " + l.Text("options_arg") + " " + strings.SplitN(c.Use, " ", 2)[1]
+    }
+    fmt.Fprintf(out, "%s\n\n%s\n  %s\n", c.Short, l.Text("usage"), usage)
     if c.HasAvailableSubCommands() {
         fmt.Fprintf(out, "\n%s\n", l.Text("commands"))
         for _, sub := range c.Commands() {
@@ -374,6 +380,12 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
             name += " <" + l.Text("value") + ">"
         }
         desc := f.Usage
+        if f.Name == "json" && c.Name() == "ssh" {
+            desc = l.Text("interactive_json")
+        }
+        if f.Name == "json" && c.Name() == "forward" {
+            desc = l.Text("forward_json")
+        }
         if f.DefValue != "" && f.DefValue != "false" {
             desc += " (" + l.Text("default_value", map[string]any{"Value": f.DefValue}) + ")"
         }

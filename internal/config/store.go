@@ -39,6 +39,7 @@ type Global struct {
     Logs          LogSettings       `toml:"logs,omitempty"`
     Stop          StopSettings      `toml:"stop,omitempty"`
     Pull          PullSettings      `toml:"pull,omitempty"`
+    Exec          ExecSettings      `toml:"exec,omitempty"`
     Targets       map[string]Target `toml:"targets"`
 }
 
@@ -107,6 +108,9 @@ func (s *Store) Load() (Global, error) {
         return c, err
     }
     if _, err := ResolvePull(c.Pull); err != nil {
+        return c, err
+    }
+    if _, err := ResolveExecCWD(c.Exec); err != nil {
         return c, err
     }
     return c, nil

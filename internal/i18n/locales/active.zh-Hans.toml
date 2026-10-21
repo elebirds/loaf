@@ -1,5 +1,43 @@
 [root_short]
 other = "连接科研项目与已有的 SSH 机器。"
+[exec_short]
+other = "前台执行机器命令，不同步源码、不生成任务 ID。"
+[exec_args]
+other = "-- <命令> [参数...]"
+[exec_flag_cwd]
+other = "远端工作目录；空值使用用户主目录，相对路径也从主目录开始。"
+[exec_command]
+other = "请在 exec -- 后提供原样命令；不允许 NUL 字节。"
+[exec_directory]
+other = "远端 exec 工作目录不能包含 NUL 字节。"
+[exec_failed]
+other = "远端命令以退出码 {{.Value}} 结束。"
+[exec_unconfirmed]
+other = "无法确认远端命令是否已完成。"
+[exec_unconfirmed_hint]
+other = "重试前请检查远端实际效果。SSH 退出码 255 和取消操作无法确认命令是否执行或仍在运行；Loaf 不会自动重放命令。"
+[interactive_short]
+other = "打开所选机器的原生 SSH 交互终端。"
+[interactive_json]
+other = "交互式 SSH 不支持 --json；如需结构化命令输出，请使用 exec --json。"
+[interactive_terminal]
+other = "交互式 SSH 需要终端；非交互操作请使用 loaf exec -- <命令>。"
+[interactive_failed]
+other = "SSH 交互会话失败或以非零状态结束。"
+[forward_short]
+other = "通过前台 SSH 连接转发本地回环端口。"
+[forward_port_arg]
+other = "<远端端口>"
+[forward_flag_local_port]
+other = "本地回环端口，默认与远端端口相同。"
+[forward_port]
+other = "本地和远端端口必须是 1 到 65535 之间的整数。"
+[forward_json]
+other = "端口转发不支持 --json；请保持前台运行，使用 Ctrl-C 关闭。"
+[forward_opening]
+other = "正在为 {{.Target}} 建立 SSH 转发：{{.Value}}。请保持本进程运行；Ctrl-C 只关闭本隧道。远端应用需要提前启动。"
+[forward_failed]
+other = "SSH 转发连接失败，请检查认证、本地端口和服务器转发策略。"
 [invalid_wait]
 other = "等待时长必须在 0s 到 5m 之间；等待到期不会停止远端任务。"
 [invalid_tail]
@@ -39,7 +77,7 @@ other = "显示帮助。"
 [flag_lang]
 other = "界面语言：auto、en 或 zh-Hans。"
 [flag_json]
-other = "输出结构化 JSON，不进行交互。"
+other = "输出结构化 JSON，不进行交互；exec 和 logs -f 使用 NDJSON 流。"
 [flag_target]
 other = "覆盖当前项目的目标别名。"
 [flag_ssh]

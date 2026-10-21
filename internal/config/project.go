@@ -20,6 +20,7 @@ type ProjectFile struct {
     Logs      LogSettings  `toml:"logs"`
     Stop      StopSettings `toml:"stop"`
     Pull      PullSettings `toml:"pull"`
+    Exec      ExecSettings `toml:"exec"`
     Sync      SyncSettings `toml:"sync"`
     Outputs   struct {
         Paths []string `toml:"paths"`
@@ -62,6 +63,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
                 return "", c, err
             }
             if _, err := ResolvePull(c.Pull); err != nil {
+                return "", c, err
+            }
+            if _, err := ResolveExecCWD(c.Exec); err != nil {
                 return "", c, err
             }
             return dir, c, nil

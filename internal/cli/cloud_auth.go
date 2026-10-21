@@ -2,6 +2,7 @@ package cli
 
 import (
     "bufio"
+    "errors"
     "fmt"
     "io"
     "strings"
@@ -84,9 +85,12 @@ func newCloudLogin(o Options, cfg config.Global, l *i18n.Localizer, result func(
         if previous != nil && previous.Credential.Key != "" && !stdin && !prompt {
             saved, err := o.Auth.Read(cmd.Context(), previous.Credential)
             if err != nil {
-                return cloud.Failure(err)
+                var api *cloud.APIError
+                if !errors.As(err, &api) || api.Code != "AUTH_REQUIRED" {
+                    return cloud.Failure(err)
+                }
             }
-            if username == "" || username == saved.Username {
+            if err == nil && (username == "" || username == saved.Username) {
                 in.Username, in.Digest, in.DeviceID = saved.Username, saved.Digest, saved.DeviceID
                 if !cmd.Flags().Changed("phone-area") {
                     in.PhoneArea = saved.PhoneArea

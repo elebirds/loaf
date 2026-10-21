@@ -114,6 +114,47 @@ func TestCloudLoginDefaultGlobalAndExplicitStores(t *testing.T) {
     }
 }
 
+func TestCloudLoginAfterLogoutRequestsFreshCredentials(t *testing.T) {
+    for _, structured := range []bool{false, true} {
+        t.Run(map[bool]string{false: "interactive", true: "json"}[structured], func(t *testing.T) {
+            o, calls := authFixture(t)
+            o.In = strings.NewReader(" raw password \n")
+            args := []string{"cloud", "login", "lab", "--username", "student@master", "--password-stdin", "--credential-store", "file", "--json"}
+            if code, out, stderr := run(t, o, args...); code != 0 {
+                t.Fatal(code, out, stderr)
+            }
+            cfg, _ := o.Store.Load()
+            original := cfg.Cloud.Accounts["lab"].Credential
+            if code, out, stderr := run(t, o, "cloud", "logout", "lab", "--json"); code != 0 {
+                t.Fatal(code, out, stderr)
+            }
+            o.Interactive = true
+            o.In = strings.NewReader("student@master\n")
+            o.ReadPassword = func(context.Context) ([]byte, error) {
+                if structured {
+                    t.Fatal("JSON login prompted")
+                }
+                return []byte(" raw password "), nil
+            }
+            args = []string{"cloud", "login", "lab"}
+            if structured {
+                args = append(args, "--username", "student@master", "--json")
+            }
+            code, out, stderr := run(t, o, args...)
+            if structured {
+                if code != 2 || stderr != "" || *calls != 1 {
+                    t.Fatal("JSON must require explicit password input", code, out, stderr, *calls)
+                }
+            } else {
+                cfg, _ = o.Store.Load()
+                if code != 0 || *calls != 2 || cfg.Cloud.Accounts["lab"].Credential != original {
+                    t.Fatal("cannot log in again after logout", code, out, stderr, *calls)
+                }
+            }
+        })
+    }
+}
+
 func TestCloudLoginErrorsAndBothHelpCatalogs(t *testing.T) {
     for _, lang := range []string{"en", "zh-Hans"} {
         o, calls := authFixture(t)

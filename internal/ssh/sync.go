@@ -140,6 +140,12 @@ func (r Rsync) remoteShell(target config.Target, batch bool) (string, string) {
         if u.User != nil {
             target.Args = append(append([]string(nil), target.Args...), "-l", u.User.Username())
         }
+    } else if at := strings.LastIndexByte(destination, '@'); at >= 0 {
+        // GNU rsync extracts user@host into -l user after the -e command,
+        // which would place -l after our SSH -- terminator. Put the user in
+        // SSH's options ourselves and pass only the host to rsync.
+        target.Args = append(append([]string(nil), target.Args...), "-l", destination[:at])
+        destination = destination[at+1:]
     }
     argv := append([]string{r.Client.Binary}, options(target, batch)...)
     argv = append(argv, "--")

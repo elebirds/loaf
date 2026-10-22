@@ -58,6 +58,9 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
         t.Fatal(string(out))
     }
     invoke("sync", "--json")
+    // GNU rsync must not inject -l after SSH's -- when an endpoint includes a
+    // user. Exercise both upload and download with this connection form.
+    invoke("add", "self", "--ssh", "ssh -F /tmp/linux-client/config researcher@self", "--replace", "--json")
     out := invoke("sync", "--json")
     var result struct {
         Data struct {

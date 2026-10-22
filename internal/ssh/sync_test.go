@@ -19,42 +19,46 @@ func TestNativeRsyncUsesLiteralSSHAndReceiverArguments(t *testing.T) {
     if err != nil {
         t.Skip("system rsync is unavailable")
     }
-    dir := t.TempDir()
-    root := filepath.Join(dir, `source 中文 'single' "double"`)
-    remote := filepath.Join(dir, `remote 中文 'single' "double" $literal`)
-    if err := os.MkdirAll(root, 0700); err != nil {
-        t.Fatal(err)
-    }
-    if err := os.WriteFile(filepath.Join(root, "train.py"), []byte("working source"), 0600); err != nil {
-        t.Fatal(err)
-    }
-    receiver := filepath.Join(dir, `receiver 'single' "double"`)
-    // A native rsync endpoint, with no Loaf header or stream relay.
-    script := "#!/bin/sh\nset -eu\nmkdir -p \"$3/cache\"\ncd \"$3\"\nshift 4\nexec " + Quote(binary) + " \"$@\"\n"
-    if err := os.WriteFile(receiver, []byte(script), 0700); err != nil {
-        t.Fatal(err)
-    }
-    captured := filepath.Join(dir, "ssh-argv")
-    fakeSSH := filepath.Join(dir, `ssh 'single' "double"`)
-    script = "#!/bin/sh\nset -eu\nprintf '%s\\000' \"$@\" >" + Quote(captured) + "\nwhile [ \"$1\" != -- ]; do shift; done\nshift 2\nexec /bin/sh -c \"$*\"\n"
-    if err := os.WriteFile(fakeSSH, []byte(script), 0700); err != nil {
-        t.Fatal(err)
-    }
-    r := Rsync{Client: &Client{Binary: fakeSSH}, Binary: binary}
-    configPath := filepath.Join(dir, `SSH 中文 'single' "double"`)
-    result, err := r.Sync(context.Background(), config.Target{Destination: "fixture", Args: []string{"-F", configPath}}, receiver, root, SyncInput{Root: remote, ProjectID: "project", Mode: "mirror", Paths: []string{"train.py"}}, true)
-    if err != nil {
-        var f *fault.Error
-        errors.As(err, &f)
-        t.Fatal(err, f)
-    }
-    data, err := os.ReadFile(filepath.Join(remote, "cache", "train.py"))
-    if err != nil || string(data) != "working source" || result.ChangedFiles != 1 {
-        t.Fatal(string(data), result, err)
-    }
-    argv, err := os.ReadFile(captured)
-    if err != nil || !bytes.Contains(argv, append([]byte(configPath), 0)) {
-        t.Fatal(string(argv), err)
+    for _, destination := range []string{"fixture", "researcher@fixture"} {
+        t.Run(destination, func(t *testing.T) {
+            dir := t.TempDir()
+            root := filepath.Join(dir, `source 中文 'single' "double"`)
+            remote := filepath.Join(dir, `remote 中文 'single' "double" $literal`)
+            if err := os.MkdirAll(root, 0700); err != nil {
+                t.Fatal(err)
+            }
+            if err := os.WriteFile(filepath.Join(root, "train.py"), []byte("working source"), 0600); err != nil {
+                t.Fatal(err)
+            }
+            receiver := filepath.Join(dir, `receiver 'single' "double"`)
+            // A native rsync endpoint, with no Loaf header or stream relay.
+            script := "#!/bin/sh\nset -eu\nmkdir -p \"$3/cache\"\ncd \"$3\"\nshift 4\nexec " + Quote(binary) + " \"$@\"\n"
+            if err := os.WriteFile(receiver, []byte(script), 0700); err != nil {
+                t.Fatal(err)
+            }
+            captured := filepath.Join(dir, "ssh-argv")
+            fakeSSH := filepath.Join(dir, `ssh 'single' "double"`)
+            script = "#!/bin/sh\nset -eu\nprintf '%s\\000' \"$@\" >" + Quote(captured) + "\nwhile [ \"$1\" != -- ]; do shift; done\nshift 2\nexec /bin/sh -c \"$*\"\n"
+            if err := os.WriteFile(fakeSSH, []byte(script), 0700); err != nil {
+                t.Fatal(err)
+            }
+            r := Rsync{Client: &Client{Binary: fakeSSH}, Binary: binary}
+            configPath := filepath.Join(dir, `SSH 中文 'single' "double"`)
+            result, err := r.Sync(context.Background(), config.Target{Destination: destination, Args: []string{"-F", configPath}}, receiver, root, SyncInput{Root: remote, ProjectID: "project", Mode: "mirror", Paths: []string{"train.py"}}, true)
+            if err != nil {
+                var f *fault.Error
+                errors.As(err, &f)
+                t.Fatal(err, f)
+            }
+            data, err := os.ReadFile(filepath.Join(remote, "cache", "train.py"))
+            if err != nil || string(data) != "working source" || result.ChangedFiles != 1 {
+                t.Fatal(string(data), result, err)
+            }
+            argv, err := os.ReadFile(captured)
+            if err != nil || !bytes.Contains(argv, append([]byte(configPath), 0)) {
+                t.Fatal(string(argv), err)
+            }
+        })
     }
 }
 
@@ -159,6 +163,37 @@ func TestNativeSSHOptionsPreserveURLAndQuotedPaths(t *testing.T) {
     }
     if destination != "[::1]" || strings.Contains(shell, "__rsync") {
         t.Fatal(shell, destination)
+    }
+}
+
+func TestRsyncUserOptionsPrecedeOptionTerminator(t *testing.T) {
+    for _, tc := range []struct {
+        destination, host, user string
+    }{
+        {"fixture", "fixture", ""},
+        {"researcher@fixture", "fixture", "researcher"},
+        {"researcher@127.0.0.1", "127.0.0.1", "researcher"},
+        {"researcher@[::1]", "[::1]", "researcher"},
+        {"ssh://researcher@[::1]", "[::1]", "researcher"},
+    } {
+        t.Run(tc.destination, func(t *testing.T) {
+            // Explicit SSH options keep their earlier precedence over defaults
+            // extracted from user@host, as with an ordinary SSH invocation.
+            target := config.Target{Destination: tc.destination, Args: []string{"-l", "explicit"}}
+            r := Rsync{Client: &Client{Binary: "ssh"}}
+            shell, host := r.remoteShell(target, true)
+            argv := append([]string{"ssh"}, options(target, true)...)
+            if tc.user != "" {
+                argv = append(argv, "-l", tc.user)
+            }
+            argv = append(argv, "--")
+            for i := range argv {
+                argv[i] = quoteRsync(argv[i])
+            }
+            if host != tc.host || shell != strings.Join(argv, " ") {
+                t.Fatalf("remote shell = %q, host = %q; want %q, %q", shell, host, strings.Join(argv, " "), tc.host)
+            }
+        })
     }
 }
 

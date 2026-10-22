@@ -27,11 +27,12 @@ type cloudReceipts struct {
     Requests []cloud.Receipt `json:"requests"`
 }
 type cloudBinding struct {
-    Target      string              `json:"target"`
-    Instance    cloud.Ref           `json:"instance"`
-    Status      string              `json:"status"`
-    Request     *cloud.Receipt      `json:"request,omitempty"`
-    Observation *cloud.SearchResult `json:"observation,omitempty"`
+    Target          string              `json:"target"`
+    Instance        cloud.Ref           `json:"instance"`
+    Status          string              `json:"status"`
+    CloneDataStatus string              `json:"clone_data_status,omitempty"`
+    Request         *cloud.Receipt      `json:"request,omitempty"`
+    Observation     *cloud.SearchResult `json:"observation,omitempty"`
 }
 type cloudAcquisition struct {
     cloud.Receipt
@@ -185,31 +186,91 @@ func newCloudCommand(o Options, cfg config.Global, l *i18n.Localizer, result fun
         planFor := cloudPlanFlags(cmd, o, cfg, l)
         limit := 100
         var yes, unquoted bool
-        var remoteBase string
+        var remoteBase, cloneFrom string
         var ready time.Duration
         cmd.Flags().IntVar(&limit, "limit", 100, l.Text("cloud_flag_limit"))
         if op == "acquire" {
+            cmd.Flags().StringVar(&cloneFrom, "clone-from", "", l.Text("cloud_flag_clone_from"))
             cmd.Flags().BoolVar(&yes, "yes", false, l.Text("cloud_flag_yes"))
             cmd.Flags().BoolVar(&unquoted, "allow-unquoted", false, l.Text("cloud_flag_unquoted"))
             cmd.Flags().StringVar(&remoteBase, "remote-dir", "~/.local/share/loaf/projects", l.Text("flag_remote"))
             cmd.Flags().DurationVar(&ready, "ready-timeout", 2*time.Minute, l.Text("cloud_flag_ready"))
         }
         cmd.RunE = func(cmd *cobra.Command, args []string) error {
+            if cmd.Flags().Changed("clone-from") {
+                if cloneFrom == "" || unquoted {
+                    return fault.New("BAD_CONFIG", "cloud_clone_options", nil)
+                }
+                for _, flag := range []string{"image", "private-image", "gpu-spec", "gpu-spec-id", "cuda-from", "expand-system-disk"} {
+                    if cmd.Flags().Changed(flag) {
+                        return fault.New("BAD_CONFIG", "cloud_clone_options", nil)
+                    }
+                }
+            }
             plan, err := planFor(cmd)
             if err != nil {
                 return err
             }
-            name, a, err := choose()
+            var name string
+            var a cloud.Account
+            var sourceBinding cloud.Binding
+            if cloneFrom != "" {
+                if target, ok := cfg.Targets[cloneFrom]; ok {
+                    if target.Cloud == nil {
+                        return fault.New("BAD_CONFIG", "cloud_clone_options", nil)
+                    }
+                    sourceBinding, err = binding(cloneFrom)
+                } else {
+                    name, a, err = choose()
+                    sourceBinding = cloud.Binding{Ref: cloud.Ref{Provider: a.Provider, Product: selectProduct(a, plan.Product), Account: name, ID: cloneFrom}, Settings: a}
+                }
+                if err != nil {
+                    return err
+                }
+                if plan.Product != "" && plan.Product != sourceBinding.Ref.Product {
+                    return fault.New("BAD_CONFIG", "cloud_product_mismatch", nil)
+                }
+                name, a = sourceBinding.Ref.Account, sourceBinding.Settings
+                plan.Product = sourceBinding.Ref.Product
+                if !config.ValidCloudBinding(sourceBinding) {
+                    return fault.New("BAD_CONFIG", "cloud_config", nil)
+                }
+                if plan.Product != "standard" || a.Credential.Mode != "session" {
+                    return fault.New("UNSUPPORTED_CAPABILITY", "cloud_clone_unsupported", nil)
+                }
+            } else {
+                name, a, err = choose()
+                plan.Product = selectProduct(a, plan.Product)
+            }
             if err != nil {
                 return err
             }
             if limit < 1 || limit > 1000 {
                 return fault.New("BAD_CONFIG", "cloud_config", nil)
             }
-            plan.Product = selectProduct(a, plan.Product)
             p, err := o.Cloud.Open(cmd.Context(), name, a, plan.Product)
             if err != nil {
                 return cloud.Failure(err)
+            }
+            if cloneFrom != "" {
+                cloner, ok := p.(cloud.Cloner)
+                if !ok {
+                    return fault.New("UNSUPPORTED_CAPABILITY", "cloud_clone_unsupported", nil)
+                }
+                source, err := cloner.CloneSource(cmd.Context(), sourceBinding.Ref)
+                if err != nil {
+                    return cloud.Failure(err)
+                }
+                wait := "30m"
+                plan, err = planFor(cmd, cloud.Profile{WaitTimeout: &wait, AutoDL: cloud.AutoDLProfile{ExpandDataDiskGB: &source.ExpandDataDiskGB}})
+                if err != nil {
+                    return err
+                }
+                plan.Product = sourceBinding.Ref.Product
+                plan, err = cloud.PrepareClone(plan, source)
+                if err != nil {
+                    return err
+                }
             }
             jsonMode, _ := cmd.Flags().GetBool("json")
             emit := cloudProgress(o, l, jsonMode && op == "watch")
@@ -259,7 +320,11 @@ func newCloudCommand(o Options, cfg config.Global, l *i18n.Localizer, result fun
                 if !jsonMode && !yes {
                     printCloud(o.Err, plan, l)
                 }
-                if err := confirmCloud(o, l, yes, l.Text("cloud_acquire_confirm")); err != nil {
+                prompt := l.Text("cloud_acquire_confirm")
+                if plan.Clone != nil {
+                    prompt = l.Text("cloud_clone_confirm", map[string]any{"ID": plan.Clone.Instance.ID, "Region": plan.Clone.Region})
+                }
+                if err := confirmCloud(o, l, yes, prompt); err != nil {
                     return err
                 }
                 in := cloud.AcquireInput{Account: name, Settings: a, Target: args[0], RemoteBase: remoteBase, Plan: plan, Limit: limit, AllowUnquoted: unquoted}
@@ -282,7 +347,7 @@ func newCloudCommand(o Options, cfg config.Global, l *i18n.Localizer, result fun
                     return fault.New("CLOUD_UNCONFIRMED", "cloud_unconfirmed", nil)
                 }
                 b := cloud.Binding{Ref: *r.Instance, Settings: a}
-                bound, err := bindCloud(cmd.Context(), o, args[0], b, remoteBase, false, ready)
+                bound, err := bindCloud(cmd.Context(), o, args[0], b, remoteBase, false, ready, plan.Clone)
                 bound.Request = &r
                 bound.Observation = observation
                 result(bound)
@@ -337,7 +402,7 @@ func newCloudCommand(o Options, cfg config.Global, l *i18n.Localizer, result fun
                 return err
             }
         }
-        r, err := bindCloud(cmd.Context(), o, args[0], b, remote, replace, ready)
+        r, err := bindCloud(cmd.Context(), o, args[0], b, remote, replace, ready, saved.Plan.Clone)
         result(r)
         if err == nil && request != "" {
             return o.Cloud.MarkReady(cmd.Context(), request, b.Ref)
@@ -428,7 +493,7 @@ func confirmCloud(o Options, l *i18n.Localizer, yes bool, prompt string) error {
     return nil
 }
 
-func bindCloud(ctx context.Context, o Options, name string, b cloud.Binding, remote string, replace bool, ready time.Duration) (cloudBinding, error) {
+func bindCloud(ctx context.Context, o Options, name string, b cloud.Binding, remote string, replace bool, ready time.Duration, clone *cloud.CloneSource) (cloudBinding, error) {
     result := cloudBinding{Target: name, Instance: b.Ref, Status: "not_bound"}
     if !config.ValidCloudBinding(b) {
         return result, fault.New("BAD_CONFIG", "cloud_config", nil)
@@ -457,13 +522,22 @@ func bindCloud(ctx context.Context, o Options, name string, b cloud.Binding, rem
         if err != nil {
             return result, cloud.Failure(err)
         }
+        if clone != nil {
+            result.CloneDataStatus = observed.CloneDataStatus
+            if b.Ref == clone.Instance || observed.Region != clone.Region {
+                return result, fault.New("BAD_CONFIG", "cloud_clone_region", nil)
+            }
+        }
         if result.Status == "not_bound" {
             if err := o.Store.Add(ctx, name, target, replace); err != nil {
                 return result, err
             }
             result.Status = "bound"
         }
-        if err == nil && observed.Status == "running" {
+        if clone != nil && observed.CloneDataStatus == "failed" {
+            return result, fault.New("CLONE_FAILED", "cloud_clone_failed", map[string]any{"ID": b.Ref.ID})
+        }
+        if err == nil && observed.Status == "running" && (clone == nil || observed.CloneDataStatus == "succeeded") {
             _, err = o.Operations.Exec(deadline, target, ssh.ExecInput{Args: []string{"/bin/true"}, Batch: true}, nil, io.Discard, io.Discard)
             if err == nil {
                 result.Status = "ready"
@@ -475,12 +549,22 @@ func bindCloud(ctx context.Context, o Options, name string, b cloud.Binding, rem
             return result, f
         }
         if ready == 0 || deadline.Err() != nil {
+            if clone != nil {
+                f := fault.New("CLOUD_NOT_READY", "cloud_clone_not_ready", nil)
+                f.Hint = "cloud_clone_wait_hint"
+                return result, f
+            }
             f := fault.Wrap("CLOUD_NOT_READY", "cloud_not_ready", err)
             f.Hint = "cloud_connect_hint"
             return result, f
         }
         select {
         case <-deadline.Done():
+            if clone != nil {
+                f := fault.New("CLOUD_NOT_READY", "cloud_clone_not_ready", nil)
+                f.Hint = "cloud_clone_wait_hint"
+                return result, f
+            }
             return result, fault.New("CLOUD_NOT_READY", "cloud_not_ready", nil)
         case <-time.After(10 * time.Second):
         }
@@ -542,7 +626,7 @@ func newCloudAccounts(o Options, cfg config.Global, l *i18n.Localizer, result fu
 
 // cloudPlanFlags returns a resolver so Changed, including explicit zero/empty
 // values, is evaluated only after Cobra parses this invocation.
-func cloudPlanFlags(cmd *cobra.Command, o Options, cfg config.Global, l *i18n.Localizer) func(*cobra.Command) (cloud.Plan, error) {
+func cloudPlanFlags(cmd *cobra.Command, o Options, cfg config.Global, l *i18n.Localizer) func(*cobra.Command, ...cloud.Profile) (cloud.Plan, error) {
     stringsFlags := []string{"profile", "gpu-vendor", "min-gpu-memory", "min-memory", "min-disk", "max-compute-hourly-price", "currency", "wait", "poll-interval", "image", "private-image", "gpu-spec"}
     for _, name := range stringsFlags {
         cmd.Flags().String(name, "", l.Text("cloud_flag_"+strings.ReplaceAll(name, "-", "_")))
@@ -556,7 +640,7 @@ func cloudPlanFlags(cmd *cobra.Command, o Options, cfg config.Global, l *i18n.Lo
     cmd.Flags().StringSlice("region", nil, l.Text("cloud_flag_region"))
     cmd.Flags().Lookup("gpu-model").DefValue = ""
     cmd.Flags().Lookup("region").DefValue = ""
-    return func(cmd *cobra.Command) (cloud.Plan, error) {
+    return func(cmd *cobra.Command, defaults ...cloud.Profile) (cloud.Plan, error) {
         _, file, err := config.Discover(cmd.Context(), o.CWD)
         if err != nil {
             return cloud.Plan{}, err
@@ -621,7 +705,8 @@ func cloudPlanFlags(cmd *cobra.Command, o Options, cfg config.Global, l *i18n.Lo
                 explicit.Regions = []string{}
             }
         }
-        return cloud.Resolve(cfg.Cloud.Safety, cfg.Cloud.Defaults, cfg.Resources["default"], cfg.Resources[profile], file.Resources["default"], file.Resources[profile], explicit)
+        layers := append(defaults, cfg.Cloud.Defaults, cfg.Resources["default"], cfg.Resources[profile], file.Resources["default"], file.Resources[profile], explicit)
+        return cloud.Resolve(cfg.Cloud.Safety, layers...)
     }
 }
 

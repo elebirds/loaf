@@ -418,6 +418,31 @@ max_compute_hourly_price = "3.00"
 currency = "CNY"
 ```
 
+### 换卡时保留原环境和数据
+
+已有机器没有空闲 GPU 时，可以持续等待**同地区**的可用机器并克隆：
+
+```bash
+loaf cloud acquire gpu-copy --account autodl-main --product standard \
+  --clone-from old-gpu --gpu-model 'RTX 5090' --gpu-count 1 \
+  --max-compute-hourly-price 3.00 --wait 24h --ready-timeout 10m --yes
+```
+
+`--clone-from` 接受实例 ID 或已绑定的云机器别名。支持使用主／子账号会话的 AutoDL 普通实例，暂不支持 Pro／开发者令牌克隆。源实例必须已关机且未在克隆中；Loaf 保留源实例，不会自动停止它。
+
+沿用现有抢占循环等待匹配库存、复查候选和价格，随后申请**复制系统盘和数据盘**。不会回退到其他地区或空白新建，冲突的地区配置会报错。候选机器还须满足源镜像的厂商、架构及 CUDA 要求。克隆继承源镜像，忽略配置中的镜像默认值；显式镜像、规格、CUDA、系统盘参数和 `--allow-unquoted` 会被拒绝。
+
+数据盘默认继承源实例的扩容量；项目／用户配置及 `--expand-data-disk` 可以增大，不能缩小。计算条件与安全上限仍按原有优先级生效。没有等待偏好时，克隆默认抢占 30m；项目／用户配置或 `--wait` 可以覆盖，包括用显式 `0s` 只尝试一次。单次窗口最长 24h，持续抢占期间需要保持命令运行。
+
+SSH 能连上不等于磁盘复制完成。克隆的 `ready` 还要求平台确认数据盘拷贝成功。观察超时时保留返回的请求／实例 ID，继续接入同一克隆结果：
+
+```bash
+loaf cloud info gpu-copy --json
+loaf cloud bind gpu-copy --request REQUEST_ID --ready-timeout 10m
+```
+
+平台提供拷贝状态时，`clone_data_status` 返回 `copying`、`succeeded`、`failed` 或 `unknown`。`CLONE_FAILED` 会保留实例以便恢复；观察超时或拷贝失败均不会另租替代机器。请求记录固定源实例身份和地区，重启进程或更改机器／账号别名不会重定向它们。
+
 ### 监测与付费分配分开
 
 | 操作 | 行为 |

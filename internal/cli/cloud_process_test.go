@@ -91,6 +91,8 @@ type cloudProcessFixture struct {
     digest                         string
     token                          string
     logins, issued, creates, stops int
+    clones                         int
+    cloneMode                      bool
     exists, expired                bool
     status, failure                string
     entered                        chan struct{}
@@ -214,7 +216,16 @@ func (f *cloudProcessFixture) serveHTTP(w http.ResponseWriter, r *http.Request) 
     case "/api/v1/sub_user":
         reply("Success", principal)
     case "/api/v1/sub_user/user/machine/list":
-        reply("Success", map[string]any{"list": []any{map[string]any{"machine_id": "machine-fixture", "gpu_name": "fixture-GPU", "gpu_idle_num": 1}}, "result_total": 1})
+        machine := map[string]any{"machine_id": "machine-fixture", "gpu_name": "fixture-GPU", "gpu_idle_num": 1}
+        if f.cloneMode {
+            machine["chip_corp"] = "nvidia"
+            machine["cpu_arch"] = "x86"
+            machine["highest_cuda_version"] = "13.2"
+            machine["region_sign"] = "west-D"
+            machine["max_data_disk_expand_size"] = int64(500) << 30
+            machine["max_instance_disk_size"] = int64(50) << 30
+        }
+        reply("Success", map[string]any{"list": []any{machine}, "result_total": 1})
     case "/api/v1/machine_pro/gpu_type":
         reply("Success", []any{map[string]any{"gpu_type": "fixture-GPU", "gpu_idle_num": 1}})
     case "/api/v1/machine_pro/gpu_spec_config":
@@ -234,14 +245,37 @@ func (f *cloudProcessFixture) serveHTTP(w http.ResponseWriter, r *http.Request) 
         default:
         }
         f.mutationResponse(w, r, reply)
+    case "/api/v1/sub_user/order/instance/clone/payg":
+        var in struct {
+            Source string         `json:"instance_uuid"`
+            Info   map[string]any `json:"instance_info"`
+        }
+        if !f.cloneMode || json.NewDecoder(r.Body).Decode(&in) != nil || in.Source != "source-fixture" || in.Info["copy_data_disk_after_clone"] != true || in.Info["expand_data_disk"] != float64(150<<30) {
+            f.t.Error("invalid clone mutation")
+        }
+        f.clones++
+        f.exists = true
+        select {
+        case f.entered <- struct{}{}:
+        default:
+        }
+        f.mutationResponse(w, r, reply)
     case "/api/v1/sub_user/instance", "/api/v1/sub_user/instance/pro":
         rows := []any{}
+        if f.cloneMode {
+            rows = append(rows, map[string]any{"uuid": "source-fixture", "status": "shutdown", "region_sign": "west-D", "expand_data_disk_size": int64(150) << 30})
+        }
         if f.exists {
-            rows = append(rows, map[string]any{"uuid": "instance-fixture", "status": f.status, "root_password": "fixture-private-ssh", "jupyter_token": "fixture-private-jupyter"})
+            rows = append(rows, map[string]any{"uuid": "instance-fixture", "status": f.status, "region_sign": "west-D", "root_password": "fixture-private-ssh", "jupyter_token": "fixture-private-jupyter"})
         }
         reply("Success", map[string]any{"list": rows, "result_total": len(rows)})
     case "/api/v1/sub_user/instance/pro/snapshot":
         reply("Success", map[string]any{"image": map[string]string{"image_type": "public"}})
+    case "/api/v1/sub_user/instance/snapshot":
+        if !f.cloneMode || r.URL.Query().Get("instance_uuid") != "source-fixture" {
+            f.t.Error("unexpected clone source snapshot")
+        }
+        reply("Success", map[string]any{"image": map[string]string{"image_type": "public", "image_name": "image-fixture", "chip_corp": "nvidia", "cpu_arch": "x86", "cuda_version": "12.8"}})
     case "/api/v1/sub_user/instance/power_off", "/api/v1/sub_user/instance/pro/power_off":
         _, _ = io.Copy(io.Discard, r.Body)
         f.stops++
@@ -358,15 +392,23 @@ func TestCloudCredentialLifecycleAcrossProcesses(t *testing.T) {
 }
 
 func TestCloudAcquisitionRecoveryAcrossProcesses(t *testing.T) {
-    for _, product := range []string{"standard", "pro"} {
+    for _, mode := range []string{"standard", "pro", "clone"} {
+        product := mode
+        if mode == "clone" {
+            product = "standard"
+        }
         for _, failure := range []string{"drop", "kill", "server", "malformed"} {
-            t.Run(product+"/"+failure, func(t *testing.T) {
+            t.Run(mode+"/"+failure, func(t *testing.T) {
                 f := newCloudProcessFixture(t)
                 f.login()
                 f.mu.Lock()
                 f.failure = failure
+                f.cloneMode = mode == "clone"
                 f.mu.Unlock()
                 args := []string{"cloud", "acquire", "first", "--product", product, "--image", "image-fixture", "--max-compute-hourly-price", "3.00", "--yes", "--json"}
+                if mode == "clone" {
+                    args = []string{"cloud", "acquire", "first", "--product", "standard", "--clone-from", "source-fixture", "--wait", "0s", "--max-compute-hourly-price", "3.00", "--yes", "--json"}
+                }
                 if product == "pro" {
                     args = append(args, "--region", "westDC3", "--cuda-from", "118")
                 }
@@ -401,6 +443,9 @@ func TestCloudAcquisitionRecoveryAcrossProcesses(t *testing.T) {
                     t.Fatal("lost durable intent", err)
                 }
                 original := rows[0]
+                if mode == "clone" && (original.Plan.Clone == nil || original.Plan.Clone.Instance.ID != "source-fixture" || original.Plan.Requirements.Regions[0] != "west-D") {
+                    t.Fatal("lost clone source/region", original)
+                }
                 f.invoke(0, "", "cloud", "requests", original.ID, "--json")
                 // A new process and a different alias may not evade the guard.
                 args[2] = "replacement"
@@ -411,8 +456,14 @@ func TestCloudAcquisitionRecoveryAcrossProcesses(t *testing.T) {
                 f.invoke(0, "", "cloud", "reconcile", original.ID, "--instance", "instance-fixture", "--json")
                 saved, err := receipts.Load(original.ID)
                 f.mu.Lock()
-                creates := f.creates
+                creates, clones := f.creates, f.clones
                 f.mu.Unlock()
+                if mode == "clone" {
+                    if creates != 0 || clones != 1 || saved.Plan.Clone == nil {
+                        t.Fatal("clone recovery replayed or fell back", creates, clones)
+                    }
+                    creates = clones
+                }
                 if err != nil || creates != 1 || saved.Status != "created" || saved.Instance == nil || saved.Instance.ID != "instance-fixture" || saved.Instance.Product != product {
                     t.Fatal("recovery replayed or redirected allocation", err, creates)
                 }

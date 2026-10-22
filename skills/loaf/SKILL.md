@@ -22,6 +22,17 @@ loaf run --wait 10s --json -- python3 smoke.py
 
 `acquire --yes` authorizes at most one paid instance, not training, resource release or automatic shutdown. Inventory and prices can race allocation. Session-backed Pro has catalog/quote search and monitoring; numeric `--gpu-spec-id` differs from developer `--gpu-spec` UUID. Unknown GPU memory/vendor stays ineligible when required; aggregate stock is not a spec reservation. The developer-token Pro adapter has no verified read-only stock/prequote capability: use an explicit spec/image/CUDA and `--allow-unquoted` only with specific user approval for unquoted allocation attempts. It cannot bypass a configured price cap or unverified hardware floors. Do not treat Elastic stock as Pro stock.
 
+### Clone an existing environment and data
+
+For an authorized same-region migration, use the native acquisition command rather than a temporary API wrapper:
+
+```bash
+loaf cloud acquire gpu-copy --account autodl-main --product standard \
+  --clone-from old-gpu --max-compute-hourly-price 3.00 --wait 24h --yes --json
+```
+
+The source is a stopped ordinary instance ID or cloud alias. Loaf waits for stock only in its region and copies both disks; it never falls back to blank creation. Source image and default disk expansion are inherited. Omit image/spec/CUDA/system-disk flags; conflicting regions or smaller disks are errors. Clone waiting defaults to 30m unless configured; explicit zero remains one attempt. `ready` additionally requires successful data copying, not just SSH. Use `cloud info` for `clone_data_status`; on timeout or `CLONE_FAILED`, keep the receipt and resume/recover that same instance with `cloud bind --request`, not another acquisition.
+
 Save `request_id` and the returned instance ID, including on failure. `CLOUD_UNCONFIRMED` (exit 3) means a resource may already exist or billing may have started. Inspect `cloud requests`, check the platform and `cloud reconcile <request-id> --instance <known-id>`; never rent a replacement automatically. `--no-instance --yes` clears duplicate protection only after explicit human confirmation that no resource was created, not an inference from an incomplete list.
 
 `cloud bind gpu-a --request <request-id>` retries connection to the same created resource without renting. `ready` means platform running, authenticated SSH and saved target, not a ready ML environment. For an existing resource use `cloud bind gpu-a --instance <id> --account <name>`. Noninteractive first-host trust failures need a human/native SSH decision; do not bypass verification. Passwords are fetched transiently for native SSH; default `cloud credentials` redacts them. Do not request `--show-password` merely to run an experiment.

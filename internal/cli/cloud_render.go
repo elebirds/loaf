@@ -15,7 +15,7 @@ var cloudValueFlags = map[string]bool{
     "--account": true, "--product": true, "--token-env": true, "--app-version": true, "--profile": true,
     "--gpu-vendor": true, "--gpu-model": true, "--gpu-count": true, "--min-gpu-memory": true, "--min-cpus": true, "--min-memory": true, "--min-disk": true, "--region": true,
     "--max-compute-hourly-price": true, "--currency": true, "--poll-interval": true, "--image": true, "--private-image": true, "--gpu-spec": true, "--gpu-spec-id": true, "--cuda-from": true, "--expand-system-disk": true, "--expand-data-disk": true,
-    "--instance": true, "--request": true, "--ready-timeout": true,
+    "--instance": true, "--request": true, "--ready-timeout": true, "--clone-from": true,
 }
 
 func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
@@ -52,6 +52,9 @@ func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
         fmt.Fprintln(out, l.Text("cloud_coverage", map[string]any{"Count": r.Examined, "Value": r.Complete}))
     case cloud.Instance:
         fmt.Fprintf(out, "%s  %s/%s  %s  %s\n", r.Ref.ID, r.Ref.Account, r.Ref.Product, l.Text("cloud_status_"+r.Status), r.Region)
+        if r.CloneDataStatus != "" {
+            fmt.Fprintln(out, l.Text("cloud_clone_data_"+r.CloneDataStatus))
+        }
     case cloud.Ref:
         fmt.Fprintf(out, "%s  %s/%s\n", r.ID, r.Account, r.Product)
     case cloudCredentials:
@@ -62,6 +65,9 @@ func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
         }
     case cloudBinding:
         fmt.Fprintln(out, l.Text("cloud_binding", map[string]any{"Target": r.Target, "ID": r.Instance.ID, "Value": l.Text("cloud_status_" + r.Status)}))
+        if r.CloneDataStatus != "" {
+            fmt.Fprintln(out, l.Text("cloud_clone_data_"+r.CloneDataStatus))
+        }
         if r.Request != nil {
             printCloud(out, *r.Request, l)
         }
@@ -101,7 +107,11 @@ func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
         if len(req.Regions) > 0 {
             fmt.Fprintln(out, "--region", strings.Join(req.Regions, ","))
         }
-        fmt.Fprintln(out, "--image", r.AutoDL.Image)
+        if r.Clone != nil {
+            fmt.Fprintln(out, l.Text("cloud_clone_summary", map[string]any{"ID": r.Clone.Instance.ID, "Region": r.Clone.Region}))
+        } else {
+            fmt.Fprintln(out, "--image", r.AutoDL.Image)
+        }
         if r.AutoDL.GPUSpecID != 0 {
             fmt.Fprintln(out, "--gpu-spec-id", r.AutoDL.GPUSpecID)
         }

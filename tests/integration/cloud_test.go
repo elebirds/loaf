@@ -34,12 +34,14 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
     }
     for _, scenario := range []struct{ name, product, kind string }{
         {"standard-main", "standard", "main"}, {"standard-sub", "standard", "sub"},
+        {"clone-main", "standard", "main"}, {"clone-sub", "standard", "sub"},
         {"pro-main", "pro", "main"}, {"pro-sub", "pro", "sub"}, {"pro-developer", "pro", ""},
     } {
         t.Run(scenario.name, func(t *testing.T) {
             product, kind := scenario.product, scenario.kind
             developer := kind == ""
-            password := product == "pro"
+            cloning := strings.HasPrefix(scenario.name, "clone-")
+            password := product == "pro" || cloning
             f := newSSHFixture(t, password)
             if password {
                 // Prevent native SSH from choosing the fixture key: this case must
@@ -56,7 +58,7 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             project := t.TempDir()
             sourceFile(t, project, "loaf.toml", "[run]\nwait = '5s'\n[outputs]\npaths = ['outputs']\n")
             sourceFile(t, project, "experiment.sh", "set -eu\ntest -z \"${LOAF_FIXTURE_TOKEN-}\"\ntest ! -d config/loaf\ntest ! -d state/loaf\nmkdir outputs\nprintf collected > outputs/result.txt\necho experiment-done\nexit 7\n")
-            created, powerOff := 0, 0
+            created, cloned, powerOff := 0, 0, 0
             observedIDs := []string{}
             factory := autodl.Factory{LookupEnv: func(name string) (string, bool) {
                 if name != "LOAF_FIXTURE_TOKEN" {
@@ -106,8 +108,30 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                     }
                     result = map[string]any{"discount_list": []any{map[string]any{"product_type": compute, "origin_price": 1000, "total_reduction": 0}, map[string]any{"product_type": disk, "origin_price": 0, "total_reduction": 0}}}
                 case strings.HasSuffix(r.URL.Path, "/user/machine/list"):
-                    result = map[string]any{"list": []any{map[string]any{"machine_id": "machine-fixture", "gpu_name": "fixture-GPU", "gpu_idle_num": 1, "payg_price": 1000, "gpu_memory": 24 << 30, "cpu_per_gpu": 8, "mem_per_gpu": 32 << 30, "max_instance_disk_size": 100 << 30}}}
+                    machine := map[string]any{"machine_id": "machine-fixture", "gpu_name": "fixture-GPU", "gpu_idle_num": 1, "payg_price": 1000, "gpu_memory": 24 << 30, "cpu_per_gpu": 8, "mem_per_gpu": 32 << 30, "max_instance_disk_size": 100 << 30}
+                    if cloning {
+                        machine["chip_corp"] = "nvidia"
+                        machine["cpu_arch"] = "x86"
+                        machine["highest_cuda_version"] = "13.2"
+                        machine["region_sign"] = "west-D"
+                        machine["max_data_disk_expand_size"] = 500 << 30
+                    }
+                    result = map[string]any{"list": []any{machine}}
+                case strings.HasSuffix(r.URL.Path, "/clone/payg"):
+                    var body struct {
+                        Source string         `json:"instance_uuid"`
+                        Info   map[string]any `json:"instance_info"`
+                    }
+                    if !cloning || json.NewDecoder(r.Body).Decode(&body) != nil || body.Source != "source-fixture" || body.Info["copy_data_disk_after_clone"] != true || body.Info["expand_data_disk"] != float64(150<<30) {
+                        t.Fatal("invalid system/data clone request")
+                    }
+                    created++
+                    cloned++
+                    result = "instance-fixture"
                 case strings.HasSuffix(r.URL.Path, "/create/payg"), strings.HasSuffix(r.URL.Path, "/pro/create"):
+                    if cloning {
+                        t.Fatal("clone fell back to ordinary creation")
+                    }
                     created++
                     result = "instance-fixture"
                 case strings.HasSuffix(r.URL.Path, "/status"):
@@ -116,13 +140,23 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 case strings.HasSuffix(r.URL.Path, "/snapshot"):
                     observedIDs = append(observedIDs, r.URL.Query().Get("instance_uuid"))
                     result = map[string]any{"image": map[string]string{"image_type": "public"}}
+                    if cloning {
+                        result = map[string]any{"image": map[string]string{"image_type": "public", "image_name": "source-image", "chip_corp": "nvidia", "cpu_arch": "x86", "cuda_version": "12.8"}}
+                    }
                     if developer {
                         result = map[string]any{"status": "running", "ssh_command": "ssh -p " + f.port + " researcher@127.0.0.1", "root_password": "loaf-fixture-password", "jupyter_token": "never-public"}
                     }
                 case strings.HasSuffix(r.URL.Path, "/power_off"):
                     powerOff++
                 default:
-                    result = map[string]any{"list": []any{map[string]any{"uuid": "instance-fixture", "status": "running", "ssh_command": "ssh -p " + f.port + " researcher@127.0.0.1", "root_password": "loaf-fixture-password"}}, "result_total": 1}
+                    row := map[string]any{"uuid": "instance-fixture", "status": "running", "ssh_command": "ssh -p " + f.port + " researcher@127.0.0.1", "root_password": "loaf-fixture-password"}
+                    rows := []any{row}
+                    if cloning {
+                        row["region_sign"] = "west-D"
+                        row["additional_info"] = map[string]any{"copy_data_disk_after_clone_status": "Succeed"}
+                        rows = append(rows, map[string]any{"uuid": "source-fixture", "status": "shutdown", "region_sign": "west-D", "expand_data_disk_size": int64(150) << 30})
+                    }
+                    result = map[string]any{"list": rows, "result_total": len(rows)}
                 }
                 data, _ := json.Marshal(map[string]any{"code": "Success", "data": result})
                 return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(data))}, nil
@@ -190,6 +224,9 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 o.In = strings.NewReader("")
             }
             acquire := []string{"cloud", "acquire", "gpu", "--image", "image-fixture", "--ready-timeout", "0s", "--yes"}
+            if cloning {
+                acquire = []string{"cloud", "acquire", "gpu", "--clone-from", "source-fixture", "--max-compute-hourly-price", "3.00", "--wait", "0s", "--ready-timeout", "0s", "--yes"}
+            }
             if product == "pro" {
                 acquire = append(acquire, "--cuda-from", "118")
                 if developer {
@@ -199,7 +236,7 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 }
             }
             invoke(acquire...)
-            if created != 1 {
+            if created != 1 || cloning && cloned != 1 {
                 t.Fatal(created)
             }
             invoke("use", "gpu")

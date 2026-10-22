@@ -418,6 +418,31 @@ max_compute_hourly_price = "3.00"
 currency = "CNY"
 ```
 
+### Keep your environment and data when moving to another GPU
+
+When an existing machine has no free GPU, clone it onto an available machine in the **same region**:
+
+```bash
+loaf cloud acquire gpu-copy --account autodl-main --product standard \
+  --clone-from old-gpu --gpu-model 'RTX 5090' --gpu-count 1 \
+  --max-compute-hourly-price 3.00 --wait 24h --ready-timeout 10m --yes
+```
+
+`--clone-from` accepts an instance ID or a bound cloud alias. Ordinary AutoDL instances support cloning with main/subaccount sessions; Pro/developer-token cloning is not supported. The source must already be shut down and not cloning. Loaf retains it and never stops it automatically.
+
+The existing acquisition loop waits for eligible stock, rechecks the winner and price, then requests **both system- and data-disk copying**. It never falls back to another region or a blank instance. Conflicting region settings are rejected. Source vendor, architecture and CUDA requirements constrain image compatibility. The clone inherits the source image, ignoring configured image defaults; explicit image/spec/CUDA/system-disk flags and `--allow-unquoted` are rejected.
+
+Data-disk expansion defaults to the source allocation; project/user settings and `--expand-data-disk` may increase it, not shrink it. Compute conditions and spending ceilings retain their normal precedence. With no wait preference, clone acquisition defaults to 30m; project/user settings or `--wait` override it, including explicit `0s` for one attempt. The maximum window is 24h, and the command must remain running to keep acquiring.
+
+SSH becoming reachable does not mean copying has finished. Clone `ready` also requires the platform's successful data-copy result. If the observation timeout expires, retain the returned request/instance IDs and resume the same clone:
+
+```bash
+loaf cloud info gpu-copy --json
+loaf cloud bind gpu-copy --request REQUEST_ID --ready-timeout 10m
+```
+
+`clone_data_status` reports `copying`, `succeeded`, `failed` or `unknown` when provided by the platform. `CLONE_FAILED` retains the instance for recovery; neither a timeout nor a copy failure rents a replacement. The receipt freezes the source identity and region, including across process restarts and alias/account changes.
+
 ### Monitoring is not a paid allocation
 
 | Operation | Behavior |

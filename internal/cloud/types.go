@@ -60,12 +60,13 @@ type Binding struct {
 
 // Instance is a public, deliberately allowlisted observation.
 type Instance struct {
-    Ref          Ref       `json:"instance"`
-    Name         string    `json:"name,omitempty"`
-    Status       string    `json:"status"`
-    NativeStatus string    `json:"native_status"`
-    Region       string    `json:"region,omitempty"`
-    ObservedAt   time.Time `json:"observed_at"`
+    Ref             Ref       `json:"instance"`
+    Name            string    `json:"name,omitempty"`
+    Status          string    `json:"status"`
+    NativeStatus    string    `json:"native_status"`
+    Region          string    `json:"region,omitempty"`
+    CloneDataStatus string    `json:"clone_data_status,omitempty"`
+    ObservedAt      time.Time `json:"observed_at"`
 }
 
 // Connection holds transient authentication material. JSON serialization always
@@ -98,6 +99,24 @@ type Provider interface {
 // Inventory is an optional read-only offer capability.
 type Inventory interface {
     Search(context.Context, Plan, int) (InventoryPage, error)
+}
+
+// Cloner is optional: copying an existing instance is not ordinary creation.
+type Cloner interface {
+    CloneSource(context.Context, Ref) (CloneSource, error)
+    Clone(context.Context, Plan, *Offer) (Ref, error)
+}
+
+// CloneSource freezes public source identity and image constraints, not private
+// platform records, credentials or a snapshot of the source filesystem.
+type CloneSource struct {
+    Instance         Ref    `json:"instance"`
+    Region           string `json:"region"`
+    Image            string `json:"image"`
+    Vendor           string `json:"gpu_vendor"`
+    Architecture     string `json:"architecture"`
+    CUDA             string `json:"cuda,omitempty"`
+    ExpandDataDiskGB int    `json:"expand_data_disk_gb"`
 }
 
 // Offer retains unknown quantities as nil. GPU memory is per card, while Price
@@ -182,6 +201,12 @@ func Failure(err error) error {
             code, message = "IDENTITY_MISMATCH", "cloud_identity_mismatch"
         case "INVALID_CREDENTIAL_RECORD":
             code, message = "INVALID_CREDENTIAL_RECORD", "cloud_credential_invalid"
+        case "CLONE_SOURCE_NOT_STOPPED":
+            code, message = api.Code, "cloud_clone_source_stopped"
+        case "CLONE_SOURCE_CHANGED":
+            code, message = api.Code, "cloud_clone_source_changed"
+        case "CLONE_SOURCE_INVALID":
+            code, message = api.Code, "cloud_clone_source_invalid"
         }
     }
     if hasAPI && api.AuthStage != "" && code == "CLOUD_FAILED" {

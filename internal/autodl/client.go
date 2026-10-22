@@ -317,7 +317,7 @@ func (a *api) instance(o object) (cloud.Instance, error) {
     case "stopping", "powering_off":
         status = "stopping"
     }
-    return cloud.Instance{Ref: a.ref(id), Name: text(o, "machine_alias"), Status: status, NativeStatus: native, Region: text(o, "region_sign"), ObservedAt: time.Now().UTC()}, nil
+    return cloud.Instance{Ref: a.ref(id), Name: text(o, "machine_alias"), Status: status, NativeStatus: native, Region: text(o, "region_sign"), CloneDataStatus: cloneDataStatus(o), ObservedAt: time.Now().UTC()}, nil
 }
 
 func (a *api) List(ctx context.Context, limit int) (cloud.Page, error) {
@@ -529,6 +529,10 @@ func (s *Standard) Search(ctx context.Context, plan cloud.Plan, limit int) (clou
         models := append([]string{}, plan.Requirements.GPUModels...)
         regions := append([]string{}, plan.Requirements.Regions...)
         body := map[string]any{"charge_type": "payg", "default_order": true, "gpu_idle_num": plan.Requirements.GPUCount, "gpu_type_name": models, "region_sign_list": regions, "page_index": page, "page_size": size}
+        if plan.Clone != nil {
+            body["cpu_arch"] = []string{plan.Clone.Architecture}
+            body["chip_corp"] = []string{plan.Clone.Vendor}
+        }
         raw, err := s.request(ctx, "POST", "/api/v1/user/machine/list", body, false)
         if err != nil {
             return result, err
@@ -545,6 +549,10 @@ func (s *Standard) Search(ctx context.Context, plan cloud.Plan, limit int) (clou
                 return result, &cloud.APIError{Code: "INVALID_RESPONSE"}
             }
             offer := cloud.Offer{ID: id, Model: text(o, "gpu_name"), Vendor: text(o, "chip_corp"), GPUCount: plan.Requirements.GPUCount, Region: text(o, "region_sign"), Source: "autodl:standard:machine/list", ObservedAt: result.ObservedAt}
+            if source := plan.Clone; source != nil {
+                compatible := strings.EqualFold(offer.Vendor, source.Vendor) && text(o, "cpu_arch") == source.Architecture && cudaCompatible(text(o, "highest_cuda_version"), source.CUDA)
+                offer.ImageAvailable = &compatible
+            }
             if idle := integer(o, "gpu_idle_num"); idle != nil {
                 available := *idle >= offer.GPUCount
                 offer.Available = &available

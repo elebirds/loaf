@@ -843,7 +843,7 @@ other = "请求接受后观察同一实例的最长时间"
 other = "显式允许未报价的分配，不能覆盖价格上限"
 
 [cloud_flag_ready]
-other = "绑定后等待平台运行及 SSH 认证的最长时间"
+other = "等待启动、克隆磁盘拷贝及 SSH 认证的最长时间"
 
 [cloud_flag_instance]
 other = "已有的平台实例 ID"
@@ -1141,3 +1141,53 @@ other = "凭据保存"
 
 [cloud_auth_stage_settings]
 other = "账号配置保存"
+[cloud_flag_clone_from]
+other = "克隆已关机的普通实例 ID 或云机器别名，仅限同区并复制双盘（默认抢占 30 分钟）"
+
+[cloud_clone_options]
+other = "克隆模式继承源实例镜像，不接受镜像、规格、CUDA、系统盘参数或 --allow-unquoted。请指定云实例 ID 或云机器别名。"
+
+[cloud_clone_region]
+other = "克隆仅允许在源实例所在区进行。请移除冲突的地区配置；目标不能是源实例本身。"
+
+[cloud_clone_disk]
+other = "目标数据盘扩容量不能小于源实例。省略该配置可继承源盘大小。"
+
+[cloud_clone_unsupported]
+other = "克隆仅支持使用会话凭据的 AutoDL 普通实例，未发送付费请求。"
+
+[cloud_clone_source_stopped]
+other = "源实例必须已关机且未在克隆中，Loaf 不会自动停止源实例。"
+
+[cloud_clone_source_changed]
+other = "源实例的地区、镜像或磁盘配置在授权后发生变化，未申请克隆。"
+
+[cloud_clone_source_invalid]
+other = "无法核实源实例的镜像、架构或数据盘大小，未申请克隆。"
+
+[cloud_clone_confirm]
+other = "是否授权在 {{.Region}} 克隆 {{.ID}}，最多一台，并复制系统盘和数据盘？存储另计，保留源实例。输入 yes 继续。"
+
+[cloud_clone_summary]
+other = "在 {{.Region}} 克隆 {{.ID}}；复制系统盘和数据盘，保留源实例。"
+
+[cloud_clone_not_ready]
+other = "克隆实例已存在，但磁盘拷贝或启动尚未完成，可能已开始计费。"
+
+[cloud_clone_wait_hint]
+other = "请用同一个 --request 和更长的 --ready-timeout 重试 cloud bind；可用 cloud info 查看拷贝状态。不要重新租用实例。"
+
+[cloud_clone_failed]
+other = "实例 {{.ID}} 的数据盘拷贝失败。请保留此实例和请求记录以恢复，未租用替代实例。"
+
+[cloud_clone_data_copying]
+other = "克隆数据盘：拷贝中。"
+
+[cloud_clone_data_succeeded]
+other = "克隆数据盘：拷贝完成。"
+
+[cloud_clone_data_failed]
+other = "克隆数据盘：拷贝失败。"
+
+[cloud_clone_data_unknown]
+other = "克隆数据盘：状态未知。"

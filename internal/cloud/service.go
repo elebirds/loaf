@@ -142,6 +142,14 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
     if !ValidProduct(in.Plan.Product) {
         return Receipt{}, invalid()
     }
+    if in.Plan.Clone != nil {
+        if err := validateClone(in.Plan, in.Account); err != nil {
+            return Receipt{}, err
+        }
+        if in.Settings.Credential.Mode != "session" {
+            return Receipt{}, Failure(&APIError{Code: "UNSUPPORTED_CAPABILITY"})
+        }
+    }
     var result Receipt
     err := s.Receipts.Lock(ctx, "target-"+in.Target, func() error {
         return s.Receipts.Lock(ctx, "allocate-"+in.Account, func() error {
@@ -167,6 +175,10 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                 return err
             }
             inventory, hasInventory := p.(Inventory)
+            clone, canClone := p.(Cloner)
+            if in.Plan.Clone != nil && (!canClone || !hasInventory) {
+                return fault.New("UNSUPPORTED_CAPABILITY", "cloud_clone_unsupported", nil)
+            }
             r := in.Plan.Requirements
             if !hasInventory {
                 if r.MaxComputeHourlyPrice != nil {
@@ -181,8 +193,10 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                     return &APIError{Code: "UNSUPPORTED_CAPABILITY"}
                 }
             }
-            if err := validateCreate(in.Plan, in.Settings.Credential.Mode); err != nil {
-                return err
+            if in.Plan.Clone == nil {
+                if err := validateCreate(in.Plan, in.Settings.Credential.Mode); err != nil {
+                    return err
+                }
             }
             wait, _ := time.ParseDuration(in.Plan.WaitTimeout)
             interval, _ := time.ParseDuration(in.Plan.PollInterval)
@@ -275,7 +289,13 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                         _ = s.Receipts.Save(result)
                         return err
                     }
-                    ref, err := p.Create(window, in.Plan, selected)
+                    var ref Ref
+                    var err error
+                    if in.Plan.Clone != nil {
+                        ref, err = clone.Clone(window, in.Plan, selected)
+                    } else {
+                        ref, err = p.Create(window, in.Plan, selected)
+                    }
                     if err == nil {
                         result.Instance = &ref
                         result.Status = "created"
@@ -465,6 +485,9 @@ func (s *Service) Reconcile(ctx context.Context, id, instance string, noInstance
             observed, err := p.Get(ctx, *ref)
             if err != nil {
                 return err
+            }
+            if source := r.Plan.Clone; source != nil && (*ref == source.Instance || observed.Region != source.Region) {
+                return fault.New("BAD_CONFIG", "cloud_clone_region", nil)
             }
             r.Instance = ref
             if r.Operation == "acquire" {

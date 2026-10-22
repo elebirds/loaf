@@ -843,7 +843,7 @@ other = "Observe the same instance for this long after acceptance"
 other = "Explicitly permit unquoted allocation; cannot override a price cap"
 
 [cloud_flag_ready]
-other = "Wait for platform running and authenticated SSH after binding"
+other = "Wait for startup, requested clone disk copying and authenticated SSH"
 
 [cloud_flag_instance]
 other = "Existing platform instance ID"
@@ -1141,3 +1141,53 @@ other = "credential storage"
 
 [cloud_auth_stage_settings]
 other = "account settings save"
+[cloud_flag_clone_from]
+other = "Clone a stopped ordinary instance ID or cloud alias in its region, copying both disks (default wait: 30m)"
+
+[cloud_clone_options]
+other = "Clone mode inherits the source image; do not pass image/spec/CUDA/system-disk flags or --allow-unquoted. Choose a cloud source ID or alias."
+
+[cloud_clone_region]
+other = "Cloning must stay in the source instance's region. Remove conflicting region settings; the source itself cannot be the destination."
+
+[cloud_clone_disk]
+other = "The destination data-disk expansion must be at least the source expansion. Omit the setting to inherit the source size."
+
+[cloud_clone_unsupported]
+other = "Cloning is supported only for ordinary AutoDL instances with session credentials. No paid request was sent."
+
+[cloud_clone_source_stopped]
+other = "The clone source must be shut down and not already cloning. Loaf did not stop it."
+
+[cloud_clone_source_changed]
+other = "The source region, image or disk allocation changed after approval. No clone was requested."
+
+[cloud_clone_source_invalid]
+other = "The source image, architecture or data-disk size could not be verified. No clone was requested."
+
+[cloud_clone_confirm]
+other = "Authorize at most one clone of {{.ID}} in {{.Region}}, copying its system and data disks? Storage is extra; the source is retained. Type yes to continue."
+
+[cloud_clone_summary]
+other = "Clone {{.ID}} in {{.Region}}; copy system and data disks, retain source."
+
+[cloud_clone_not_ready]
+other = "The clone exists, but disk copying or startup has not completed. It may already be billing."
+
+[cloud_clone_wait_hint]
+other = "Retry cloud bind with the same --request and a longer --ready-timeout; inspect cloud info for copy status. Do not acquire another instance."
+
+[cloud_clone_failed]
+other = "Data-disk copying failed for {{.ID}}. Keep this instance and receipt for recovery; no replacement was rented."
+
+[cloud_clone_data_copying]
+other = "Clone data disk: copying."
+
+[cloud_clone_data_succeeded]
+other = "Clone data disk: completed."
+
+[cloud_clone_data_failed]
+other = "Clone data disk: failed."
+
+[cloud_clone_data_unknown]
+other = "Clone data disk: status unknown."

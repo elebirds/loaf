@@ -83,6 +83,7 @@ type Plan struct {
     AutoDL       ImageOptions `json:"autodl"`
     WaitTimeout  string       `json:"wait_timeout"`
     PollInterval string       `json:"poll_interval"`
+    Clone        *CloneSource `json:"clone,omitempty"`
 }
 
 func invalid() error { return fault.New("BAD_CONFIG", "cloud_config", nil) }

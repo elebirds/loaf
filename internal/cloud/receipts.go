@@ -75,6 +75,9 @@ func (r Receipt) validate() error {
     if !ValidProduct(product) || r.Instance != nil && (r.Instance.ID == "" || r.Instance.Account != r.Account || r.Instance.Product != product || r.Instance.Provider != r.Settings.Provider) {
         return invalid()
     }
+    if r.Plan.Clone != nil && (r.Operation != "acquire" || validateClone(r.Plan, r.Account) != nil || r.Instance != nil && *r.Instance == r.Plan.Clone.Instance) {
+        return invalid()
+    }
     return nil
 }
 

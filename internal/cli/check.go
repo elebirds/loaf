@@ -136,7 +136,7 @@ func newCheckCommand(o Options, cfg config.Global, target *string, l *i18n.Local
                     if err != nil {
                         kind := ssh.FailureKind(err)
                         if request.Err() != nil {
-                            kind = "connection_timeout"
+                            kind = "observation_timeout"
                             if cmd.Context().Err() != nil {
                                 kind = "canceled"
                             }

@@ -1406,7 +1406,7 @@ other = "等待超时必须大于 0s 且不超过 24h。"
 other = "观察预算结束，仍有未完成或不可达的任务；未停止任何任务。"
 
 [wait_summary]
-other = "已完成 {{.Count}}/{{.Total}}；已观察 {{.Matched}}，查询错误 {{.Value}}。"
+other = "已完成 {{.Count}}/{{.Total}}；已观察 {{.Matched}}，查询错误 {{.Value}}，末轮中断 {{.Bytes}}。"
 
 [last_observation]
 other = "  上次观察 {{.Stage}}：{{.Value}} / {{.Code}}"
@@ -1587,3 +1587,12 @@ other = "远端基础目录：{{.Root}}；已解析项目位置：{{.Remote}}"
 
 [run_preview_pull]
 other = "下载基础目录：{{.Root}}；校验和：{{.Value}}"
+
+[pull_args]
+other = "[任务 ID ...]"
+
+[wait_interrupted_row]
+other = "末轮查询中断；保留带时间的上次观察"
+
+[trace_reason_observation_timeout]
+other = "观察预算已耗尽"

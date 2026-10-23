@@ -24,7 +24,7 @@ func newPullCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
     var checksum bool
     var into string
     var concurrency int
-    cmd := &cobra.Command{Use: "pull " + l.Text("run_id_arg"), Short: l.Text("pull_short"), Args: arguments(0, 1000)}
+    cmd := &cobra.Command{Use: "pull " + l.Text("pull_args"), Short: l.Text("pull_short"), Args: arguments(0, 1000)}
     cmd.Flags().StringArrayVar(&paths, "path", nil, l.Text("flag_pull_path"))
     cmd.Flags().StringVar(&to, "to", "", l.Text("flag_pull_to"))
     cmd.Flags().BoolVar(&checksum, "checksum", false, l.Text("flag_pull_checksum"))

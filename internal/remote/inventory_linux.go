@@ -50,7 +50,7 @@ func Inventory(ctx context.Context, req wire.Request) (wire.OutputInventory, err
     if err != nil {
         return result, err
     }
-    if record.FormatVersion != wire.FormatVersion || record.Request.ProjectID != req.ProjectID || record.Request.RunID != req.RunID || record.Request.Root != req.Root {
+    if record.FormatVersion != wire.FormatVersion || record.Request.FormatVersion != wire.FormatVersion || record.Request.ProjectID != req.ProjectID || record.Request.RunID != req.RunID || record.Request.Root != req.Root {
         return result, errors.New("BAD_FORMAT")
     }
     work := filepath.Join(dir, "work")

@@ -18,7 +18,7 @@ func FailureKind(err error) string {
         return "canceled"
     }
     if errors.Is(err, context.DeadlineExceeded) {
-        return "connection_timeout"
+        return "observation_timeout"
     }
     var f *fault.Error
     if errors.As(err, &f) {

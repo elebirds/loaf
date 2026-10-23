@@ -1,6 +1,7 @@
 package ssh
 
 import (
+    "context"
     "github.com/elebirds/loaf/internal/fault"
     "testing"
 )
@@ -11,5 +12,11 @@ func TestFailureKindsUseEvidenceWithoutAttributingNetworkOwnership(t *testing.T)
         if got := FailureKind(err); got != tc.kind {
             t.Fatal(got, tc)
         }
+    }
+}
+
+func TestFailureKindSeparatesLocalObservationBudgetFromConnectionTimeout(t *testing.T) {
+    if got := FailureKind(context.DeadlineExceeded); got != "observation_timeout" {
+        t.Fatal(got)
     }
 }

@@ -83,7 +83,8 @@ type View struct {
     CleanupPending   bool                 `json:"cleanup_pending,omitempty"`
     LastObservation  *config.ObservedRun  `json:"last_observation,omitempty"`
     LastQueryFailure *config.QueryFailure `json:"last_query_failure,omitempty"`
-    ObservedAt       time.Time            `json:"-"`
+    ObservedAt       time.Time            `json:"observed_at,omitzero"`
+    QueryInterrupted bool                 `json:"query_interrupted,omitempty"`
     Ref              config.RunRef        `json:"-"`
 }
 

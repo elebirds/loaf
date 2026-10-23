@@ -369,7 +369,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
         use += " " + parts[1]
     }
     usage := use + " " + l.Text("options_arg")
-    if c.Name() == "exec" {
+    if c.Name() == "exec" || c.Name() == "run" {
         usage = c.CommandPath() + " " + l.Text("options_arg") + " " + strings.SplitN(c.Use, " ", 2)[1]
     }
     fmt.Fprintf(out, "%s\n\n%s\n  %s\n", c.Short, l.Text("usage"), usage)
@@ -474,7 +474,7 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         for _, v := range r.Runs {
             printRun(out, v, l)
         }
-        fmt.Fprintln(out, l.Text("wait_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.QueryErrors, "Matched": r.Examined}))
+        fmt.Fprintln(out, l.Text("wait_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.QueryErrors, "Matched": r.Examined, "Bytes": r.Interrupted}))
     case runList:
         if r.Source == "local" {
             fmt.Fprintln(out, l.Text("inspect_local"))

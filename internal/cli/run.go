@@ -438,6 +438,9 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
     } else if v.CleanupPending {
         fmt.Fprintf(out, "  %s", l.Text("clean_status_pending"))
     }
+    if v.QueryInterrupted {
+        fmt.Fprintf(out, "  %s", l.Text("wait_interrupted_row"))
+    }
     if v.QueryError != "" {
         fmt.Fprintf(out, "  %s: %s", l.Text("run_query"), v.QueryError)
     }

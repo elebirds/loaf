@@ -190,7 +190,7 @@ Without an explicit `--recovery-budget`, opt-in recovery still retries once. A p
 
 Successful observations save a separate public `last_observation` with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
 
-`wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. Timeout or cancellation leaves all tasks running. This does not schedule workloads.
+`wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. If the total budget interrupts a later query, the row retains its previous completed observation with `observed_at` and `query_interrupted`; `interrupted` counts these rows rather than inventing a target failure. Timeout or cancellation leaves all tasks running. This does not schedule workloads.
 
 ### Optional project setup
 

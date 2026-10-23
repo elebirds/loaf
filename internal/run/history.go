@@ -174,9 +174,10 @@ func (f HistoryFilters) matchesStatus(status string) bool {
 }
 
 type historyObservation struct {
-    view     View
-    err      error
-    examined bool
+    view        View
+    err         error
+    examined    bool
+    interrupted bool
 }
 
 func (s Service) observeHistory(ctx context.Context, refs []config.RunRef, batch bool) []historyObservation {
@@ -209,7 +210,7 @@ func (s Service) observeBounded(ctx context.Context, refs []config.RunRef, batch
                 observed, err := s.Observe(query, refs[i], 0, 0, batch)
                 cancel()
                 observed.Log = nil
-                observations[i] = historyObservation{view: observed, err: err, examined: true}
+                observations[i] = historyObservation{view: observed, err: err, examined: true, interrupted: err != nil && ctx.Err() != nil}
             }
         }()
     }

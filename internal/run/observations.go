@@ -36,7 +36,9 @@ func (s Service) remember(ctx context.Context, ref config.RunRef, v View, err er
     if !v.ObservedAt.IsZero() {
         next.Last = &config.ObservedRun{ObservedAt: v.ObservedAt, Status: v.Status, Phase: v.Phase, ExitCode: v.ExitCode, Signal: v.Signal, CompletedAt: v.CompletedAt}
     }
-    if err != nil {
+    // Local cancellation/observation-budget expiry does not establish a new
+    // connection failure. Keep the last actual failure independently.
+    if err != nil && ctx.Err() == nil {
         stage := fault.Stage(err)
         if stage == "" {
             stage = "observe"

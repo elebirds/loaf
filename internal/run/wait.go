@@ -18,6 +18,7 @@ type WaitResult struct {
     Unexamined  int    `json:"unexamined"`
     Completed   int    `json:"completed"`
     Pending     int    `json:"pending"`
+    Interrupted int    `json:"interrupted"`
     QueryErrors int    `json:"query_errors"`
     TimedOut    bool   `json:"timed_out"`
 }
@@ -111,8 +112,8 @@ func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Du
             pending = append(pending[n:], pending[:n]...)
             indices = append(indices[n:], indices[:n]...)
         }
-        round, stop := context.WithTimeout(waiting, 5*time.Second)
-        observations := s.observeBounded(round, pending, batch, 2*time.Second)
+        round, stop := context.WithTimeout(waiting, 20*time.Second)
+        observations := s.observeBounded(round, pending, batch, 20*time.Second)
         stop()
         rotation++
         for j, item := range observations {
@@ -120,8 +121,16 @@ func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Du
                 continue
             }
             i := indices[j]
+            // The enclosing observation budget is not evidence that a target
+            // failed. Keep the last completed query, dated and explicitly marked
+            // interrupted, rather than replacing it with local cancellation.
+            if item.interrupted && seen[i] {
+                result.Runs[i].QueryInterrupted = true
+                continue
+            }
             seen[i] = true
             next := item.view
+            next.QueryInterrupted = item.interrupted
             if item.err != nil && next.QueryError == "" {
                 next.QueryError = errorCode(item.err)
             }
@@ -131,8 +140,11 @@ func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Du
             }
             result.Runs[i] = next
         }
-        result.Completed, result.Examined, result.QueryErrors = 0, 0, 0
+        result.Completed, result.Examined, result.QueryErrors, result.Interrupted = 0, 0, 0, 0
         for i, v := range result.Runs {
+            if v.QueryInterrupted {
+                result.Interrupted++
+            }
             if seen[i] {
                 result.Examined++
             }

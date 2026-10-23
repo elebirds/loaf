@@ -64,3 +64,25 @@ func TestInventoryUnknownMissingAndCleanedDoNotCreateDirectories(t *testing.T) {
     _, err = Inventory(context.Background(), req)
     expectCode(t, err, "BAD_REQUEST")
 }
+
+func TestInventoryRejectsUnknownStoredRequestFormat(t *testing.T) {
+    req, work := outputFixture(t)
+    req.Depth = 2
+    req.Limit = 20
+    dir := filepath.Dir(work)
+    record, err := read(dir)
+    if err != nil {
+        t.Fatal(err)
+    }
+    record.Request.FormatVersion = 99
+    if err := save(dir, record); err != nil {
+        t.Fatal(err)
+    }
+    before, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+    _, err = Inventory(context.Background(), req)
+    expectCode(t, err, "BAD_FORMAT")
+    after, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+    if string(after) != string(before) {
+        t.Fatal("unknown record changed")
+    }
+}

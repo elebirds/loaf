@@ -1406,7 +1406,7 @@ other = "Wait timeout must be greater than 0s and at most 24h."
 other = "Observation budget ended with pending or unreachable tasks; none were stopped."
 
 [wait_summary]
-other = "Completed {{.Count}}/{{.Total}}; observed {{.Matched}}, query errors {{.Value}}."
+other = "Completed {{.Count}}/{{.Total}}; observed {{.Matched}}, query errors {{.Value}}, interrupted {{.Bytes}}."
 
 [last_observation]
 other = "  Last observed {{.Stage}}: {{.Value}} / {{.Code}}"
@@ -1587,3 +1587,12 @@ other = "Remote base: {{.Root}}; resolved project location: {{.Remote}}"
 
 [run_preview_pull]
 other = "Download base: {{.Root}}; checksum: {{.Value}}"
+
+[pull_args]
+other = "[run-id ...]"
+
+[wait_interrupted_row]
+other = "latest query interrupted; retaining dated observation"
+
+[trace_reason_observation_timeout]
+other = "observation budget expired"

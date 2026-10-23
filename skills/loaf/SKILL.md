@@ -45,7 +45,7 @@ Submit the intended experiment command, without writing a remote launcher:
 loaf run --wait 10s --json -- python3 smoke.py
 ```
 
-Loaf handles prerequisites, source synchronization, independent work copies and background supervision. Do not add a routine sequence of `check`, `sync`, PID checks or internal-file inspection around `run`. Use `check` or the local `sync --dry-run` when their diagnostic information is needed.
+Loaf handles prerequisites, source synchronization, independent work copies and background supervision. Do not add a routine sequence of `check`, `sync`, PID checks or internal-file inspection around `run`. Use `check` for remote diagnostics, `sync --dry-run` for local source selection, or `run --dry-run --json -- <command>` for a complete local submission plan with policy provenance and redacted environment names. The run preview creates no IDs/state and never accesses SSH or credentials.
 
 ## Choose foreground inspection or a durable experiment
 
@@ -75,17 +75,21 @@ Prefer finite queries over a busy polling loop. Log tails are line- and byte-bou
 
 For explicitly requested continuous logs, `logs <run-id> -f --reconnect --json` allows one cursor-safe transient reconnection. Save `data.run.log.cursor` after consuming a chunk, or `data.log.cursor` from a finite query. Use `logs <run-id> -f --resume <cursor> --json` to continue manually; do not combine resume with tail. A changed/replaced log returns `LOG_CHANGED`; obtaining a fresh tail is an explicit reset, not automatic gap recovery. Default following remains single-connection. Cancellation or a failed output consumer never restarts a stream.
 
+`logs -f --resume-file /tmp/cursor.json --recovery-budget 2m --json` loads an acknowledged cursor and permits consecutive transient failures within a cumulative disconnected-wait budget. JSON/pipes never auto-save processing acknowledgement: consume a chunk, then call `logs <run-id> --resume-file /tmp/cursor.json --ack-cursor <cursor> --json` offline. Human terminals checkpoint after successful writes. Keep checkpoint files outside source trees. Default opt-in recovery still retries once.
+
+For a foreground frozen group use `wait r_A r_B --timeout 30m --json`, or exact `wait --tag ablation`. Inspect all rows plus completed/pending/query-error and examined/unexamined coverage; cancellation does not stop tasks. Waiting does not schedule jobs.
+
 ## Find and inspect saved tasks offline
 
 Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigation. Names/tags are local, immutable and not identities; keep the run ID. `ps --name` matches exactly, repeated `--tag` requires all tags, and filters run before bounded remote observation.
 
-`ps --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Local lists reject live status filters/nonzero wait. Preserve and explicitly use matching older CLIs for old tasks; do not edit locators or migrate records.
+`ps --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Dated `last_observation` and separate `last_query_failure` sidecars preserve public status/phase/exit summaries and failure stages, not log text/environments. Never treat their status as live. Local lists reject live status filters/nonzero wait. Preserve and explicitly use matching older CLIs for old tasks; do not edit locators or migrate records.
 
 ## Handle uncertainty without duplicate experiments
 
 Cloud runner operations reuse a private native SSH master only within one CLI invocation, without borrowing the user's master. Let one `pull` select multiple paths instead of launching a separate CLI for every file. Finite reads/downloads may make one bounded transient-transport retry; mutations and foreground commands are not replayed. Inspect `error.stage` and the original error code/diagnostic to distinguish cloud lookup, SSH authentication, runner verification, sync, submission, observation, and download failures. Do not reinstall a runner merely because its verification connection failed.
 
-`check --trace --json` or a finite runner command with `--trace` reports safe phase timings, private-master/retry counts and stable recovery reasons. Inspect the trace even on success when diagnosing a recovered connection. Do not infer health of a proxy, gateway or training environment from SSH success alone. Traces omit secrets/commands and do not profile unrelated cloud HTTP operations.
+`check --trace --json` or a finite runner command with `--trace` reports safe phase timings, private-master/retry counts and stable recovery reasons. Inspect the trace even on success when diagnosing a recovered connection. Do not infer health of a proxy, gateway or training environment from SSH success alone. Traces omit secrets/commands and do not profile unrelated cloud HTTP operations. `check --targets a,b --report /tmp/diagnostic.json --json` preserves per-target partial checks and exports only ordinal target IDs, safe steps/timings/codes and trace, not endpoint/path/tool details. `error.failure_kind` classifies observed transport evidence without guessing network ownership.
 
 `SUBMISSION_UNKNOWN` (operation exit 3) includes the original saved ID. Query that ID; do not automatically replace or replay the run. An unreachable machine or `unknown` result is not proof of training failure. `ps` lists can contain successful rows alongside query errors.
 
@@ -114,6 +118,8 @@ Runner operations automatically deploy the helper matching the local CLI. `VERSI
 ```bash
 loaf pull <run-id> --json
 ```
+
+To browse before downloading, use `outputs <run-id> --depth 2 --limit 200 --json`. Check missing roots and truncation/depth/entry coverage. This is read-only metadata and does not deploy a helper; `RUNNER_REQUIRED` needs explicit `--prepare-runner` authority. Existing `pull` still prepares its helper automatically. Use `pull r_A r_B --into ./comparison --json` for separate run-ID directories and per-ID partial results. Concurrency is opt-in (1–4); interactive authentication stays serial. Do not combine batch `--into` with single exact `--to`.
 
 The default uses output paths saved at submission and downloads to `loaf-results/<run-id>/` under the project. Changing the current target or project outputs does not redirect that task. Repeat `--path` to override the selection for one download; `--to` is the exact destination, relative to the current directory when not absolute.
 

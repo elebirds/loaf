@@ -76,6 +76,18 @@ Normal `check` only observes the remote environment. `--runner` additionally upl
 
 Python, uv, and GPU tools are optional observations. Their absence does not make a CPU-capable machine fail the check. Missing rsync, unsupported platforms, or an unwritable remote location do.
 
+### Check several targets and export diagnostics
+
+```bash
+loaf check --targets lab-a,lab-b --timeout 20s --trace --report /tmp/loaf-diagnostic.json --json
+```
+
+`--targets` checks 1–32 distinct aliases without `--target`. Each has its own timeout; machine mode uses at most four concurrent checks and interactive authentication stays serial. Failed/unexamined rows retain successful observations. Per-target steps distinguish connection, authentication, platform and runner checks. Ordinary check is read-only remotely; helper deployment/repair still requires `--runner`.
+
+`error.failure_kind` and trace distinguish authentication, host trust, name resolution, refused, timed out, reset, closed and unclassified transport failures without attributing them to a gateway or local network. A retry after a failed first connection is not counted as reconnection of an established master.
+
+`--report` atomically writes a private 0600 allowlisted diagnostic: target input ordinals, known platform labels, step outcomes, stable failure categories, timings and safe trace. It omits aliases, endpoints, paths, commands, request bodies, environments and credentials; ordinary check JSON keeps its useful diagnostics. The report destination must be absent or an existing known-format Loaf diagnostic, never a symlink or unrelated file. Safe trace collection works even without `--trace`.
+
 ## Run an experiment
 
 From the project directory, submit the command you would otherwise run remotely:
@@ -98,6 +110,14 @@ loaf logs <run-id> -f
 `ps` lists the latest submitted or submission-uncertain runs in this project, bounded to 20 by default (`--limit` or `[ps].limit` changes the bound). An ID queries that run only. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection and remote location when project defaults change; `--target` cannot redirect an ID query.
 
 Runner operations require the same software version as the local CLI. Loaf automatically deploys and verifies its bundled runner, repairing a missing or mismatched executable. It does not download an arbitrary release or hot-replace a running supervisor. Tasks created by another version return `VERSION_MISMATCH`; retain their matching CLI alongside an upgrade and invoke it explicitly for those tasks. Unknown record formats are rejected without rewriting them.
+
+### Preview submission entirely offline
+
+```bash
+loaf run --dry-run --json -- python3 train.py
+```
+
+The plan includes target selection, literal entry-point argv, setup presence, environment names (not values), selected working files/source bytes, outputs, waiting and sync/download policies, and per-field `flag`/`project`/`user`/`default` provenance (`local_selection` for `loaf use`). An unregistered project gets no ID. Preview does not access credentials, SSH, helpers or state writes. It is neither a frozen snapshot nor a transfer estimate or proof of remote prerequisites. Actual submission still checks prerequisites and synchronizes automatically.
 
 ### Find tasks and inspect them offline
 
@@ -155,6 +175,22 @@ Finite log queries return `data.log.cursor`; stream chunks return `data.run.log.
 A cursor is bound to the software version, task, location and log file, with a boundary-integrity guard. Replacement, truncation or rewriting at the saved boundary returns `LOG_CHANGED`, never a silent restart from the tail. Read a fresh tail explicitly to obtain a new cursor when that happens. Output-consumer errors, cancellation, authentication/trust failures and an already-delivered end event do not trigger a restart. Accepted tasks continue independently.
 
 If submission confirmation is lost, Loaf checks the same saved ID once. If still uncertain, it returns `SUBMISSION_UNKNOWN` with that ID and operation exit 3. Query it; do not automatically submit another run.
+
+### Recover sessions and wait for several tasks
+
+```bash
+loaf logs <run-id> -f --resume-file /tmp/loaf-cursor.json --recovery-budget 2m
+loaf wait r_A r_B --timeout 30m --json
+loaf wait --tag ablation --timeout 1h
+```
+
+`--resume-file` loads an acknowledged cursor and enables recovery. Human terminal output checkpoints only after a successful write. JSON and piped output **never automatically acknowledge processing**: handle a chunk, then save its `data.run.log.cursor` with `loaf logs <run-id> --resume-file /tmp/loaf-cursor.json --ack-cursor "$cursor" --json`. This acknowledgement is offline. Keep cursor files outside source trees. Writes are atomic and cannot rewind a saved stream; unknown formats and symlinks are rejected.
+
+Without an explicit `--recovery-budget`, opt-in recovery still retries once. A positive budget allows consecutive transient failures within a total disconnected-wait budget (up to 24h); healthy streaming does not consume it. Human recovery messages go to stderr. Default `logs -f` is unchanged. Sink failure, cancellation, trust/authentication failure, end and `LOG_CHANGED` never restart the stream.
+
+Successful observations save a separate public `last_observation` with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
+
+`wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. Timeout or cancellation leaves all tasks running. This does not schedule workloads.
 
 ### Optional project setup
 
@@ -250,6 +286,19 @@ Default change detection compares size and modification time. Enable `--checksum
 Missing paths produce `OUTPUT_MISSING` (exit 1). Existing selections are downloaded when possible; JSON retains `paths`, `downloaded_paths`, `missing_paths`, destination, and effective policy in `data` alongside the error. `changed_files` is present only after a successful rsync transfer without a recovery retry; a recovered transfer omits it rather than reporting only the last attempt's changes. An all-missing selection is never an empty success. Unsafe paths or special files reject the selection before transfer; relative links must resolve within the selected trees. Existing destination links cannot redirect writes outside the result directory.
 
 Running, failed, and stopped tasks can all have useful outputs. A running pull copies current contents, not a consistent checkpoint snapshot; wait for completion or have training publish checkpoints atomically when consistency matters. Two downloads to the same destination are rejected with `PULL_BUSY`; downloads coordinate with cleanup through a separate data lock, without holding the remote source-sync or execution-control locks.
+
+### Browse and compare several outputs
+
+```bash
+loaf outputs <run-id> --depth 2 --limit 200 --json
+loaf outputs <run-id> --prepare-runner --json  # Explicit helper deployment/repair
+loaf pull r_A r_B --into ./comparison --json
+loaf pull r_A r_B --into ./comparison --concurrency 2 --json
+```
+
+`outputs` reads only each run's frozen output selection. It reports relative paths, type, bytes, modification time and missing roots, with visited-root and entry coverage. Depth is relative to each output root (root = 0); limits are 0–20 levels and 1–1000 entries. `truncated` and `depth_limited` make unvisited contents explicit. It does not read file contents, checksum files, follow links or require a successful/live task. Ordinary browsing does not upload a helper; a missing/mismatched executable returns `RUNNER_REQUIRED`. Only `--prepare-runner` authorizes repair. `pull` keeps its existing automatic preparation.
+
+Multiple explicit IDs require `--into`; each downloads under `<into>/<run-id>/` using its own saved connection and output paths. JSON retains every result/error with completed, failed and unexamined counts; one failure does not discard successful downloads. Downloads are serial by default; `--concurrency 1–4` is explicit and interactive authentication stays serial. Repeating is incremental and preserves local extras. Single-run `--to` still names the exact directory and cannot be combined with batch `--into`. One-off download destinations need normal ignore/exclude rules if they sit in your source tree.
 
 ## Reclaim completed task data
 
@@ -577,32 +626,3 @@ Maintainers publish by explicitly pushing a `vX.Y.Z` or prerelease tag. The rele
 ## License
 
 [MIT](LICENSE)
-
-### Recover sessions and wait for several tasks
-
-```bash
-loaf logs <run-id> -f --resume-file /tmp/loaf-cursor.json --recovery-budget 2m
-loaf wait r_A r_B --timeout 30m --json
-loaf wait --tag ablation --timeout 1h
-```
-
-`--resume-file` loads an acknowledged cursor and enables recovery. Human terminal output checkpoints only after a successful write. JSON and piped output **never automatically acknowledge processing**: handle a chunk, then save its `data.run.log.cursor` with `loaf logs <run-id> --resume-file /tmp/loaf-cursor.json --ack-cursor "$cursor" --json`. This acknowledgement is offline. Keep cursor files outside source trees. Writes are atomic and cannot rewind a saved stream; unknown formats and symlinks are rejected.
-
-Without an explicit `--recovery-budget`, opt-in recovery still retries once. A positive budget allows consecutive transient failures within a total disconnected-wait budget (up to 24h); healthy streaming does not consume it. Human recovery messages go to stderr. Default `logs -f` is unchanged. Sink failure, cancellation, trust/authentication failure, end and `LOG_CHANGED` never restart the stream.
-
-Successful observations save a separate public `last_observation` with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
-
-`wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. Timeout or cancellation leaves all tasks running. This does not schedule workloads.
-
-### Browse and compare several outputs
-
-```bash
-loaf outputs <run-id> --depth 2 --limit 200 --json
-loaf outputs <run-id> --prepare-runner --json  # Explicit helper deployment/repair
-loaf pull r_A r_B --into ./comparison --json
-loaf pull r_A r_B --into ./comparison --concurrency 2 --json
-```
-
-`outputs` reads only each run's frozen output selection. It reports relative paths, type, bytes, modification time and missing roots, with visited-root and entry coverage. Depth is relative to each output root (root = 0); limits are 0–20 levels and 1–1000 entries. `truncated` and `depth_limited` make unvisited contents explicit. It does not read file contents, checksum files, follow links or require a successful/live task. Ordinary browsing does not upload a helper; a missing/mismatched executable returns `RUNNER_REQUIRED`. Only `--prepare-runner` authorizes repair. `pull` keeps its existing automatic preparation.
-
-Multiple explicit IDs require `--into`; each downloads under `<into>/<run-id>/` using its own saved connection and output paths. JSON retains every result/error with completed, failed and unexamined counts; one failure does not discard successful downloads. Downloads are serial by default; `--concurrency 1–4` is explicit and interactive authentication stays serial. Repeating is incremental and preserves local extras. Single-run `--to` still names the exact directory and cannot be combined with batch `--into`. One-off download destinations need normal ignore/exclude rules if they sit in your source tree.

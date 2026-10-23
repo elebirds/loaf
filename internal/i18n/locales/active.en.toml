@@ -1464,3 +1464,126 @@ other = "Some selected downloads failed or were not examined; completed destinat
 
 [pull_batch_summary]
 other = "Downloaded {{.Count}}/{{.Total}}; failed {{.Value}}, unexamined {{.Matched}}."
+
+[flag_run_dry]
+other = "Explain the complete local submission plan without SSH, credentials, IDs or state writes."
+
+[run_preview_heading]
+other = "Local submission preview"
+
+[run_preview_target]
+other = "Target: {{.Target}} ({{.Value}})"
+
+[run_preview_command]
+other = "Literal entry point: {{.Value}}"
+
+[run_preview_environment]
+other = "Environment variable names (values hidden): {{.Value}}"
+
+[run_preview_policies]
+other = "Wait {{.Millis}} ms; tail {{.Count}} lines; sync {{.Mode}}; outputs {{.Paths}}."
+
+[run_preview_source]
+other = "Selected {{.Count}} files, {{.Bytes}} source bytes under {{.Root}}."
+
+[run_preview_not_snapshot]
+other = "This is a local selection, not a source snapshot or transfer estimate; remote prerequisites remain unchecked."
+
+[flag_check_targets]
+other = "Check 1–32 distinct aliases, comma-separated; cannot combine with --target."
+
+[flag_check_report]
+other = "Write a private, shareable allowlisted diagnostic report with ordinal target IDs."
+
+[check_batch_flags]
+other = "Use a positive timeout and 1–32 distinct --targets, without --target; report paths must be nonempty."
+
+[check_batch_partial]
+other = "Some target checks failed or were not examined; successful observations are retained."
+
+[check_batch_summary]
+other = "Checks passed {{.Count}}/{{.Total}}; failed {{.Value}}, unexamined {{.Matched}}."
+
+[diagnostic_report_invalid]
+other = "Report path must be absent or an existing regular Loaf diagnostic report of a known format."
+
+[diagnostic_report_failed]
+other = "Could not write the diagnostic report; check the destination permissions."
+
+[operation_stage_inventory]
+other = "output inventory"
+
+[check_step_connect]
+other = "Connection"
+
+[check_step_authentication]
+other = "Authentication"
+
+[check_step_platform]
+other = "Platform"
+
+[check_step_runner]
+other = "Runner"
+
+[check_step_state_verified]
+other = "verified"
+
+[check_step_state_unconfirmed]
+other = "unconfirmed"
+
+[check_step_state_not_checked]
+other = "not checked"
+
+[check_step_state_unsupported]
+other = "unsupported"
+
+[check_step_state_failed]
+other = "failed"
+
+[trace_reason_canceled]
+other = "observation canceled"
+
+[trace_reason_host_trust]
+other = "host trust rejected"
+
+[trace_reason_authentication]
+other = "SSH authentication rejected"
+
+[trace_reason_configuration]
+other = "configuration failure"
+
+[trace_reason_name_resolution]
+other = "name resolution failure"
+
+[trace_reason_connection_refused]
+other = "connection refused"
+
+[trace_reason_connection_timeout]
+other = "connection or observation timed out"
+
+[trace_reason_connection_reset]
+other = "connection reset"
+
+[trace_reason_connection_closed]
+other = "connection closed"
+
+[trace_reason_remote_prerequisite]
+other = "remote prerequisite failed"
+
+[trace_reason_runner]
+other = "runner unavailable or mismatched"
+
+[trace_reason_operation_failed]
+other = "operation failed; cause unclassified"
+
+[trace_reason_cloud_api]
+other = "cloud API failure"
+
+[run_preview_setup]
+other = "Setup configured: {{.Value}}"
+
+[run_preview_location]
+other = "Remote base: {{.Root}}; resolved project location: {{.Remote}}"
+
+[run_preview_pull]
+other = "Download base: {{.Root}}; checksum: {{.Value}}"

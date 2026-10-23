@@ -9,10 +9,8 @@ import (
     "errors"
     "fmt"
     "io"
-    "path"
     "runtime/debug"
     "strings"
-    "time"
 
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
@@ -60,6 +58,7 @@ type Options struct {
 }
 
 type errorView struct {
+    FailureKind     string `json:"failure_kind,omitempty"`
     Code            string `json:"code"`
     Message         string `json:"message"`
     Hint            string `json:"hint,omitempty"`
@@ -89,10 +88,13 @@ type useResult struct {
     Root      string `json:"root"`
 }
 type checkResult struct {
-    Target    string                `json:"target"`
-    ProjectID string                `json:"project_id"`
-    Report    ssh.Report            `json:"report"`
-    Runner    *execution.RunnerInfo `json:"runner,omitempty"`
+    Target        string                `json:"target"`
+    ProjectID     string                `json:"project_id"`
+    Report        ssh.Report            `json:"report"`
+    Runner        *execution.RunnerInfo `json:"runner,omitempty"`
+    Steps         map[string]string     `json:"steps,omitempty"`
+    ElapsedMillis int64                 `json:"elapsed_millis"`
+    Error         *errorView            `json:"error,omitempty"`
 }
 
 // Execute runs one command and returns the public operation exit code.
@@ -200,56 +202,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         result = useResult{args[0], p.ID, p.Root}
         return nil
     }
-    check := &cobra.Command{Use: "check", Short: l.Text("check_short"), Args: arguments(0, 0)}
-    var timeout time.Duration
-    var verifyRunner bool
-    check.Flags().BoolVar(&verifyRunner, "runner", false, l.Text("flag_runner"))
-    check.Flags().DurationVar(&timeout, "timeout", 20*time.Second, l.Text("flag_timeout"))
-    check.RunE = func(cmd *cobra.Command, _ []string) error {
-        if timeout <= 0 {
-            return fault.New("BAD_CONFIG", "invalid_flags", nil)
-        }
-        root, file, err := config.Discover(cmd.Context(), o.CWD)
-        if err != nil {
-            return err
-        }
-        p, err := o.Store.Existing(root)
-        if err != nil {
-            return err
-        }
-        name, t, err := config.Resolve(target, p, file, cfg)
-        if err != nil {
-            return err
-        }
-        p, err = o.Store.Select(cmd.Context(), root, "")
-        if err != nil {
-            return err
-        }
-        dir := file.RemoteDir
-        if dir == "" {
-            dir = path.Join(t.RemoteBase, p.ID)
-        }
-        requestCtx, cancel := context.WithTimeout(cmd.Context(), timeout)
-        defer cancel()
-        r, err := o.Checker.Check(requestCtx, t, dir, jsonMode || !o.Interactive)
-        checked := checkResult{Target: name, ProjectID: p.ID, Report: r}
-        result = checked
-        if err != nil {
-            return err
-        }
-        if verifyRunner {
-            if o.Runner == nil {
-                return fault.New("BUILD_REQUIRED", "runner_missing", nil)
-            }
-            verified, err := o.Runner.Verify(requestCtx, t, r.Arch, jsonMode || !o.Interactive)
-            if err != nil {
-                return err
-            }
-            checked.Runner = &verified
-            result = checked
-        }
-        return nil
-    }
+    check := newCheckCommand(o, cfg, &target, l, func(value any) { result = value })
     version := &cobra.Command{Use: "version", Short: l.Text("version_short"), Args: arguments(0, 0), RunE: func(_ *cobra.Command, _ []string) error {
         info, _ := debug.ReadBuildInfo()
         result = versionData(info)
@@ -295,7 +248,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         if !errors.As(err, &f) {
             f = fault.Wrap("OPERATION_FAILED", "internal_error", err)
         }
-        view = &errorView{Code: f.Code, Message: l.Text(f.Message, f.Params), Stage: fault.Stage(err)}
+        view = &errorView{FailureKind: ssh.FailureKind(err), Code: f.Code, Message: l.Text(f.Message, f.Params), Stage: fault.Stage(err)}
         view.ProviderCode, _ = f.Params["ProviderCode"].(string)
         view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
         view.AuthStage, _ = f.Params["AuthStage"].(string)
@@ -371,7 +324,7 @@ func earlyOptions(args []string) (bool, string, error) {
             i++
             continue
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" || a == "--depth" || a == "--into" || a == "--concurrency" || a == "--resume-file" || a == "--ack-cursor" || a == "--recovery-budget" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" || a == "--targets" || a == "--report" || a == "--depth" || a == "--into" || a == "--concurrency" || a == "--resume-file" || a == "--ack-cursor" || a == "--recovery-budget" {
             i++
             continue
         }
@@ -505,6 +458,8 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
             }
         }
         fmt.Fprintln(out, l.Text("pull_batch_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.Failed, "Matched": r.Unexamined}))
+    case execution.RunPreview:
+        printPreview(out, r, l)
     case execution.OutputListing:
         printOutputs(out, r, l)
     case sources.PullResult:
@@ -543,6 +498,8 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         if r.Truncated {
             fmt.Fprintln(out, l.Text("runs_truncated"))
         }
+    case checkBatch:
+        printCheckBatch(out, r, l)
     case checkResult:
         fmt.Fprintln(out, l.Text("check_heading", map[string]any{"Target": r.Target}))
         if r.Report.OS == "" {

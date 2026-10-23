@@ -1464,3 +1464,126 @@ other = "部分所选下载失败或未执行；已完成的目标仍可使用�
 
 [pull_batch_summary]
 other = "下载完成 {{.Count}}/{{.Total}}；失败 {{.Value}}，未执行 {{.Matched}}。"
+
+[flag_run_dry]
+other = "完全离线解释提交计划；不连接 SSH、不读取凭据、不分配 ID、不写入状态。"
+
+[run_preview_heading]
+other = "本地提交预览"
+
+[run_preview_target]
+other = "目标：{{.Target}}（{{.Value}}）"
+
+[run_preview_command]
+other = "字面入口参数：{{.Value}}"
+
+[run_preview_environment]
+other = "环境变量名（隐藏值）：{{.Value}}"
+
+[run_preview_policies]
+other = "等待 {{.Millis}} 毫秒；日志尾部 {{.Count}} 行；同步 {{.Mode}}；输出 {{.Paths}}。"
+
+[run_preview_source]
+other = "在 {{.Root}} 下选择 {{.Count}} 个文件，源码大小 {{.Bytes}} 字节。"
+
+[run_preview_not_snapshot]
+other = "这是本地文件选择，不是冻结快照或传输量估计；尚未检查远端先决条件。"
+
+[flag_check_targets]
+other = "检查 1–32 个不同别名，以逗号分隔，不能与 --target 混用。"
+
+[flag_check_report]
+other = "写入私有、可分享的白名单诊断报告，目标仅以序号标识。"
+
+[check_batch_flags]
+other = "请使用正超时和 1–32 个不同的 --targets，不同时使用 --target；报告路径不能为空。"
+
+[check_batch_partial]
+other = "部分目标检查失败或未执行；成功观察结果已保留。"
+
+[check_batch_summary]
+other = "检查通过 {{.Count}}/{{.Total}}；失败 {{.Value}}，未执行 {{.Matched}}。"
+
+[diagnostic_report_invalid]
+other = "报告路径必须不存在，或是已知格式的普通 Loaf 诊断报告文件。"
+
+[diagnostic_report_failed]
+other = "无法写入诊断报告，请检查目标权限。"
+
+[operation_stage_inventory]
+other = "输出浏览"
+
+[check_step_connect]
+other = "连接"
+
+[check_step_authentication]
+other = "认证"
+
+[check_step_platform]
+other = "平台"
+
+[check_step_runner]
+other = "Runner"
+
+[check_step_state_verified]
+other = "已验证"
+
+[check_step_state_unconfirmed]
+other = "未确认"
+
+[check_step_state_not_checked]
+other = "未检查"
+
+[check_step_state_unsupported]
+other = "不支持"
+
+[check_step_state_failed]
+other = "失败"
+
+[trace_reason_canceled]
+other = "观察已取消"
+
+[trace_reason_host_trust]
+other = "主机信任被拒绝"
+
+[trace_reason_authentication]
+other = "SSH 认证被拒绝"
+
+[trace_reason_configuration]
+other = "配置失败"
+
+[trace_reason_name_resolution]
+other = "名称解析失败"
+
+[trace_reason_connection_refused]
+other = "连接被拒绝"
+
+[trace_reason_connection_timeout]
+other = "连接或观察超时"
+
+[trace_reason_connection_reset]
+other = "连接被重置"
+
+[trace_reason_connection_closed]
+other = "连接已关闭"
+
+[trace_reason_remote_prerequisite]
+other = "远端先决条件未满足"
+
+[trace_reason_runner]
+other = "Runner 不可用或版本不匹配"
+
+[trace_reason_operation_failed]
+other = "操作失败，原因未分类"
+
+[trace_reason_cloud_api]
+other = "云平台 API 失败"
+
+[run_preview_setup]
+other = "已配置 setup：{{.Value}}"
+
+[run_preview_location]
+other = "远端基础目录：{{.Root}}；已解析项目位置：{{.Remote}}"
+
+[run_preview_pull]
+other = "下载基础目录：{{.Root}}；校验和：{{.Value}}"

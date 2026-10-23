@@ -23,8 +23,10 @@ type runList = execution.History
 func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any), streamed *bool) []*cobra.Command {
     run := &cobra.Command{Use: "run " + l.Text("run_args"), Short: l.Text("run_short")}
     var wait string
+    var dryRun bool
     var runName string
     var tags []string
+    run.Flags().BoolVar(&dryRun, "dry-run", false, l.Text("flag_run_dry"))
     run.Flags().StringVar(&runName, "name", "", l.Text("flag_run_name"))
     run.Flags().StringArrayVar(&tags, "tag", nil, l.Text("flag_run_tag"))
     run.Flags().StringVar(&wait, "wait", "0s", l.Text("flag_wait"))
@@ -77,6 +79,13 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
         }
         name, machine, err := config.Resolve(*target, personal, file, cfg)
         if err != nil {
+            return err
+        }
+        if dryRun {
+            preview, err := previewRun(cmd, root, file, cfg, personal, name, machine, args, metadata, plan, pullPolicy, budget, tail)
+            if err == nil {
+                result(preview)
+            }
             return err
         }
         if o.Runs == nil {

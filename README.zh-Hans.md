@@ -76,6 +76,18 @@ loaf check --runner
 
 Python、uv 和 GPU 工具属于可选检查项，缺失时不会让能够执行 CPU 程序的机器检查失败。缺少 rsync、不支持的平台或不可写的远端位置则会报告问题。
 
+### 多目标连接检查与诊断导出
+
+```bash
+loaf check --targets lab-a,lab-b --timeout 20s --trace --report /tmp/loaf-diagnostic.json --json
+```
+
+`--targets` 一次检查 1–32 个不同别名，不能与 `--target` 同用。每个目标拥有独立超时，机器模式最多并发 4 个，交互认证串行；失败行与未执行行不会掩盖成功结果。逐项报告连接、认证、平台与 runner 检查状态；普通 check 远端只读，部署／修复仍须 `--runner`。
+
+`error.failure_kind` 和 trace 区分认证、主机信任、名称解析、拒绝、超时、重置、关闭及原因未知的传输故障，不推断是网关还是本地网络。首次连接失败后的成功不计作已建立连接的重连，后者单独计数。
+
+`--report` 原子写入 0600 的白名单诊断：目标仅保留输入序号、已知平台标签、各检查状态、稳定错误分类、时间与安全 trace。报告不含别名、端点、路径、命令、请求正文、环境或凭据；普通 check JSON 仍保留自己的可用诊断。报告文件必须不存在或已有已知格式的 Loaf 诊断，拒绝符号链接与未知文件；报告不依赖 `--trace` 才能采集安全 trace。
+
 ## 运行实验
 
 在项目目录中提交原本准备在远端运行的命令：
@@ -98,6 +110,14 @@ loaf logs <任务ID> -f
 `ps` 默认查询当前项目最近 20 个已提交或提交未确认任务，可用 `--limit` 或 `[ps].limit` 调整数量上限；指定 ID 时只查询该任务。部分查询失败会保留其他成功结果，不会把训练标成失败。`logs` 省略 ID 时选择最近一次已提交或提交未确认任务，不会退回更旧任务；明确的检查、同步失败不替换最近任务。已有任务保留提交时的连接及远端位置，不随项目默认值改变，指定 ID 的查询不能用 `--target` 改向。
 
 需要 runner 的操作必须与本地 CLI 同版本。Loaf 自动部署并验证内置封装，缺失或版本不符时会修复；不下载任意版本，也不热替换正在运行的监督进程。其他版本创建的任务返回 `VERSION_MISMATCH`；升级时请并存保留对应 CLI，并显式使用它操作原有任务。未知记录格式会直接拒绝，不改写数据。
+
+### 提交前完全离线预览
+
+```bash
+loaf run --dry-run --json -- python3 train.py
+```
+
+预览包含目标及选择来源、字面入口 argv、setup 是否配置、环境变量名（不含值）、实际工作文件及源码字节数、输出选择、等待和同步／下载策略，以及逐字段的 `flag`／`project`／`user`／`default` 来源；本地 `loaf use` 为 `local_selection`。未注册项目不分配 ID，也不会读取凭据、连接 SSH、部署 helper 或写入状态。它不冻结快照、不估计网络流量，也不证明远端依赖可用。普通提交仍自动执行先决检查与同步。
 
 ### 寻找任务与离线查看
 
@@ -155,6 +175,22 @@ loaf logs <任务ID> -f --resume "$cursor" --json
 游标绑定软件版本、任务、位置与日志文件，并校验偏移边界内容。文件被替换、截断或边界内容被改写时返回 `LOG_CHANGED`，不会悄悄从尾部重新开始；此时须显式读取新尾部以获取新游标。输出消费失败、取消、认证／信任失败或已交付 end 事件都不触发重启。已接管任务独立继续运行。
 
 提交回执丢失时，Loaf 查询同一个已保存 ID 一次。仍无法确认就返回 `SUBMISSION_UNKNOWN`、原 ID 和操作退出码 3。此时应查询原任务，不要自动另开一次运行。
+
+### 恢复日志会话与多任务等待
+
+```bash
+loaf logs <任务ID> -f --resume-file /tmp/loaf-cursor.json --recovery-budget 2m
+loaf wait r_A r_B --timeout 30m --json
+loaf wait --tag ablation --timeout 1h
+```
+
+`--resume-file` 读取已确认处理的游标并启用恢复。人类终端输出仅在写入成功后保存游标。JSON 和管道输出**不会自动确认下游已处理**：先处理一块数据，再用 `loaf logs <任务ID> --resume-file /tmp/loaf-cursor.json --ack-cursor "$cursor" --json` 保存其 `data.run.log.cursor`。确认操作完全离线。游标文件应放在源码树之外；原子写入不能回退，未知格式和符号链接会被拒绝。
+
+未显式指定 `--recovery-budget` 时，启用恢复仍只重试一次。正预算允许在累计断线等待时间内连续恢复（最多 24h），正常日志流不消耗预算；恢复提示写入 stderr。默认 `logs -f` 不变。输出接收失败、取消、认证或信任失败、结束事件及 `LOG_CHANGED` 均不会重启流。
+
+成功观察以独立文件保存公开的 `last_observation`，包含观察时间、阶段和退出结果；`last_query_failure` 只记录最近失败查询的时间、错误码和阶段。离线 `ps --local` 和 `inspect` 展示这些带时间的事实，不将其作为实时状态；不缓存日志正文或执行环境。
+
+`wait` 在开始时冻结明确 ID 或精确标签匹配的本地集合（1–1000 个任务），轮询各自保存的连接，并返回全部任务、已完成／待完成／查询失败及已观察／未观察覆盖数。不可达任务不会妨碍其他任务的观察。人类输出只报告变化，JSON 为单个有限结果。超时或取消不会停止任务；这不是作业调度器。
 
 ### 可选的项目准备命令
 
@@ -250,6 +286,19 @@ checksum = false
 路径缺失时返回 `OUTPUT_MISSING`（退出码 1），存在的选定输出会尽可能下载。JSON 在错误旁保留 `data`，包含 `paths`、`downloaded_paths`、`missing_paths`、目的地及生效策略；只有 rsync 首次传输成功后才提供 `changed_files`，经过恢复重试时不报告只覆盖最后一次尝试的变更计数。全部缺失不会被当成空下载成功。不安全路径或特殊文件会在传输前拒绝整组选择；相对链接的实际目标必须在选定输出范围内，本地已有链接也不能将写入导向结果目录之外。
 
 运行中、失败、停止的任务都可以取回已有输出。运行中下载是当前内容的拷贝，不是完整 checkpoint 的一致快照；需要一致性时，应等待结束，或让训练脚本原子发布 checkpoint。两个下载写入同一目的地时返回 `PULL_BUSY`；下载通过独立数据锁与清理互斥，不占用远端源码同步锁或执行控制锁。
+
+### 浏览输出与批量对比
+
+```bash
+loaf outputs <任务ID> --depth 2 --limit 200 --json
+loaf outputs <任务ID> --prepare-runner --json  # 明确允许部署或修复辅助程序
+loaf pull r_A r_B --into ./comparison --json
+loaf pull r_A r_B --into ./comparison --concurrency 2 --json
+```
+
+`outputs` 仅浏览任务冻结的输出范围，返回相对路径、类型、大小、修改时间及缺失根目录，并报告已检查根目录与条目的覆盖情况。深度相对于各输出根目录（根为 0），范围 0–20，条目上限 1–1000。`truncated` 和 `depth_limited` 明确标出未访问部分。不读取内容、不计算校验和、不遍历符号链接，也不要求任务成功或仍在运行。默认不会上传辅助程序，缺失或不匹配时返回 `RUNNER_REQUIRED`；只有 `--prepare-runner` 明确允许修复。`pull` 的自动准备行为不变。
+
+多个明确 ID 必须使用 `--into`，各自根据保存的连接和输出路径下载到 `<into>/<任务ID>/`。JSON 保留每个结果或错误及完成、失败、未执行数量，单个失败不会丢弃成功结果。默认串行，`--concurrency 1–4` 显式启用并发，交互认证保持串行。重复下载是增量更新，不删除本地额外文件。单任务 `--to` 仍表示精确目录，不能与批量 `--into` 混用。一次性下载目录若位于源码树中，需要普通忽略或排除规则。
 
 ## 回收已结束任务的数据
 
@@ -577,32 +626,3 @@ Loaf 不调度 GPU 任务、不自动修复环境，也不替代实验追踪工�
 ## 许可证
 
 [MIT](LICENSE)
-
-### 恢复日志会话与多任务等待
-
-```bash
-loaf logs <任务ID> -f --resume-file /tmp/loaf-cursor.json --recovery-budget 2m
-loaf wait r_A r_B --timeout 30m --json
-loaf wait --tag ablation --timeout 1h
-```
-
-`--resume-file` 读取已确认处理的游标并启用恢复。人类终端输出仅在写入成功后保存游标。JSON 和管道输出**不会自动确认下游已处理**：先处理一块数据，再用 `loaf logs <任务ID> --resume-file /tmp/loaf-cursor.json --ack-cursor "$cursor" --json` 保存其 `data.run.log.cursor`。确认操作完全离线。游标文件应放在源码树之外；原子写入不能回退，未知格式和符号链接会被拒绝。
-
-未显式指定 `--recovery-budget` 时，启用恢复仍只重试一次。正预算允许在累计断线等待时间内连续恢复（最多 24h），正常日志流不消耗预算；恢复提示写入 stderr。默认 `logs -f` 不变。输出接收失败、取消、认证或信任失败、结束事件及 `LOG_CHANGED` 均不会重启流。
-
-成功观察以独立文件保存公开的 `last_observation`，包含观察时间、阶段和退出结果；`last_query_failure` 只记录最近失败查询的时间、错误码和阶段。离线 `ps --local` 和 `inspect` 展示这些带时间的事实，不将其作为实时状态；不缓存日志正文或执行环境。
-
-`wait` 在开始时冻结明确 ID 或精确标签匹配的本地集合（1–1000 个任务），轮询各自保存的连接，并返回全部任务、已完成／待完成／查询失败及已观察／未观察覆盖数。不可达任务不会妨碍其他任务的观察。人类输出只报告变化，JSON 为单个有限结果。超时或取消不会停止任务；这不是作业调度器。
-
-### 浏览输出与批量对比
-
-```bash
-loaf outputs <任务ID> --depth 2 --limit 200 --json
-loaf outputs <任务ID> --prepare-runner --json  # 明确允许部署或修复辅助程序
-loaf pull r_A r_B --into ./comparison --json
-loaf pull r_A r_B --into ./comparison --concurrency 2 --json
-```
-
-`outputs` 仅浏览任务冻结的输出范围，返回相对路径、类型、大小、修改时间及缺失根目录，并报告已检查根目录与条目的覆盖情况。深度相对于各输出根目录（根为 0），范围 0–20，条目上限 1–1000。`truncated` 和 `depth_limited` 明确标出未访问部分。不读取内容、不计算校验和、不遍历符号链接，也不要求任务成功或仍在运行。默认不会上传辅助程序，缺失或不匹配时返回 `RUNNER_REQUIRED`；只有 `--prepare-runner` 明确允许修复。`pull` 的自动准备行为不变。
-
-多个明确 ID 必须使用 `--into`，各自根据保存的连接和输出路径下载到 `<into>/<任务ID>/`。JSON 保留每个结果或错误及完成、失败、未执行数量，单个失败不会丢弃成功结果。默认串行，`--concurrency 1–4` 显式启用并发，交互认证保持串行。重复下载是增量更新，不删除本地额外文件。单任务 `--to` 仍表示精确目录，不能与批量 `--into` 混用。一次性下载目录若位于源码树中，需要普通忽略或排除规则。

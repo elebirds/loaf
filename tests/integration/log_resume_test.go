@@ -7,6 +7,7 @@ import (
     "encoding/json"
     "os"
     "path"
+    "path/filepath"
     "testing"
     "time"
 
@@ -38,7 +39,8 @@ func TestPublicLogCursorAcrossProcessesAndChangedLogs(t *testing.T) {
 
     // Consume one confirmed chunk, then cancel this CLI process. The next
     // invocation must use its cursor, not replay the initial tail or execution.
-    original := stopCLICommand(ctx, project, "logs", submitted.ID, "-f", "--json")
+    checkpoint := filepath.Join(t.TempDir(), "cursor.json")
+    original := stopCLICommand(ctx, project, "logs", submitted.ID, "-f", "--resume-file", checkpoint, "--json")
     output, err := original.StdoutPipe()
     if err != nil {
         t.Fatal(err)
@@ -88,7 +90,14 @@ func TestPublicLogCursorAcrossProcessesAndChangedLogs(t *testing.T) {
         t.Fatal("canceling logs stopped the accepted task", current)
     }
 
-    resumed := stopCLICommand(ctx, project, "logs", submitted.ID, "-f", "--resume", cursor, "--json")
+    if _, err := os.Stat(checkpoint); !os.IsNotExist(err) {
+        t.Fatal("JSON output auto-acknowledged processing", err)
+    }
+    if code, out := cli(t, project, "logs", submitted.ID, "--resume-file", checkpoint, "--ack-cursor", cursor, "--json"); code != 0 {
+        t.Fatal(code, string(out))
+    }
+    savedCheckpoint, _ := os.ReadFile(checkpoint)
+    resumed := stopCLICommand(ctx, project, "logs", submitted.ID, "-f", "--resume-file", checkpoint, "--json")
     output, err = resumed.StdoutPipe()
     if err != nil {
         t.Fatal(err)
@@ -130,6 +139,10 @@ func TestPublicLogCursorAcrossProcessesAndChangedLogs(t *testing.T) {
     err = resumed.Wait()
     if err != nil || scanner.Err() != nil || resumedDiagnostic.Len() != 0 || text != second || ends != 1 || terminal.Status != "succeeded" {
         t.Fatal(text, ends, terminal, err, scanner.Err(), resumedDiagnostic.String())
+    }
+    afterCheckpoint, _ := os.ReadFile(checkpoint)
+    if !bytes.Equal(savedCheckpoint, afterCheckpoint) {
+        t.Fatal("piped JSON advanced acknowledged file")
     }
     whole := runCLI(t, project, "logs", submitted.ID, "--json")
     if whole.Log == nil || whole.Log.Text != first+second {

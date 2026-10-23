@@ -92,6 +92,7 @@ func (t *Trace) stage(stage string) func(error) {
         event := TraceStage{Stage: stage, StartedMillis: start.Sub(origin).Milliseconds(), ElapsedMillis: time.Since(start).Milliseconds(), Outcome: "ok"}
         if err != nil {
             event.Outcome = "error"
+            event.Reason = FailureKind(err)
             var f *fault.Error
             if errors.As(err, &f) {
                 event.ErrorCode = f.Code
@@ -140,7 +141,7 @@ func (t *Trace) retried(err error) {
     defer t.mu.Unlock()
     if t.enabled {
         t.report.ReadRetries++
-        reason, code := "ssh_transport", "SSH_FAILED"
+        reason, code := FailureKind(err), "SSH_FAILED"
         var f *fault.Error
         if errors.As(err, &f) {
             code = f.Code

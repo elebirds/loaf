@@ -20,10 +20,12 @@ import (
 
 // RunnerArch observes only the platform needed to deploy a read-only helper.
 // Downloading existing results must not require a writable experiment directory.
-func (c *Client) RunnerArch(ctx context.Context, target config.Target, batch bool) (string, error) {
-    out, err := c.Execute(ctx, target, "uname -s; uname -m", nil, batch)
+func (c *Client) RunnerArch(ctx context.Context, target config.Target, batch bool) (arch string, err error) {
+    finish := c.Trace.stage("platform_probe")
+    defer func() { finish(err) }()
+    out, err := c.executeRead(ctx, target, "uname -s; uname -m", nil, batch)
     if err != nil {
-        return "", err
+        return "", fault.At(err, "platform_probe")
     }
     fields := strings.Fields(string(out))
     if len(fields) != 2 || fields[0] != "Linux" || (fields[1] != "x86_64" && fields[1] != "aarch64") {
@@ -34,13 +36,16 @@ func (c *Client) RunnerArch(ctx context.Context, target config.Target, batch boo
 
 // Outputs reads a transient selection using the matching current helper.
 // It never requests execution.
-func (c *Client) Outputs(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (wire.OutputSelection, error) {
+func (c *Client) Outputs(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (result wire.OutputSelection, err error) {
+    finish := c.Trace.stage("outputs")
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, "outputs") }()
     req.Action = "outputs"
     data, err := json.Marshal(req)
     if err != nil {
         return wire.OutputSelection{}, err
     }
-    out, transportErr := c.Execute(ctx, target, Quote(runner), bytes.NewReader(data), batch)
+    out, transportErr := c.executeRead(ctx, target, Quote(runner), data, batch)
     var response wire.Response
     if err := json.Unmarshal(out, &response); err != nil {
         if transportErr != nil {
@@ -82,7 +87,24 @@ type PullInput struct {
 
 // Pull updates a checked local destination without mirror deletion or in-place
 // writes. files-from uses rsync's native protocol and treats names literally.
-func (r Rsync) Pull(ctx context.Context, target config.Target, runner, destination string, input PullInput, batch bool) (Transfer, error) {
+func (r Rsync) Pull(ctx context.Context, target config.Target, runner, destination string, input PullInput, batch bool) (result Transfer, err error) {
+    attempts := 0
+    var trace *Trace
+    if r.Client != nil {
+        trace = r.Client.Trace
+    }
+    finish := trace.stage("pull")
+    defer func() { finish(err) }()
+    err = retryReadTrace(ctx, trace, func() (err error) {
+        attempts++
+        result, err = r.pull(ctx, target, runner, destination, input, batch)
+        return err
+    })
+    result.Retried = attempts > 1
+    return result, fault.At(err, "pull")
+}
+
+func (r Rsync) pull(ctx context.Context, target config.Target, runner, destination string, input PullInput, batch bool) (Transfer, error) {
     var result Transfer
     if r.Client == nil || r.Client.Binary == "" {
         return result, fault.New("SSH_FAILED", "ssh_missing", nil)
@@ -144,7 +166,7 @@ func (r Rsync) Pull(ctx context.Context, target config.Target, runner, destinati
         if match := pullCode.FindStringSubmatch(diagnostic.String()); match != nil {
             code = match[1]
         }
-        return result, pullFailure(code, err, diagnostic.String())
+        return result, pullFailure(code, session.transportError(err), diagnostic.String())
     }
     result.ChangedFiles = changes.count
     return result, nil

@@ -30,6 +30,7 @@ type Request struct {
     Tail          int               `json:"tail,omitempty"`
     GraceMillis   *int64            `json:"grace_millis,omitempty"`
     Outputs       []string          `json:"outputs,omitempty"`
+    Resume        string            `json:"resume,omitempty"`
 }
 
 // RunRecord is persisted by the remote execution owner.
@@ -80,6 +81,7 @@ type LogChunk struct {
     Text      string `json:"text"`
     Offset    int64  `json:"offset"`
     Truncated bool   `json:"truncated"`
+    Cursor    string `json:"cursor,omitempty"`
 }
 
 // Observation combines a status snapshot with a bounded log tail.

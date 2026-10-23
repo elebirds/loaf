@@ -18,10 +18,15 @@ type Client struct {
     Resolve           ResolveConnection
     AskpassExecutable string
     SensitiveEnv      []string
+    Connections       *Connections
+    Trace             *Trace
 }
 
 // Execute invokes a fixed remote operation with separately encoded input.
-func (c *Client) Execute(ctx context.Context, target config.Target, command string, input io.Reader, noninteractive bool) ([]byte, error) {
+func (c *Client) Execute(ctx context.Context, target config.Target, command string, input io.Reader, noninteractive bool) (out []byte, err error) {
+    finish := c.Trace.stage("ssh_operation")
+    defer func() { finish(err) }()
+    cloudTarget := target.Cloud != nil
     session, err := c.prepare(ctx, target, noninteractive)
     if err != nil {
         return nil, err
@@ -35,8 +40,11 @@ func (c *Client) Execute(ctx context.Context, target config.Target, command stri
     cmd.Stderr = &stderr
     output, err := cmd.Output()
     if err != nil {
-        f := fault.Wrap("SSH_FAILED", "ssh_failed", err)
+        f := fault.Wrap("SSH_FAILED", "ssh_failed", session.transportError(err))
         f.Hint = "ssh_hint"
+        if cloudTarget {
+            f.Hint = "cloud_ssh_hint"
+        }
         // Preserve the original diagnostic without requiring callers to parse English.
         f.Params = map[string]any{"Detail": strings.TrimSpace(stderr.String())}
         return output, f
@@ -85,8 +93,10 @@ func (c *Client) Preflight(ctx context.Context, target config.Target, remoteDir 
     return c.check(ctx, target, remoteDir, batch, true)
 }
 
-func (c *Client) check(ctx context.Context, target config.Target, remoteDir string, noninteractive, minimal bool) (Report, error) {
-    r := Report{Local: map[string]Tool{}, Remote: map[string]Tool{}, Issues: []string{}}
+func (c *Client) check(ctx context.Context, target config.Target, remoteDir string, noninteractive, minimal bool) (r Report, err error) {
+    finish := c.Trace.stage("preflight")
+    defer func() { finish(err) }()
+    r = Report{Local: map[string]Tool{}, Remote: map[string]Tool{}, Issues: []string{}}
     if !config.ValidRemotePath(remoteDir) {
         return r, fault.New("BAD_CONFIG", "invalid_remote", nil)
     }
@@ -112,9 +122,9 @@ func (c *Client) check(ctx context.Context, target config.Target, remoteDir stri
     if minimal {
         script = "minimal=yes\n" + script
     }
-    out, err := c.Execute(ctx, target, "/bin/sh -s -- "+Quote(remoteDir), strings.NewReader(script), noninteractive)
+    out, err := c.executeRead(ctx, target, "/bin/sh -s -- "+Quote(remoteDir), []byte(script), noninteractive)
     if err != nil {
-        return r, err
+        return r, fault.At(err, "preflight")
     }
     fields := strings.Split(string(out), "\x00")
     if len(fields) != 18 || fields[0] != "loaf-probe-1" {

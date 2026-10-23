@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 当前源码包含 v0.2 远端操作，以及 v0.3 的显式 AutoDL 租用与接入命令。已发布的 [v0.1.0-rc.2 压缩包](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环；使用新命令请从当前源码构建。
+> 当前源码目标版本为 v0.4.0-rc.2 候选版，提供离线任务查看、名称／标签、SSH 诊断及显式日志游标续接，并保留命令级云 SSH 复用。已发布的 [v0.1.0-rc.2 压缩包](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环；使用新命令请从当前源码构建。
 
 ## 安装
 
@@ -43,7 +43,7 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-构建会内置 Linux amd64、arm64 远端封装，并生成 `dist/loaf`、平台压缩包和 `loaf_<version>_checksums.txt`。可用 `LOAF_BUILD_TARGETS` 选择其他构建目标，例如 `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`。
+构建会内置 Linux amd64、arm64 远端封装，并生成 `dist/loaf`、平台压缩包和 `loaf_<version>_checksums.txt`。默认构建标识由 `VERSION` 中的目标版本加开发提交和时间戳组成；显式设置 `VERSION` 环境变量可选择准确的软件版本。可用 `LOAF_BUILD_TARGETS` 选择其他构建目标，例如 `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`。
 
 ## 配置科研机器
 
@@ -97,7 +97,24 @@ loaf logs <任务ID> -f
 
 `ps` 默认查询当前项目最近 20 个已提交或提交未确认任务，可用 `--limit` 或 `[ps].limit` 调整数量上限；指定 ID 时只查询该任务。部分查询失败会保留其他成功结果，不会把训练标成失败。`logs` 省略 ID 时选择最近一次已提交或提交未确认任务，不会退回更旧任务；明确的检查、同步失败不替换最近任务。已有任务保留提交时的连接及远端位置，不随项目默认值改变，指定 ID 的查询不能用 `--target` 改向。
 
-需要 runner 的操作必须与本地 CLI 同版本。Loaf 自动部署并验证内置封装，缺失或版本不符时会修复；不下载任意版本，也不热替换正在运行的监督进程。其他版本创建的任务返回 `VERSION_MISMATCH`，请先用对应版本的 CLI 结束这些任务，再升级。未知记录格式会直接拒绝，不改写数据。
+需要 runner 的操作必须与本地 CLI 同版本。Loaf 自动部署并验证内置封装，缺失或版本不符时会修复；不下载任意版本，也不热替换正在运行的监督进程。其他版本创建的任务返回 `VERSION_MISMATCH`；升级时请并存保留对应 CLI，并显式使用它操作原有任务。未知记录格式会直接拒绝，不改写数据。
+
+### 寻找任务与离线查看
+
+提交时为任务指定便于识别的名称和可重复标签：
+
+```bash
+loaf run --name "ablation-seed1" --tag ablation --tag seed1 -- python3 train.py
+loaf ps --name "ablation-seed1" --tag seed1 --json
+loaf ps --local --tag ablation --json
+loaf inspect <任务ID> --json
+```
+
+名称和标签在提交时保存于本地，之后不可替换。名称不必唯一，任务操作仍以 ID 为身份。名称／标签按精确值在有界查询前筛选，重复标签要求全部匹配；不改变命令、远端环境、路径或最近任务选择。
+
+`ps --local`（含指定 ID）与 `inspect <任务ID>` 只读取本地资料，不启动 SSH、不查询云平台、不访问凭据或部署封装，也可查看旧版本任务和已删除别名。JSON 标记 `source: "local"`；除已有清理收据保留的终态外，执行状态为 `unknown`。本地模式拒绝实时 `--status` 筛选及非零 `--wait`。
+
+`inspect` 包含保存的 `version`、当前 `client_version`、`compatible`、冻结的机器／实例身份、提交确认、位置和输出路径，不暴露 SSH 参数、凭据引用或私有执行环境。保存任务的版本错误还提供 `error.expected_version`、`error.actual_version`。旧可执行文件可按版本命名保留，例如 `loaf-v0.4.0-rc.1`，不要覆盖管理运行中任务所需的唯一 CLI。这些命令不下载 CLI，也不迁移任务。
 
 ### 筛选任务历史
 
@@ -115,7 +132,7 @@ loaf run --wait 10s --json -- python3 smoke.py
 loaf ps <任务ID> --wait 30s --json
 ```
 
-从远端确认接管后计算等待预算：窗口内结束时，一次返回终态、退出结果和有限日志；尚未结束时，返回已观察到的状态和原任务 ID，任务继续运行。`--wait 0s` 在接管后返回，最长可等待 5 分钟。这是观察预算，不是训练时限；取消观察不会停止已接管任务。
+从远端确认接管后计算等待预算：窗口内结束时，一次返回终态、退出结果和有限日志；尚未结束时，返回已观察到的状态和原任务 ID，任务继续运行。`--wait 0s` 在接管后返回，最长可等待 5 分钟。这是观察预算，不是训练时限；取消观察不会停止已接管任务。JSON 在确认接管后保留 `submission: "submitted"`，即使之后观察失败、返回 `status: "unknown"` 和错误；`submission: "uncertain"` 则表示仍需查询同一 ID 确认接管。
 
 普通模式显示准备阶段，并在 `run --wait` 期间持续显示日志。JSON 模式只返回一份有限结果，不混入进度文字。持续日志使用 NDJSON：
 
@@ -125,6 +142,17 @@ loaf logs <任务ID> -f --json
 ```
 
 日志默认取最后 100 行，日志文本最多 256 KiB，`log.truncated` 表示省略了输出。持续读取产生 `data.type = "chunk"`，结束时为 `"end"`，任务查询结果在 `data.run` 中；流错误为 `"error"`，带普通错误对象。偏移量按原日志字节计算。程序输出不翻译、不解析成指标；及时看到日志还需要程序主动刷新输出。
+
+若实时日志需要承受一次临时断线，可显式启用续接：
+
+```bash
+loaf logs <任务ID> -f --reconnect
+loaf logs <任务ID> -f --resume "$cursor" --json
+```
+
+有限日志查询通过 `data.log.cursor` 返回游标，流式 chunk 使用 `data.run.log.cursor`。应在消费完该块后保存游标。`--resume` 须配合 `--follow`，不能与显式 `--tail` 同用，并从已确认的原始日志字节偏移续读；与 `--reconnect` 一样，最多允许一次临时断线重连。默认 `logs -f` 仍保持单连接行为。
+
+游标绑定软件版本、任务、位置与日志文件，并校验偏移边界内容。文件被替换、截断或边界内容被改写时返回 `LOG_CHANGED`，不会悄悄从尾部重新开始；此时须显式读取新尾部以获取新游标。输出消费失败、取消、认证／信任失败或已交付 end 事件都不触发重启。已接管任务独立继续运行。
 
 提交回执丢失时，Loaf 查询同一个已保存 ID 一次。仍无法确认就返回 `SUBMISSION_UNKNOWN`、原 ID 和操作退出码 3。此时应查询原任务，不要自动另开一次运行。
 
@@ -219,7 +247,7 @@ checksum = false
 
 默认按大小和修改时间判断文件变化。`--checksum` 可识别同大小、同时间戳的内容变化，代价是两端读取文件。按显式参数、项目偏好、用户偏好顺序覆盖；`--checksum=false` 可以关闭已启用的偏好，`--to` 覆盖默认目的地。
 
-路径缺失时返回 `OUTPUT_MISSING`（退出码 1），存在的选定输出会尽可能下载。JSON 在错误旁保留 `data`，包含 `paths`、`downloaded_paths`、`missing_paths`、目的地及生效策略；只有 rsync 成功完成传输后才提供 `changed_files`。全部缺失不会被当成空下载成功。不安全路径或特殊文件会在传输前拒绝整组选择；相对链接的实际目标必须在选定输出范围内，本地已有链接也不能将写入导向结果目录之外。
+路径缺失时返回 `OUTPUT_MISSING`（退出码 1），存在的选定输出会尽可能下载。JSON 在错误旁保留 `data`，包含 `paths`、`downloaded_paths`、`missing_paths`、目的地及生效策略；只有 rsync 首次传输成功后才提供 `changed_files`，经过恢复重试时不报告只覆盖最后一次尝试的变更计数。全部缺失不会被当成空下载成功。不安全路径或特殊文件会在传输前拒绝整组选择；相对链接的实际目标必须在选定输出范围内，本地已有链接也不能将写入导向结果目录之外。
 
 运行中、失败、停止的任务都可以取回已有输出。运行中下载是当前内容的拷贝，不是完整 checkpoint 的一致快照；需要一致性时，应等待结束，或让训练脚本原子发布 checkpoint。两个下载写入同一目的地时返回 `PULL_BUSY`；下载通过独立数据锁与清理互斥，不占用远端源码同步锁或执行控制锁。
 
@@ -282,7 +310,7 @@ paths = ["outputs", "checkpoints"]
 
 用户配置保存在 `~/.config/loaf/config.toml`，项目标识和个人选择保存在 `~/.local/state/loaf/index.json`，私有任务位置索引保存在同目录的 `runs.json`；执行记录和日志仍保存在绑定的远端机器上。`XDG_CONFIG_HOME` 和 `XDG_STATE_HOME` 可以覆盖这些位置。
 
-当前任务索引使用格式 2，不迁移或覆盖之前的索引；如需保留早期版本的状态，请为 v0.2 设置独立的 `XDG_STATE_HOME`。
+当前任务索引使用格式 2。名称／标签另存于 `run-metadata/` 下的私有格式 1 文件，不改变定位器结构，对应旧 CLI 仍可读取其任务。更早的索引格式会被拒绝，不自动迁移或覆盖；不同索引格式的客户端应使用独立 `XDG_STATE_HOME`。
 
 个人同步默认值放在已有用户配置的 `[sync]` 中，保留原来的 `format_version` 和机器条目：
 
@@ -362,7 +390,9 @@ loaf use gpu-a
 loaf run -- python3 train.py
 ```
 
-`credentials` 显示当前 SSH 地址，默认隐藏密码；只有显式 `--show-password` 才会显示密码。首次主机信任通过原生 SSH 确认，非交互命令不会批准新主机或变化的主机密钥。云连接优先使用密钥，也能通过 OpenSSH 原生 askpass 使用临时获取的密码。密码只在内存中，经私有的临时本地套接字传递，不写入配置、子进程参数或环境变量；临时启动脚本不含密码。云 SSH 连接不复用已有的连接主进程，静态 SSH 机器保留原有行为。
+`credentials` 显示当前 SSH 地址，默认隐藏密码；只有显式 `--show-password` 才会显示密码。首次主机信任通过原生 SSH 确认，非交互命令不会批准新主机或变化的主机密钥。云连接优先使用密钥，也能通过 OpenSSH 原生 askpass 使用临时获取的密码。密码只在内存中，经私有的临时本地套接字传递，不写入配置、子进程参数或环境变量；临时启动脚本不含密码。
+
+云 runner 操作为每个绑定实例及连接配置使用本次命令私有的 OpenSSH 主连接；连接健康期间只解析一次连接信息，探测、封装请求和原生 rsync 共用该认证连接。Loaf 不借用已有主连接，也不改写 SSH 配置。正常退出和取消只关闭本命令创建的连接；父进程生命周期管道保证 CLI 被强制结束后也不会留下持久连接。静态 SSH 机器及前台 `exec`、`ssh`、`forward` 保留原有连接行为。
 
 `bind` 先检查账号能读取该实例，再保存绑定并验证 SSH 认证。`ready` 仅表示平台运行、SSH 认证成功且机器已保存，不表示 Python/CUDA 环境已就绪。`--ready-timeout` 默认 2m，0s 表示仅做一次有界检查。实例已创建但连不上时可能已经计费，请保留 ID 并修复连接，不要重新租卡。可用 `loaf cloud bind gpu-a --request <请求ID>` 恢复同一租用结果，不会创建替代实例。显式 `--replace` 可重绑别名，但历史任务仍刷新其原实例的连接信息。
 
@@ -508,6 +538,19 @@ LOAF_LANG=en loaf check --json
 核心命令支持 `--json`，包含 `schema_version: 1`、稳定的 `ok` 字段，以及结构化数据或错误码。人类可读的 `message` 和 `hint` 可以随语言变化，命令名、字段和错误码保持不变；外部诊断保留原文。操作退出码：0 表示本次操作成功，2 表示参数或配置错误，3 表示提交、停止、前台执行、清理或云变更未确认，1 表示其他失败。训练退出码在 `data.exit_code` 中，不作为 CLI 退出码；成功查询到失败训练时，仍是 `ok: true`、`data.status: "failed"`。未结束任务没有训练退出码，无法确认的结果如实报告未知。
 
 ## 常见问题
+
+```bash
+loaf check --trace --json
+loaf pull <任务ID> --trace --json
+```
+
+`--trace` 为有限 JSON 结果增加有界 `trace` 对象，提供阶段耗时、连接解析、成功建立的私有主连接、重连和只读重试计数。重试事件给出 `private_master_exit` 等稳定原因；操作恢复成功后仍保留首次失败的诊断。普通模式将诊断写入 stderr。收集须显式启用，不记录命令、端点、请求体、密码、token 或环境变量值。
+
+耗时可能嵌套，不应相加。私有主连接计数适用于云 runner 连接，不代表用户静态 SSH 的连接共享；诊断涵盖 SSH 工作流及其云连接查询，不追踪无关的云目录／租用 HTTP 操作。明细最多 512 条，以 `truncated: true` 标记截断，计数仍完整。`check --trace` 保持远端只读，除非另外显式指定 `--runner`。持续流、前台 `exec`、交互终端、隧道及云 watch 不支持 trace。
+
+连接失败会提供稳定的 `error.stage`，例如 `cloud_connection`、`ssh_connect`、`runner_verify`、`sync`、`launch`、`observe`、`pull`，并保留原错误码及可用的 SSH／平台诊断。封装版本验证失败本身不代表可执行文件损坏。
+
+有限只读探测、状态／日志查询、输出检查和下载，在识别到临时传输故障后最多追加一次尝试，退避短暂且可取消。认证、主机密钥、配置和路径错误不重试；默认日志流已输出部分内容后不重启；只有显式 `logs -f --reconnect` 或 `--resume` 才启用游标恢复。源码同步、封装上传、提交、停止、清理和前台命令不自动重放。下载保留已完成文件，并沿用原任务及目的地。
 
 源码缺失时，用 `loaf sync --dry-run` 检查 Git 和 Loaf 的排除规则；项目位于上级仓库的忽略目录中时，仍受该规则约束。命令失败时先查看 `loaf logs`：接管成功后仍可能因解释器、依赖或输入缺失而失败。提交或停止未确认时，应查询原 ID，而非另开替代任务。
 

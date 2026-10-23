@@ -8,6 +8,7 @@ import (
     "testing"
 
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/wire"
 )
 
 func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
@@ -58,6 +59,12 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
         t.Fatal(string(out))
     }
     invoke("sync", "--json")
+    if sshTest := os.Getenv("LOAF_SSH_TEST"); sshTest != "" {
+        command(t, "docker", "cp", sshTest, f.id+":/tmp/linux-client/ssh.test")
+        runner := "/home/researcher/.local/share/loaf/bin/" + wire.Version + "/loaf-runner"
+        out := command(t, "docker", "exec", "--user", "researcher", "-e", "LOAF_NATIVE_SCOPE_RUNNER="+runner, f.id, "/tmp/linux-client/ssh.test", "-test.run=^TestNative(PrivateConnectionWithRsync|ResumableLogConnection)$", "-test.v")
+        t.Log(out)
+    }
     // GNU rsync must not inject -l after SSH's -- when an endpoint includes a
     // user. Exercise both upload and download with this connection form.
     invoke("add", "self", "--ssh", "ssh -F /tmp/linux-client/config researcher@self", "--replace", "--json")

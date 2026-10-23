@@ -2,6 +2,7 @@ package run
 
 import (
     "context"
+    "slices"
     "sync"
     "time"
 
@@ -16,10 +17,15 @@ type HistoryFilters struct {
     Target   string     `json:"target,omitempty"`
     Since    *time.Time `json:"since,omitempty"`
     Until    *time.Time `json:"until,omitempty"`
+    Name     string     `json:"name,omitempty"`
+    Tags     []string   `json:"tags,omitempty"`
 }
 
 // Validate rejects unknown statuses and inverted, inclusive submission boundaries.
 func (f HistoryFilters) Validate() error {
+    if _, err := config.NormalizeRunMetadata(config.RunMetadata{Name: f.Name, Tags: f.Tags}); err != nil {
+        return err
+    }
     for _, status := range f.Statuses {
         switch status {
         case "starting", "running", "succeeded", "failed", "stopped", "unknown":
@@ -47,14 +53,31 @@ type History struct {
     Matched    int            `json:"matched"`
     Unresolved int            `json:"unresolved"`
     Filters    HistoryFilters `json:"filters"`
+    Source     string         `json:"source,omitempty"`
 }
 
 // History queries at most limit locally eligible entries and shares the existing
 // 20-second list budget. An unreachable machine never becomes a training failure.
 func (s Service) History(ctx context.Context, projectID string, filters HistoryFilters, limit int, batch bool) (History, error) {
+    return s.history(ctx, projectID, filters, limit, batch, false)
+}
+
+// LocalHistory lists saved facts without SSH, credentials, or runner deployment.
+// Status filters require a fresh observation and are rejected in this mode.
+func (s Service) LocalHistory(ctx context.Context, projectID string, filters HistoryFilters, limit int) (History, error) {
+    return s.history(ctx, projectID, filters, limit, true, true)
+}
+
+func (s Service) history(ctx context.Context, projectID string, filters HistoryFilters, limit int, batch, local bool) (History, error) {
     result := History{Runs: []View{}, Limit: limit, Filters: filters}
     if err := filters.Validate(); err != nil {
         return result, err
+    }
+    if local && len(filters.Statuses) != 0 {
+        return result, fault.New("BAD_CONFIG", "ps_local_status", nil)
+    }
+    if local {
+        result.Source = "local"
     }
     if limit < 1 || limit > 1000 {
         return result, fault.New("BAD_CONFIG", "ps_invalid_limit", nil)
@@ -72,12 +95,37 @@ func (s Service) History(ctx context.Context, projectID string, filters HistoryF
         if filters.Since != nil && ref.AttemptedAt.Before(*filters.Since) || filters.Until != nil && ref.AttemptedAt.After(*filters.Until) {
             continue
         }
+        ref, err = s.describe(ref)
+        if err != nil {
+            return result, err
+        }
+        if filters.Name != "" && ref.Name != filters.Name {
+            continue
+        }
+        matched := true
+        for _, tag := range filters.Tags {
+            if !slices.Contains(ref.Tags, tag) {
+                matched = false
+                break
+            }
+        }
+        if !matched {
+            continue
+        }
         eligible = append(eligible, ref)
     }
     result.Eligible = len(eligible)
     queryCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
     defer cancel()
     candidates := eligible[:min(len(eligible), limit)]
+    if local {
+        for _, ref := range candidates {
+            result.Runs = append(result.Runs, view(ref, nil))
+        }
+        result.Examined, result.Matched = len(candidates), len(candidates)
+        result.Truncated = len(candidates) < result.Eligible
+        return result, nil
+    }
     observations := s.observeHistory(queryCtx, candidates, batch)
     failed := false
     for _, item := range observations {

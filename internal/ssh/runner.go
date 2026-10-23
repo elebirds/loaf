@@ -10,6 +10,7 @@ import (
     "strings"
 
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -17,14 +18,17 @@ var versionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,100}$`)
 
 // DeployRunner ensures the versioned executable matches the packaged runner.
 // Replacing a mismatched file is atomic and never restarts a live supervisor.
-func (c *Client) DeployRunner(ctx context.Context, target config.Target, version string, binary []byte, noninteractive bool) (string, error) {
+func (c *Client) DeployRunner(ctx context.Context, target config.Target, version string, binary []byte, noninteractive bool) (result string, err error) {
+    finish := c.Trace.stage("runner_verify")
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, "runner_verify") }()
     if !versionPattern.MatchString(version) || version != wire.Version || len(binary) == 0 {
         return "", errors.New("BAD_RUNNER")
     }
     probe := `target="$HOME/.local/share/loaf/bin/` + version + `/loaf-runner"; if [ -f "$target" ]; then printf '%s' "$target"; fi`
-    out, err := c.Execute(ctx, target, probe, nil, noninteractive)
+    out, err := c.executeRead(ctx, target, probe, nil, noninteractive)
     if err != nil {
-        return "", err
+        return "", fault.At(err, "runner_probe")
     }
     request := wire.Request{FormatVersion: wire.FormatVersion, Version: version, Action: "version"}
     remotePath := string(out)
@@ -48,7 +52,10 @@ func (c *Client) DeployRunner(ctx context.Context, target config.Target, version
     return remotePath, err
 }
 
-func (c *Client) uploadRunner(ctx context.Context, target config.Target, version string, binary []byte, noninteractive, replace bool) (string, error) {
+func (c *Client) uploadRunner(ctx context.Context, target config.Target, version string, binary []byte, noninteractive, replace bool) (result string, err error) {
+    finish := c.Trace.stage("runner_upload")
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, "runner_upload") }()
     publish := `if ! ln "$tmp" "$target"; then test -f "$target"; fi; rm "$tmp";`
     exists := `[ -e "$target" ]`
     if replace {
@@ -68,7 +75,14 @@ func (c *Client) uploadRunner(ctx context.Context, target config.Target, version
 }
 
 // Control transports one JSON request without interpolating its fields into Shell.
-func (c *Client) Control(ctx context.Context, target config.Target, runner string, request wire.Request, noninteractive bool) (*wire.RunRecord, error) {
+func (c *Client) Control(ctx context.Context, target config.Target, runner string, request wire.Request, noninteractive bool) (record *wire.RunRecord, err error) {
+    stage := request.Action
+    if stage == "version" {
+        stage = "runner_verify"
+    }
+    finish := c.Trace.stage(stage)
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, stage) }()
     if request.Version != wire.Version {
         return nil, &RemoteError{Code: "VERSION_MISMATCH"}
     }
@@ -76,7 +90,14 @@ func (c *Client) Control(ctx context.Context, target config.Target, runner strin
     if err != nil {
         return nil, err
     }
-    out, sshErr := c.Execute(ctx, target, Quote(runner), bytes.NewReader(data), noninteractive)
+    var out []byte
+    var sshErr error
+    switch request.Action {
+    case "version", "status", "logs":
+        out, sshErr = c.executeRead(ctx, target, Quote(runner), data, noninteractive)
+    default:
+        out, sshErr = c.Execute(ctx, target, Quote(runner), bytes.NewReader(data), noninteractive)
+    }
     var response wire.Response
     if err := json.Unmarshal(out, &response); err != nil {
         if sshErr != nil {

@@ -32,7 +32,7 @@ type ExecResult struct {
 // SSH uses 255 for transport errors, so that value cannot confirm a command result.
 func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, stdin io.Reader, stdout, stderr io.Writer) (ExecResult, error) {
     result := ExecResult{Status: "not_started"}
-    session, err := c.prepare(ctx, target, in.Batch)
+    session, err := c.prepareDirect(ctx, target, in.Batch)
     if err != nil {
         return result, err
     }
@@ -71,7 +71,7 @@ func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, s
 // real terminal descriptors so OpenSSH owns terminal modes and window resizing.
 func (c *Client) Interactive(ctx context.Context, target config.Target, stdin io.Reader, stdout, stderr io.Writer) error {
     cloudTarget := target.Cloud != nil
-    session, err := c.prepare(ctx, target, false)
+    session, err := c.prepareDirect(ctx, target, false)
     if err != nil {
         return err
     }
@@ -99,7 +99,7 @@ func (c *Client) Interactive(ctx context.Context, target config.Target, stdin io
 // Forward keeps a local loopback forwarding on its own foreground SSH connection.
 // No ControlMaster socket is used or closed, even if SSH Config enables sharing.
 func (c *Client) Forward(ctx context.Context, target config.Target, local, remote int, batch bool, stderr io.Writer) error {
-    session, err := c.prepare(ctx, target, batch)
+    session, err := c.prepareDirect(ctx, target, batch)
     if err != nil {
         return err
     }

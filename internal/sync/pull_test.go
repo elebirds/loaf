@@ -32,15 +32,16 @@ func (r *outputRemote) Outputs(_ context.Context, _ config.Target, _ string, req
 }
 
 type outputDownloader struct {
-    calls int
-    input ssh.PullInput
-    err   error
+    calls   int
+    input   ssh.PullInput
+    err     error
+    retried bool
 }
 
 func (d *outputDownloader) Pull(_ context.Context, _ config.Target, _ string, _ string, in ssh.PullInput, _ bool) (ssh.Transfer, error) {
     d.calls++
     d.input = in
-    return ssh.Transfer{ChangedFiles: 2}, d.err
+    return ssh.Transfer{ChangedFiles: 2, Retried: d.retried}, d.err
 }
 
 func TestPullUsesSavedLocationAndKeepsPartialResult(t *testing.T) {
@@ -81,6 +82,17 @@ func TestPullUsesSavedLocationAndKeepsPartialResult(t *testing.T) {
     _, err = svc.Pull(context.Background(), ref, destination, []string{"outputs"}, config.PullPolicy{}, true)
     if !errors.As(err, &f) || f.Code != "BAD_RESPONSE" || downloader.calls != before {
         t.Fatal("trusted an invalid remote selection", err)
+    }
+}
+
+func TestRecoveredPullDoesNotClaimALastAttemptChangeCount(t *testing.T) {
+    remote := &outputRemote{selection: wire.OutputSelection{Available: []string{"outputs"}}}
+    downloader := &outputDownloader{retried: true}
+    svc := PullService{Remote: remote, Receive: downloader, Runner: func(context.Context, config.Target, string, bool) (string, error) { return "/helper", nil }}
+    ref := config.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Version: wire.Version}
+    result, err := svc.Pull(context.Background(), ref, canonicalTemp(t), []string{"outputs"}, config.PullPolicy{}, true)
+    if err != nil || result.ChangedFiles != nil || !reflect.DeepEqual(result.DownloadedPaths, []string{"outputs"}) {
+        t.Fatal("reported only the last attempt as a complete change count", result, err)
     }
 }
 

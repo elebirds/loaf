@@ -2,7 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-version=${VERSION:-dev-$(git rev-parse --short HEAD)-$(date -u +%Y%m%d%H%M%S)}
+release=$(cat VERSION)
+version=${VERSION:-${release}-dev.$(git rev-parse --short HEAD).$(date -u +%Y%m%d%H%M%S)}
 if [[ ! "$version" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,100}$ ]]; then
     echo "Invalid VERSION" >&2
     exit 2

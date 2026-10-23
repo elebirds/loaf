@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Current source includes v0.2 remote operations and explicit AutoDL rental/connection commands for v0.3. The published [v0.1.0-rc.2 archive](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow; build from current source for newer commands.
+> Current source targets v0.4.0-rc.2, a prerelease with offline task inspection, names/tags, SSH diagnostics and opt-in cursor log recovery, alongside command-scoped cloud SSH reuse. The published [v0.1.0-rc.2 archive](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow; build from current source for newer commands.
 
 ## Install
 
@@ -43,7 +43,7 @@ export PATH="$PWD/dist:$PATH"
 loaf --help
 ```
 
-The build embeds Linux amd64 and arm64 runners and produces `dist/loaf`, a platform archive, and `loaf_<version>_checksums.txt`. For other build targets, set `LOAF_BUILD_TARGETS`, for example `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`.
+The build embeds Linux amd64 and arm64 runners and produces `dist/loaf`, a platform archive, and `loaf_<version>_checksums.txt`. Default build identities use the release in `VERSION` plus a development revision and timestamp; an explicit `VERSION` environment variable selects an exact software version. For other build targets, set `LOAF_BUILD_TARGETS`, for example `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64`.
 
 ## Set up a research machine
 
@@ -97,7 +97,24 @@ loaf logs <run-id> -f
 
 `ps` lists the latest submitted or submission-uncertain runs in this project, bounded to 20 by default (`--limit` or `[ps].limit` changes the bound). An ID queries that run only. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection and remote location when project defaults change; `--target` cannot redirect an ID query.
 
-Runner operations require the same software version as the local CLI. Loaf automatically deploys and verifies its bundled runner, repairing a missing or mismatched executable. It does not download an arbitrary release or hot-replace a running supervisor. Tasks created by another version return `VERSION_MISMATCH`; finish them with their matching CLI before upgrading. Unknown record formats are rejected without rewriting them.
+Runner operations require the same software version as the local CLI. Loaf automatically deploys and verifies its bundled runner, repairing a missing or mismatched executable. It does not download an arbitrary release or hot-replace a running supervisor. Tasks created by another version return `VERSION_MISMATCH`; retain their matching CLI alongside an upgrade and invoke it explicitly for those tasks. Unknown record formats are rejected without rewriting them.
+
+### Find tasks and inspect them offline
+
+Give a task a readable name and repeatable tags when submitting:
+
+```bash
+loaf run --name "ablation-seed1" --tag ablation --tag seed1 -- python3 train.py
+loaf ps --name "ablation-seed1" --tag seed1 --json
+loaf ps --local --tag ablation --json
+loaf inspect <run-id> --json
+```
+
+Names and tags are saved locally at submission and remain immutable. Names need not be unique; the run ID remains the identity used for task operations. Name/tag filters match exact values before the bounded queries; repeated tags require all values. They do not change the command, remote environment, paths or latest-run selection.
+
+`ps --local`, including an explicit ID, and `inspect <run-id>` read saved facts without SSH, cloud lookup, credential access or helper deployment. They work with older-version tasks and removed aliases. JSON marks `source: "local"`; execution status is `unknown` unless a retained cleanup receipt already supplies a terminal result. Local mode rejects live `--status` filters and nonzero `--wait`.
+
+`inspect` includes the saved `version`, current `client_version`, `compatible`, frozen machine/instance identity, submission confirmation, locations and output paths. It excludes SSH arguments, credential references and private execution environments. A saved-task version error also returns `error.expected_version` and `error.actual_version`. Keep old executables under versioned names, such as `loaf-v0.4.0-rc.1`, rather than overwriting the only CLI able to control an active task. These commands do not download a CLI or migrate a task.
 
 ### Filter task history
 
@@ -115,7 +132,7 @@ loaf run --wait 10s --json -- python3 smoke.py
 loaf ps <run-id> --wait 30s --json
 ```
 
-Waiting starts after remote acceptance. A task that finishes within the budget returns its final status, exit result, and bounded log tail in the same response. Otherwise Loaf returns the observed state and the same run ID; the task continues. `--wait 0s` returns after acceptance. The maximum wait is 5 minutes. This is an observation budget, not a training timeout; canceling observation does not stop accepted work.
+Waiting starts after remote acceptance. A task that finishes within the budget returns its final status, exit result, and bounded log tail in the same response. Otherwise Loaf returns the observed state and the same run ID; the task continues. `--wait 0s` returns after acceptance. The maximum wait is 5 minutes. This is an observation budget, not a training timeout; canceling observation does not stop accepted work. JSON keeps `submission: "submitted"` after confirmed acceptance, even if a later observation returns `status: "unknown"` and an error. `submission: "uncertain"` means acceptance still needs confirmation against that same ID.
 
 Normal output shows preparation stages and streams logs during `run --wait`. JSON mode returns one finite result without progress text. A following log stream uses NDJSON:
 
@@ -125,6 +142,17 @@ loaf logs <run-id> -f --json
 ```
 
 Log tails default to 100 lines and at most 256 KiB of log text. `log.truncated` reports omitted output. Following reads emit `data.type = "chunk"` and a final `"end"`, with the run observation under `data.run`; stream errors emit `"error"` with the ordinary error object. Offsets count bytes in the source log. Program output is not translated or interpreted as metrics. Programs must flush their own output for timely logs.
+
+For a live log stream that should survive one transient disconnect, opt in:
+
+```bash
+loaf logs <run-id> -f --reconnect
+loaf logs <run-id> -f --resume "$cursor" --json
+```
+
+Finite log queries return `data.log.cursor`; stream chunks return `data.run.log.cursor`. Save the cursor only after consuming its chunk. `--resume` requires `--follow`, cannot be combined with an explicit `--tail`, and continues at that confirmed source-byte position. It also permits one transient reconnection, as does `--reconnect`. Default `logs -f` retains its single-connection behavior.
+
+A cursor is bound to the software version, task, location and log file, with a boundary-integrity guard. Replacement, truncation or rewriting at the saved boundary returns `LOG_CHANGED`, never a silent restart from the tail. Read a fresh tail explicitly to obtain a new cursor when that happens. Output-consumer errors, cancellation, authentication/trust failures and an already-delivered end event do not trigger a restart. Accepted tasks continue independently.
 
 If submission confirmation is lost, Loaf checks the same saved ID once. If still uncertain, it returns `SUBMISSION_UNKNOWN` with that ID and operation exit 3. Query it; do not automatically submit another run.
 
@@ -219,7 +247,7 @@ Relative `base_dir` values use the project root, and Loaf appends the run ID. Ch
 
 Default change detection compares size and modification time. Enable `--checksum` to detect content changes with the same size and timestamp, at the cost of reading files on both ends. Explicit flags override project preferences, then user preferences; `--checksum=false` overrides an enabled preference. `--to` overrides the default destination.
 
-Missing paths produce `OUTPUT_MISSING` (exit 1). Existing selections are downloaded when possible; JSON retains `paths`, `downloaded_paths`, `missing_paths`, destination, and effective policy in `data` alongside the error. `changed_files` is present only after a successful rsync transfer. An all-missing selection is never an empty success. Unsafe paths or special files reject the selection before transfer; relative links must resolve within the selected trees. Existing destination links cannot redirect writes outside the result directory.
+Missing paths produce `OUTPUT_MISSING` (exit 1). Existing selections are downloaded when possible; JSON retains `paths`, `downloaded_paths`, `missing_paths`, destination, and effective policy in `data` alongside the error. `changed_files` is present only after a successful rsync transfer without a recovery retry; a recovered transfer omits it rather than reporting only the last attempt's changes. An all-missing selection is never an empty success. Unsafe paths or special files reject the selection before transfer; relative links must resolve within the selected trees. Existing destination links cannot redirect writes outside the result directory.
 
 Running, failed, and stopped tasks can all have useful outputs. A running pull copies current contents, not a consistent checkpoint snapshot; wait for completion or have training publish checkpoints atomically when consistency matters. Two downloads to the same destination are rejected with `PULL_BUSY`; downloads coordinate with cleanup through a separate data lock, without holding the remote source-sync or execution-control locks.
 
@@ -282,7 +310,7 @@ Target selection follows `--target`, the current project's `loaf use` setting, t
 
 User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside it in `runs.json`; execution records and logs remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
 
-The current run index uses format 2. Previous indexes are rejected without migration or overwriting; use a separate `XDG_STATE_HOME` for v0.2 when retaining an earlier version's state.
+The current run index uses format 2. Names/tags use separate private format-1 files under `run-metadata/`, leaving the existing locator schema unchanged so matching older CLIs can still read their tasks. Previous index formats are rejected without migration or overwriting; use separate `XDG_STATE_HOME` locations for clients requiring different index formats.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 
@@ -362,7 +390,9 @@ loaf use gpu-a
 loaf run -- python3 train.py
 ```
 
-`credentials` shows the current SSH endpoint, redacting its password. Only explicit `--show-password` reveals it. Establish first-host trust with native SSH; noninteractive commands never approve a new or changed host key. Cloud connections prefer keys and can use a fetched password through native OpenSSH askpass. Passwords stay in memory behind a temporary private local socket, not in configuration, subprocess arguments or environment variables. The short-lived launcher contains no password. Cloud SSH connections do not reuse a pre-existing multiplexed master; static SSH targets retain their original behavior.
+`credentials` shows the current SSH endpoint, redacting its password. Only explicit `--show-password` reveals it. Establish first-host trust with native SSH; noninteractive commands never approve a new or changed host key. Cloud connections prefer keys and can use a fetched password through native OpenSSH askpass. Passwords stay in memory behind a temporary private local socket, not in configuration, subprocess arguments or environment variables. The short-lived launcher contains no password.
+
+Cloud runner operations share one private, command-scoped OpenSSH master per bound instance and connection configuration. Connection details are resolved once while that master is healthy; its authenticated connection carries probes, runner requests, and native rsync. Loaf never borrows a pre-existing master or writes SSH configuration. Normal exit and cancellation close only this command's masters; a parent-lifetime pipe also prevents an orphaned persistent connection if the CLI is killed. Static SSH targets and foreground `exec`, `ssh`, and `forward` retain their original connection behavior.
 
 `bind` checks that the account can inspect this instance, saves the binding, then verifies authenticated SSH. `ready` means platform running + SSH authenticated + target saved, not Python/CUDA ready. `--ready-timeout` defaults to 2m (0s makes one bounded check). A created but unreachable instance may already be billing: keep its ID and fix its connection, rather than renting another. Retry a saved acquisition with `loaf cloud bind gpu-a --request <request-id>`; it never creates a replacement. An explicit `--replace` can rebind an alias; older runs still refresh their original instance's endpoint.
 
@@ -508,6 +538,19 @@ Language precedence is `--lang`, `LOAF_LANG`, then `language` in the user config
 Core commands support `--json` with `schema_version: 1`, a stable `ok` field, and structured data or an error code. Human-readable `message` and `hint` can change language; command names, keys, and error codes do not. External diagnostics retain their original text. Operation exit codes are 0 for a successful operation, 2 for arguments/configuration, 3 for unconfirmed submission, stopping, foreground execution, cleanup, or cloud mutation, and 1 for other failures. The training exit code belongs to `data.exit_code`, not the CLI exit status. A successful query of failed training has `ok: true` and `data.status: "failed"`. Nonterminal tasks have no training exit code; unknown outcomes are reported honestly.
 
 ## Troubleshooting
+
+```bash
+loaf check --trace --json
+loaf pull <run-id> --trace --json
+```
+
+`--trace` adds a bounded `trace` object to a finite JSON result, including stage timings, connection resolutions, successful private masters, reconnects and read retries. Retry events carry stable reasons such as `private_master_exit`; a recovered operation can succeed while its trace retains the initial failure. Human traces go to stderr. Collection is opt-in and omits commands, endpoints, request bodies, passwords, tokens and environment values.
+
+Timings may be nested, so do not sum them. Private-master counters apply to cloud runner connections, not the user's static SSH sharing. The trace profiles the SSH workflow, including its cloud connection lookup, not unrelated cloud catalog/allocation HTTP operations. Details stop at 512 events with `truncated: true`, while counters remain complete. `check --trace` stays read-only remotely unless `--runner` is also explicit. Trace is not supported for following streams, foreground `exec`, interactive terminals, tunnels or cloud watch.
+
+Connection failures include a stable `error.stage`, such as `cloud_connection`, `ssh_connect`, `runner_verify`, `sync`, `launch`, `observe`, or `pull`, while retaining the original error code and available SSH/provider diagnostics. A runner verification failure is not itself evidence of a damaged executable.
+
+Finite read-only probes, status/log queries, output checks, and downloads make at most one extra attempt after a recognized transient transport failure, with a short cancellable backoff. Authentication, host-key, configuration, and path failures are not retried. Default log streams are not restarted after partial output; explicitly opt in to cursor recovery with `logs -f --reconnect` or `--resume`. Source sync, runner upload, submission, stop, cleanup, and foreground commands are never automatically replayed. Downloads retain completed files and reuse the original run and destination.
 
 For missing source files, use `loaf sync --dry-run` to inspect Git and Loaf exclusions. A project inside a parent repository's ignored directory remains subject to that ignore rule. For a failed command, inspect `loaf logs`; an accepted run can still fail because an interpreter, dependency, or input is missing. For a lost submission or stop confirmation, query the saved ID instead of starting a replacement task.
 

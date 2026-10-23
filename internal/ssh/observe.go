@@ -20,7 +20,10 @@ type RemoteError struct{ Code string }
 func (e *RemoteError) Error() string { return e.Code }
 
 // Observe returns a finite remote observation, optionally after bounded waiting.
-func (c *Client) Observe(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (wire.Observation, error) {
+func (c *Client) Observe(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (result wire.Observation, err error) {
+    finish := c.Trace.stage("observe")
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, "observe") }()
     if req.Version != wire.Version {
         return wire.Observation{}, &RemoteError{Code: "VERSION_MISMATCH"}
     }
@@ -29,7 +32,7 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
     if err != nil {
         return wire.Observation{}, err
     }
-    out, transportErr := c.Execute(ctx, target, Quote(runner), bytes.NewReader(data), batch)
+    out, transportErr := c.executeRead(ctx, target, Quote(runner), data, batch)
     var response wire.Response
     if err := json.Unmarshal(out, &response); err != nil {
         if transportErr != nil {
@@ -37,7 +40,7 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
         }
         return wire.Observation{}, errors.New("BAD_RESPONSE")
     }
-    result := wire.Observation{Record: response.Record}
+    result = wire.Observation{Record: response.Record}
     if response.Log != nil {
         result.Log = *response.Log
     }
@@ -63,7 +66,10 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
 }
 
 // Follow decodes one cancellable SSH stream. It never signals a remote run.
-func (c *Client) Follow(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool, emit func(wire.LogEvent) error) error {
+func (c *Client) Follow(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool, emit func(wire.LogEvent) error) (err error) {
+    finish := c.Trace.stage("log_follow")
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, "log_follow") }()
     if req.Version != wire.Version {
         return &RemoteError{Code: "VERSION_MISMATCH"}
     }
@@ -95,6 +101,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     ended := false
     decoder := json.NewDecoder(output)
     var streamErr error
+    decodeFailure := false
     for {
         var event struct {
             wire.LogEvent
@@ -106,6 +113,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
         }
         if err != nil {
             streamErr = err
+            decodeFailure = true
             break
         }
         if event.Record != nil && event.Record.Request.Version != wire.Version {
@@ -131,10 +139,15 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     }
     waitErr := cmd.Wait()
     if streamErr != nil {
+        if decodeFailure {
+            f := fault.Wrap("SSH_FAILED", "ssh_failed", session.transportError(streamErr))
+            f.Params = map[string]any{"Detail": strings.TrimSpace(diagnostic.String())}
+            return f
+        }
         return streamErr
     }
     if waitErr != nil || !ended {
-        f := fault.Wrap("SSH_FAILED", "ssh_failed", waitErr)
+        f := fault.Wrap("SSH_FAILED", "ssh_failed", session.transportError(waitErr))
         f.Params = map[string]any{"Detail": strings.TrimSpace(diagnostic.String())}
         return f
     }

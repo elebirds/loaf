@@ -62,6 +62,7 @@ Use `exec` for an authorized foreground machine operation, not as a faster submi
 ## Keep the ID; inspect the result
 
 - Save `data.run_id`. IDs are project-scoped and stay bound to their submitted machine and location.
+- `data.submission: "submitted"` preserves confirmed acceptance even if later observation fails with `status: "unknown"`. `"uncertain"` requires querying the same ID; neither observation failure nor a nonzero CLI exit authorizes another submission.
 - `ok` describes the CLI operation. Inspect `data.status` and `data.exit_code` for the experiment result; CLI exit 0 does not mean training succeeded.
 - `--wait 10s` is an observation budget, not a runtime limit. If still running, query the same ID later. Use `--wait 0s` for immediate return after acceptance.
 
@@ -72,7 +73,19 @@ loaf logs <run-id> --tail 100 --json
 
 Prefer finite queries over a busy polling loop. Log tails are line- and byte-bounded; `log.truncated` means earlier output was omitted. For explicitly requested live observation, `loaf logs <run-id> -f --json` emits NDJSON chunks and an end/error result. Canceling observation does not stop accepted work.
 
+For explicitly requested continuous logs, `logs <run-id> -f --reconnect --json` allows one cursor-safe transient reconnection. Save `data.run.log.cursor` after consuming a chunk, or `data.log.cursor` from a finite query. Use `logs <run-id> -f --resume <cursor> --json` to continue manually; do not combine resume with tail. A changed/replaced log returns `LOG_CHANGED`; obtaining a fresh tail is an explicit reset, not automatic gap recovery. Default following remains single-connection. Cancellation or a failed output consumer never restarts a stream.
+
+## Find and inspect saved tasks offline
+
+Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigation. Names/tags are local, immutable and not identities; keep the run ID. `ps --name` matches exactly, repeated `--tag` requires all tags, and filters run before bounded remote observation.
+
+`ps --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Local lists reject live status filters/nonzero wait. Preserve and explicitly use matching older CLIs for old tasks; do not edit locators or migrate records.
+
 ## Handle uncertainty without duplicate experiments
+
+Cloud runner operations reuse a private native SSH master only within one CLI invocation, without borrowing the user's master. Let one `pull` select multiple paths instead of launching a separate CLI for every file. Finite reads/downloads may make one bounded transient-transport retry; mutations and foreground commands are not replayed. Inspect `error.stage` and the original error code/diagnostic to distinguish cloud lookup, SSH authentication, runner verification, sync, submission, observation, and download failures. Do not reinstall a runner merely because its verification connection failed.
+
+`check --trace --json` or a finite runner command with `--trace` reports safe phase timings, private-master/retry counts and stable recovery reasons. Inspect the trace even on success when diagnosing a recovered connection. Do not infer health of a proxy, gateway or training environment from SSH success alone. Traces omit secrets/commands and do not profile unrelated cloud HTTP operations.
 
 `SUBMISSION_UNKNOWN` (operation exit 3) includes the original saved ID. Query that ID; do not automatically replace or replay the run. An unreachable machine or `unknown` result is not proof of training failure. `ps` lists can contain successful rows alongside query errors.
 

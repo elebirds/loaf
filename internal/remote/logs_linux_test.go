@@ -100,3 +100,69 @@ func TestQueryDoesNotCreateDirectoriesOrRewriteUnknownRecords(t *testing.T) {
         t.Fatal("rewrote unknown run format")
     }
 }
+
+func TestLogCursorResumesBytesAndRejectsChangedIdentityOrBoundary(t *testing.T) {
+    root := managedRoot(t)
+    req := wire.Request{FormatVersion: 1, Version: wire.Version, Root: root, ProjectID: "project", RunID: "cursor", Tail: 100}
+    dir, err := runPath(req)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if err := os.Mkdir(dir, 0700); err != nil {
+        t.Fatal(err)
+    }
+    if chunk, err := readLog(dir, 100, nil); err != nil || chunk.Text != "" || chunk.Offset != 0 {
+        t.Fatal(chunk, err)
+    }
+    path := filepath.Join(dir, "output.log")
+    first, err := readLogRequest(req, "")
+    if err != nil || first.Offset != 0 || first.Cursor == "" {
+        t.Fatal(first, err)
+    }
+    writeSource(t, dir, "output.log", "first 中文\n")
+    initial, err := readLogRequest(req, first.Cursor)
+    if err != nil || initial.Text != "first 中文\n" || initial.Cursor == "" {
+        t.Fatal(initial, err)
+    }
+    f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err := f.WriteString("second\n"); err != nil {
+        t.Fatal(err)
+    }
+    f.Close()
+    resumed, err := readLogRequest(req, initial.Cursor)
+    if err != nil || resumed.Text != "second\n" || resumed.Offset != int64(len("first 中文\nsecond\n")) {
+        t.Fatal(resumed, err)
+    }
+    other := req
+    other.RunID = "other"
+    if _, err := readLogRequest(other, initial.Cursor); err == nil || err.Error() != "BAD_LOG_CURSOR" {
+        t.Fatal(err)
+    }
+    if err := os.WriteFile(path, []byte("rewritten content that is longer than the cursor"), 0600); err != nil {
+        t.Fatal(err)
+    }
+    if _, err := readLogRequest(req, initial.Cursor); err == nil || err.Error() != "LOG_CHANGED" {
+        t.Fatal("accepted same-inode rewrite", err)
+    }
+    writeSource(t, dir, "output.log", "first 中文\nsecond\n")
+    fresh, err := readLogRequest(req, "")
+    if err != nil {
+        t.Fatal(err)
+    }
+    if err := os.Rename(path, path+".old"); err != nil {
+        t.Fatal(err)
+    }
+    writeSource(t, dir, "output.log", "first 中文\nsecond\n")
+    if _, err := readLogRequest(req, fresh.Cursor); err == nil || err.Error() != "LOG_CHANGED" {
+        t.Fatal("accepted replacement", err)
+    }
+    if err := os.Remove(path); err != nil {
+        t.Fatal(err)
+    }
+    if _, err := readLogRequest(req, fresh.Cursor); err == nil || err.Error() != "LOG_CHANGED" {
+        t.Fatal("accepted disappearance", err)
+    }
+}

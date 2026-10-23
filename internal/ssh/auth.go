@@ -19,13 +19,55 @@ import (
 type ResolveConnection func(context.Context, config.Target) (config.Target, string, error)
 
 type connectionSession struct {
-    target config.Target
-    batch  bool
-    env    []string
-    close  func()
+    target     config.Target
+    batch      bool
+    env        []string
+    close      func()
+    masterDone <-chan struct{}
+}
+
+// scopedTransportError keeps the identity of the private master behind a failed
+// operation. Native mux clients can exit 255 without any diagnostic when that
+// master disappears; an exit code alone cannot distinguish a disconnection.
+type scopedTransportError struct {
+    cause      error
+    masterDone <-chan struct{}
+}
+
+func (e *scopedTransportError) Error() string { return e.cause.Error() }
+func (e *scopedTransportError) Unwrap() error { return e.cause }
+
+func (s connectionSession) transportError(err error) error {
+    if err == nil || s.masterDone == nil {
+        return err
+    }
+    return &scopedTransportError{cause: err, masterDone: s.masterDone}
+}
+
+func (e *scopedTransportError) disconnected() bool {
+    // The mux client and the master's Wait goroutine may finish in either
+    // order. Synchronize briefly on our own master, not arbitrary SSH exits.
+    timer := time.NewTimer(25 * time.Millisecond)
+    defer timer.Stop()
+    select {
+    case <-e.masterDone:
+        return true
+    case <-timer.C:
+        return false
+    }
 }
 
 func (c *Client) prepare(ctx context.Context, target config.Target, batch bool) (connectionSession, error) {
+    if c.Connections != nil && target.Cloud != nil {
+        if err := Validate(target); err != nil {
+            return connectionSession{}, err
+        }
+        return c.Connections.prepare(ctx, c, target, batch)
+    }
+    return c.prepareDirect(ctx, target, batch)
+}
+
+func (c *Client) prepareDirect(ctx context.Context, target config.Target, batch bool) (connectionSession, error) {
     session := connectionSession{target: target, batch: batch, close: func() {}}
     if err := Validate(target); err != nil {
         return session, err
@@ -42,9 +84,12 @@ func (c *Client) prepare(ctx context.Context, target config.Target, batch bool) 
     if c.Resolve == nil {
         return session, fault.New("CLOUD_FAILED", "cloud_failed", nil)
     }
+    c.Trace.resolved()
+    finish := c.Trace.stage("cloud_connection")
     resolved, password, err := c.Resolve(ctx, target)
+    finish(err)
     if err != nil {
-        return session, err
+        return session, fault.At(err, "cloud_connection")
     }
     if resolved.Cloud != nil {
         return session, fault.New("BAD_CONFIG", "cloud_config", nil)

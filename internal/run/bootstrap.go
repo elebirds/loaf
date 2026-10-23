@@ -3,6 +3,7 @@ package run
 
 import (
     "context"
+    "errors"
 
     "github.com/elebirds/loaf/internal/bundle"
     "github.com/elebirds/loaf/internal/config"
@@ -34,7 +35,15 @@ func (b Bootstrap) Verify(ctx context.Context, target config.Target, arch string
     }
     path, err := b.Remote.DeployRunner(ctx, target, wire.Version, binary, batch)
     if err != nil {
-        return RunnerInfo{}, fault.Wrap("SSH_FAILED", "runner_failed", err)
+        var known *fault.Error
+        if errors.As(err, &known) {
+            return RunnerInfo{}, fault.At(err, "runner_verify")
+        }
+        code := errorCode(err)
+        if code == "QUERY_FAILED" {
+            code = "SSH_FAILED"
+        }
+        return RunnerInfo{}, fault.At(fault.Wrap(code, "runner_failed", err), "runner_verify")
     }
     return RunnerInfo{path, wire.Version, len(binary)}, nil
 }

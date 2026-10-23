@@ -1,6 +1,7 @@
 package cli
 
 import (
+    "context"
     "encoding/json"
     "fmt"
     "io"
@@ -21,6 +22,10 @@ type runList = execution.History
 func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any), streamed *bool) []*cobra.Command {
     run := &cobra.Command{Use: "run " + l.Text("run_args"), Short: l.Text("run_short")}
     var wait string
+    var runName string
+    var tags []string
+    run.Flags().StringVar(&runName, "name", "", l.Text("flag_run_name"))
+    run.Flags().StringArrayVar(&tags, "tag", nil, l.Text("flag_run_tag"))
     run.Flags().StringVar(&wait, "wait", "0s", l.Text("flag_wait"))
     run.Args = func(cmd *cobra.Command, args []string) error {
         if len(args) > 0 && cmd.ArgsLenAtDash() != 0 {
@@ -29,6 +34,10 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
         return nil
     }
     run.RunE = func(cmd *cobra.Command, args []string) error {
+        metadata, err := config.NormalizeRunMetadata(config.RunMetadata{Name: runName, Tags: tags})
+        if err != nil {
+            return err
+        }
         root, file, err := config.Discover(cmd.Context(), o.CWD)
         if err != nil {
             return err
@@ -84,7 +93,7 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
         if !jsonMode && policy.Mode == "update" {
             fmt.Fprintln(o.Err, l.Text("sync_update_warning"))
         }
-        submitted, err := o.Runs.Submit(cmd.Context(), execution.SubmitInput{Project: personal, File: file, Target: name, Connection: machine, RemoteDir: remoteDir, Plan: plan, Args: args, Batch: jsonMode || !o.Interactive}, func(stage string) {
+        submitted, err := o.Runs.Submit(cmd.Context(), execution.SubmitInput{Project: personal, File: file, Target: name, Connection: machine, RemoteDir: remoteDir, Plan: plan, Args: args, Metadata: metadata, Batch: jsonMode || !o.Interactive}, func(stage string) {
             if !jsonMode {
                 fmt.Fprintln(o.Err, l.Text("run_progress_"+stage))
             }
@@ -122,7 +131,7 @@ func newRunCommands(o Options, cfg config.Global, target *string, l *i18n.Locali
     }
     ps := newPSCommand(o, cfg, target, l, result)
     logs := newLogsCommand(o, cfg, target, l, result, streamed)
-    return []*cobra.Command{run, ps, logs, newStopCommand(o, cfg, target, l, result)}
+    return []*cobra.Command{run, ps, logs, newStopCommand(o, cfg, target, l, result), newInspectCommand(o, l, result)}
 }
 
 func runProject(cmd *cobra.Command, o Options, target *string) (config.Project, config.ProjectFile, error) {
@@ -144,10 +153,16 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
     var wait, since, until, listTarget string
     var limit int
     var statuses []string
+    var local bool
+    var name string
+    var tags []string
     cmd := &cobra.Command{Use: "ps " + l.Text("run_id_arg"), Short: l.Text("ps_short"), Args: arguments(0, 1)}
     cmd.Flags().StringVar(&wait, "wait", "0s", l.Text("flag_ps_wait"))
     cmd.Flags().IntVar(&limit, "limit", 20, l.Text("flag_limit"))
     cmd.Flags().StringArrayVar(&statuses, "status", nil, l.Text("ps_flag_status"))
+    cmd.Flags().BoolVar(&local, "local", false, l.Text("flag_ps_local"))
+    cmd.Flags().StringVar(&name, "name", "", l.Text("ps_flag_name"))
+    cmd.Flags().StringArrayVar(&tags, "tag", nil, l.Text("ps_flag_tag"))
     cmd.Flags().StringVar(&since, "since", "", l.Text("ps_flag_since"))
     cmd.Flags().StringVar(&until, "until", "", l.Text("ps_flag_until"))
     // A local flag replaces the inherited selector only for list filtering. It
@@ -158,10 +173,10 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
         if err != nil {
             return err
         }
-        if len(args) == 0 && budget > 0 {
+        if (len(args) == 0 || local) && budget > 0 {
             return fault.New("BAD_CONFIG", "invalid_flags", nil)
         }
-        listFlags := []string{"status", "since", "until", "target", "limit"}
+        listFlags := []string{"status", "since", "until", "target", "limit", "name", "tag"}
         if len(args) == 1 {
             for _, flag := range listFlags {
                 if cmd.Flags().Changed(flag) {
@@ -169,7 +184,11 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
                 }
             }
         }
-        if o.Runs == nil {
+        service := o.Runs
+        if local {
+            service = &execution.Service{Index: o.Store, Metadata: o.Store}
+        }
+        if service == nil {
             return fault.New("SSH_FAILED", "ssh_missing", nil)
         }
         root, file, err := config.Discover(cmd.Context(), o.CWD)
@@ -182,7 +201,14 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
         }
         jsonMode, _ := cmd.Flags().GetBool("json")
         if len(args) == 1 {
-            ref, err := o.Runs.Select(project.ID, args[0])
+            if local {
+                details, err := service.Inspect(project, args[0])
+                if err == nil {
+                    result(details)
+                }
+                return err
+            }
+            ref, err := service.Select(project.ID, args[0])
             if err != nil {
                 return err
             }
@@ -193,7 +219,7 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
                     return err
                 }
             }
-            observed, err := o.Runs.Observe(cmd.Context(), ref, budget, tail, jsonMode || !o.Interactive)
+            observed, err := service.Observe(cmd.Context(), ref, budget, tail, jsonMode || !o.Interactive)
             if budget == 0 {
                 observed.Log = nil
             }
@@ -208,7 +234,7 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
         if err != nil {
             return err
         }
-        filters := execution.HistoryFilters{Statuses: statuses, Target: listTarget}
+        filters := execution.HistoryFilters{Statuses: statuses, Target: listTarget, Name: name, Tags: tags}
         for _, boundary := range []struct {
             value   string
             changed bool
@@ -230,7 +256,12 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
         if cmd.Flags().Changed("target") && !config.ValidName(listTarget) {
             return fault.New("BAD_CONFIG", "invalid_target", nil)
         }
-        list, err := o.Runs.History(cmd.Context(), project.ID, filters, maximum, jsonMode || !o.Interactive)
+        var list execution.History
+        if local {
+            list, err = service.LocalHistory(cmd.Context(), project.ID, filters, maximum)
+        } else {
+            list, err = service.History(cmd.Context(), project.ID, filters, maximum, jsonMode || !o.Interactive)
+        }
         result(list)
         return err
     }
@@ -240,10 +271,17 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
 func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any), streamed *bool) *cobra.Command {
     var tail int
     var follow bool
+    var resume string
+    var reconnect bool
     cmd := &cobra.Command{Use: "logs " + l.Text("run_id_arg"), Short: l.Text("logs_short"), Args: arguments(0, 1)}
     cmd.Flags().IntVar(&tail, "tail", 100, l.Text("flag_tail"))
     cmd.Flags().BoolVarP(&follow, "follow", "f", false, l.Text("flag_follow"))
+    cmd.Flags().StringVar(&resume, "resume", "", l.Text("flag_log_resume"))
+    cmd.Flags().BoolVar(&reconnect, "reconnect", false, l.Text("flag_log_reconnect"))
     cmd.RunE = func(cmd *cobra.Command, args []string) error {
+        if ((cmd.Flags().Changed("resume") || reconnect) && !follow) || (cmd.Flags().Changed("resume") && (resume == "" || cmd.Flags().Changed("tail"))) {
+            return fault.New("BAD_CONFIG", "log_resume_flags", nil)
+        }
         project, file, err := runProject(cmd, o, target)
         if err != nil {
             return err
@@ -272,7 +310,13 @@ func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
             if jsonMode {
                 *streamed = true
             }
-            last, err := o.Runs.Follow(cmd.Context(), ref, 0, lines, jsonMode || !o.Interactive, func(v execution.View, kind string) error {
+            observer := o.Runs.Follow
+            if reconnect || resume != "" {
+                observer = func(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, emit func(execution.View, string) error) (execution.View, error) {
+                    return o.Runs.FollowResumable(ctx, ref, wait, tail, batch, resume, emit)
+                }
+            }
+            last, err := observer(cmd.Context(), ref, 0, lines, jsonMode || !o.Interactive, func(v execution.View, kind string) error {
                 if jsonMode {
                     return json.NewEncoder(o.Out).Encode(envelope{SchemaVersion: 1, OK: true, Data: struct {
                         Type string         `json:"type"`
@@ -316,6 +360,15 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
         state = l.Text("run_status_" + state)
     }
     fmt.Fprintf(out, "%s  %s  %s", v.ID, v.Target, state)
+    if v.Name != "" {
+        fmt.Fprintf(out, "  %q", v.Name)
+    }
+    if len(v.Tags) > 0 {
+        fmt.Fprintf(out, "  %v", v.Tags)
+    }
+    if v.Status == "unknown" && v.Submission == "submitted" {
+        fmt.Fprintf(out, "  %s", l.Text("run_submission_confirmed"))
+    }
     if v.Phase != "" {
         fmt.Fprintf(out, "  %s", l.Text("run_phase_"+v.Phase))
     }

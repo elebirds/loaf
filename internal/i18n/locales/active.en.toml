@@ -1191,3 +1191,174 @@ other = "Clone data disk: failed."
 
 [cloud_clone_data_unknown]
 other = "Clone data disk: status unknown."
+
+[cloud_ssh_hint]
+other = "Inspect this instance's SSH endpoint and host key. Loaf uses the bound cloud credentials; an interrupted connection does not mean an accepted experiment stopped."
+
+[operation_stage]
+other = "Failed stage: {{.Stage}}."
+
+[run_submission_confirmed]
+other = "submission confirmed; query this same ID"
+
+[operation_stage_cloud_connection]
+other = "cloud connection lookup"
+
+[operation_stage_ssh_connect]
+other = "SSH authentication and connection"
+
+[operation_stage_preflight]
+other = "execution prerequisites"
+
+[operation_stage_platform_probe]
+other = "remote platform detection"
+
+[operation_stage_runner_probe]
+other = "runner path lookup"
+
+[operation_stage_runner_verify]
+other = "runner version verification"
+
+[operation_stage_runner_upload]
+other = "runner upload"
+
+[operation_stage_sync]
+other = "source synchronization"
+
+[operation_stage_launch]
+other = "experiment submission"
+
+[operation_stage_status]
+other = "saved-run status query"
+
+[operation_stage_observe]
+other = "experiment observation"
+
+[operation_stage_logs]
+other = "log query"
+
+[operation_stage_log_follow]
+other = "live log observation"
+
+[operation_stage_outputs]
+other = "output selection"
+
+[operation_stage_pull]
+other = "output transfer"
+
+[operation_stage_stop]
+other = "stop request"
+
+[operation_stage_clean]
+other = "run cleanup"
+
+[run_metadata_invalid]
+other = "Use a printable name of at most 128 characters and at most 16 nonempty tags of 64 characters each."
+
+[run_metadata_immutable]
+other = "Saved task names and tags cannot be replaced."
+
+[run_metadata_unavailable]
+other = "Task annotation storage is unavailable."
+
+[flag_run_name]
+other = "Human-readable task name; does not replace the run ID."
+
+[flag_run_tag]
+other = "Task tag; repeat to add tags."
+
+[flag_ps_local]
+other = "Read saved task facts only; do not connect or query execution status."
+
+[ps_flag_name]
+other = "Match the exact saved task name before querying."
+
+[ps_flag_tag]
+other = "Require this saved tag; repeat to require all tags."
+
+[ps_local_status]
+other = "Local task facts cannot satisfy live status filters. Omit --status or --local."
+
+[inspect_short]
+other = "Inspect one saved task offline, including its required CLI version."
+
+[inspect_args]
+other = "<run-id>"
+
+[inspect_instance]
+other = "Bound instance: {{.Provider}}/{{.Product}}, account {{.Account}}, ID {{.ID}}."
+
+[inspect_destination]
+other = "Bound SSH destination: {{.Destination}}."
+
+[inspect_local]
+other = "Saved local facts; execution status was not queried."
+
+[inspect_version]
+other = "Task version: {{.Version}}; current CLI: {{.Client}}."
+
+[inspect_location]
+other = "Project: {{.Root}}; remote directory: {{.Remote}}."
+
+[inspect_outputs]
+other = "Saved output paths: {{.Paths}}."
+
+[inspect_use_version]
+other = "Use CLI {{.Version}} explicitly for remote operations on this task; it is not migrated."
+
+[flag_trace]
+other = "Report safe SSH-stage timings and connection/retry counts for a finite command."
+
+[trace_finite_only]
+other = "--trace supports finite commands, not terminal, forwarding, exec or following streams."
+
+[trace_summary]
+other = "SSH trace: {{.Millis}} ms; resolutions {{.Resolutions}}, private masters {{.Masters}}, reconnects {{.Reconnects}}, read retries {{.Retries}}."
+
+[trace_stage]
+other = "{{.Stage}}: {{.Millis}} ms; {{.Outcome}} {{.Code}} {{.Reason}}"
+
+[trace_outcome_ok]
+other = "ok"
+
+[trace_outcome_error]
+other = "error"
+
+[trace_outcome_retry]
+other = "retry"
+
+[trace_reason_private_master_exit]
+other = "private master exited"
+
+[trace_reason_cloud_transport]
+other = "transient cloud connection lookup failure"
+
+[trace_reason_ssh_transport]
+other = "transient SSH transport failure"
+
+[trace_truncated]
+other = "Trace details reached the 512-event limit; counters remain complete."
+
+[operation_stage_ssh_operation]
+other = "SSH operation"
+
+[operation_stage_read_retry]
+other = "Read recovery"
+
+[flag_log_resume]
+other = "Continue from this log cursor; requires --follow and excludes --tail."
+
+[flag_log_reconnect]
+other = "Allow one transient reconnection from the last confirmed log cursor; requires --follow."
+
+[log_resume_flags]
+other = "Log resume/reconnect requires --follow; a nonempty --resume cursor cannot be combined with --tail."
+
+[log_cursor_invalid]
+other = "The log cursor is malformed or belongs to another task or software version."
+
+[log_changed]
+other = "The log was replaced, truncated or rewritten at the saved cursor."
+
+[log_changed_hint]
+other = "Read a fresh tail without --resume and save its new cursor before continuing."

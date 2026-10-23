@@ -33,6 +33,8 @@ type RunRef struct {
     AttemptedAt *time.Time  `json:"attempted_at,omitempty"`
     Submission  string      `json:"submission"`
     Cleanup     *RunCleanup `json:"cleanup,omitempty"`
+    Name        string      `json:"-"`
+    Tags        []string    `json:"-"`
 }
 
 // RunCleanup preserves availability separately from the original execution
@@ -134,7 +136,12 @@ func (s *Store) Runs(projectID string) ([]RunRef, error) {
             refs = append(refs, ref)
         }
     }
-    sort.Slice(refs, func(i, j int) bool { return refs[i].AttemptedAt.After(*refs[j].AttemptedAt) })
+    sort.Slice(refs, func(i, j int) bool {
+        if refs[i].AttemptedAt.Equal(*refs[j].AttemptedAt) {
+            return refs[i].ID < refs[j].ID
+        }
+        return refs[i].AttemptedAt.After(*refs[j].AttemptedAt)
+    })
     return refs, nil
 }
 

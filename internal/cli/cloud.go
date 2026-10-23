@@ -44,12 +44,15 @@ type cloudCredentials struct {
     Password   *string          `json:"password,omitempty"`
 }
 
-func newCloudCommand(o Options, cfg config.Global, l *i18n.Localizer, result func(any), streamed *bool) *cobra.Command {
+func newCloudCommand(o Options, cfg config.Global, l *i18n.Localizer, result func(any), streamed *bool, before func(*cobra.Command, []string) error) *cobra.Command {
     command := &cobra.Command{Use: "cloud", Short: l.Text("cloud_short"), Args: arguments(0, 0)}
     var account, product string
     command.PersistentFlags().StringVar(&account, "account", "", l.Text("cloud_flag_account"))
     command.PersistentFlags().StringVar(&product, "product", "", l.Text("cloud_flag_product"))
-    command.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+    command.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+        if err := before(cmd, args); err != nil {
+            return err
+        }
         if jsonMode, _ := cmd.Flags().GetBool("json"); jsonMode {
             o.Interactive = false
         }

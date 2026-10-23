@@ -1191,3 +1191,174 @@ other = "克隆数据盘：拷贝失败。"
 
 [cloud_clone_data_unknown]
 other = "克隆数据盘：状态未知。"
+
+[cloud_ssh_hint]
+other = "请检查此实例的 SSH 连接地址和主机密钥。Loaf 使用已绑定的云凭据；连接中断不代表已接管的实验停止。"
+
+[operation_stage]
+other = "失败阶段：{{.Stage}}。"
+
+[run_submission_confirmed]
+other = "提交已确认；请查询同一任务 ID"
+
+[operation_stage_cloud_connection]
+other = "获取云实例连接信息"
+
+[operation_stage_ssh_connect]
+other = "SSH 认证与建连"
+
+[operation_stage_preflight]
+other = "执行前置检查"
+
+[operation_stage_platform_probe]
+other = "检测远端平台"
+
+[operation_stage_runner_probe]
+other = "查找封装路径"
+
+[operation_stage_runner_verify]
+other = "验证封装版本"
+
+[operation_stage_runner_upload]
+other = "上传封装"
+
+[operation_stage_sync]
+other = "同步源码"
+
+[operation_stage_launch]
+other = "提交实验"
+
+[operation_stage_status]
+other = "查询原任务状态"
+
+[operation_stage_observe]
+other = "观察实验状态"
+
+[operation_stage_logs]
+other = "查询日志"
+
+[operation_stage_log_follow]
+other = "跟随实验日志"
+
+[operation_stage_outputs]
+other = "检查输出选择"
+
+[operation_stage_pull]
+other = "传输输出"
+
+[operation_stage_stop]
+other = "请求停止"
+
+[operation_stage_clean]
+other = "清理任务数据"
+
+[run_metadata_invalid]
+other = "名称须为不超过 128 字符的可打印文本；标签最多 16 个，每个非空且不超过 64 字符。"
+
+[run_metadata_immutable]
+other = "不能替换已保存的任务名称和标签。"
+
+[run_metadata_unavailable]
+other = "任务名称和标签存储不可用。"
+
+[flag_run_name]
+other = "便于识别的任务名称，不替代任务 ID。"
+
+[flag_run_tag]
+other = "任务标签，可重复指定。"
+
+[flag_ps_local]
+other = "只读本地任务资料，不连接或查询执行状态。"
+
+[ps_flag_name]
+other = "查询前按已保存的任务名称精确筛选。"
+
+[ps_flag_tag]
+other = "要求包含此标签；重复指定时须全部匹配。"
+
+[ps_local_status]
+other = "本地资料不能满足实时状态筛选，请去掉 --status 或 --local。"
+
+[inspect_short]
+other = "离线查看一项已保存任务及其所需 CLI 版本。"
+
+[inspect_args]
+other = "<任务 ID>"
+
+[inspect_instance]
+other = "绑定实例：{{.Provider}}/{{.Product}}，账号 {{.Account}}，ID {{.ID}}。"
+
+[inspect_destination]
+other = "绑定 SSH 目标：{{.Destination}}。"
+
+[inspect_local]
+other = "以下为本地资料，未查询远端执行状态。"
+
+[inspect_version]
+other = "任务版本：{{.Version}}；当前 CLI：{{.Client}}。"
+
+[inspect_location]
+other = "项目：{{.Root}}；远端目录：{{.Remote}}。"
+
+[inspect_outputs]
+other = "保存的输出路径：{{.Paths}}。"
+
+[inspect_use_version]
+other = "远端操作请显式使用 CLI {{.Version}}；该任务不会迁移。"
+
+[flag_trace]
+other = "为有限命令报告脱敏 SSH 阶段耗时及连接／重试计数。"
+
+[trace_finite_only]
+other = "--trace 适用于有限命令，不用于终端、隧道、exec 或持续流。"
+
+[trace_summary]
+other = "SSH 诊断：{{.Millis}} 毫秒；连接解析 {{.Resolutions}} 次，私有主连接 {{.Masters}} 个，重连 {{.Reconnects}} 次，只读重试 {{.Retries}} 次。"
+
+[trace_stage]
+other = "{{.Stage}}：{{.Millis}} 毫秒；{{.Outcome}} {{.Code}} {{.Reason}}"
+
+[trace_outcome_ok]
+other = "成功"
+
+[trace_outcome_error]
+other = "失败"
+
+[trace_outcome_retry]
+other = "重试"
+
+[trace_reason_private_master_exit]
+other = "私有主连接已退出"
+
+[trace_reason_cloud_transport]
+other = "云连接查询出现临时传输故障"
+
+[trace_reason_ssh_transport]
+other = "SSH 临时传输故障"
+
+[trace_truncated]
+other = "诊断明细达到 512 条上限，计数仍为完整结果。"
+
+[operation_stage_ssh_operation]
+other = "SSH 操作"
+
+[operation_stage_read_retry]
+other = "只读恢复"
+
+[flag_log_resume]
+other = "从此日志游标续读，须配合 --follow，不能同时指定 --tail。"
+
+[flag_log_reconnect]
+other = "允许从最后确认的日志游标重连一次，须配合 --follow。"
+
+[log_resume_flags]
+other = "日志续接／重连须配合 --follow；--resume 游标不能为空，也不能同时指定 --tail。"
+
+[log_cursor_invalid]
+other = "日志游标无效，或属于其他任务／软件版本。"
+
+[log_changed]
+other = "日志已被替换、截断，或游标处内容被改写。"
+
+[log_changed_hint]
+other = "请去掉 --resume 重新读取日志尾部，并保存新的游标后续读。"

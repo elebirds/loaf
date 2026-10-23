@@ -54,22 +54,27 @@ type Options struct {
     In           io.Reader
     Out, Err     io.Writer
     Interactive  bool
+    Trace        *ssh.Trace
 }
 
 type errorView struct {
-    Code         string `json:"code"`
-    Message      string `json:"message"`
-    Hint         string `json:"hint,omitempty"`
-    Detail       string `json:"detail,omitempty"`
-    ProviderCode string `json:"provider_code,omitempty"`
-    AuthStage    string `json:"auth_stage,omitempty"`
-    HTTPStatus   int    `json:"http_status,omitempty"`
+    Code            string `json:"code"`
+    Message         string `json:"message"`
+    Hint            string `json:"hint,omitempty"`
+    Detail          string `json:"detail,omitempty"`
+    ProviderCode    string `json:"provider_code,omitempty"`
+    AuthStage       string `json:"auth_stage,omitempty"`
+    HTTPStatus      int    `json:"http_status,omitempty"`
+    Stage           string `json:"stage,omitempty"`
+    ExpectedVersion string `json:"expected_version,omitempty"`
+    ActualVersion   string `json:"actual_version,omitempty"`
 }
 type envelope struct {
-    SchemaVersion int        `json:"schema_version"`
-    OK            bool       `json:"ok"`
-    Data          any        `json:"data,omitempty"`
-    Error         *errorView `json:"error,omitempty"`
+    SchemaVersion int              `json:"schema_version"`
+    OK            bool             `json:"ok"`
+    Data          any              `json:"data,omitempty"`
+    Error         *errorView       `json:"error,omitempty"`
+    Trace         *ssh.TraceReport `json:"trace,omitempty"`
 }
 type addResult struct {
     Target      string `json:"target"`
@@ -90,6 +95,7 @@ type checkResult struct {
 
 // Execute runs one command and returns the public operation exit code.
 func Execute(ctx context.Context, args []string, o Options) int {
+    o.Trace.Reset()
     jsonMode, preferred, earlyErr := earlyOptions(args)
     cfg, cfgErr := o.Store.Load()
     if preferred == "" {
@@ -113,6 +119,22 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.SetArgs(args)
     root.PersistentFlags().String("lang", "auto", l.Text("flag_lang"))
     root.PersistentFlags().Bool("json", false, l.Text("flag_json"))
+    root.PersistentFlags().Bool("trace", false, l.Text("flag_trace"))
+    root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+        enabled, _ := cmd.Flags().GetBool("trace")
+        if !enabled {
+            return nil
+        }
+        follow, _ := cmd.Flags().GetBool("follow")
+        if follow || cmd.Name() == "exec" || cmd.Name() == "ssh" || cmd.Name() == "forward" || cmd.Name() == "watch" {
+            return fault.New("BAD_CONFIG", "trace_finite_only", nil)
+        }
+        if o.Trace == nil {
+            o.Trace = &ssh.Trace{}
+        }
+        o.Trace.Enable()
+        return nil
+    }
     root.PersistentFlags().StringVar(&target, "target", "", l.Text("flag_target"))
     root.PersistentFlags().BoolP("help", "h", false, l.Text("flag_help"))
     root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error {
@@ -245,7 +267,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     root.AddCommand(newCleanCommand(o, &target, l, func(value any) { result = value }))
-    root.AddCommand(newCloudCommand(o, cfg, l, func(value any) { result = value }, &streamed))
+    root.AddCommand(newCloudCommand(o, cfg, l, func(value any) { result = value }, &streamed, root.PersistentPreRunE))
     err := earlyErr
     if err == nil {
         err = langErr
@@ -269,10 +291,14 @@ func Execute(ctx context.Context, args []string, o Options) int {
         if !errors.As(err, &f) {
             f = fault.Wrap("OPERATION_FAILED", "internal_error", err)
         }
-        view = &errorView{Code: f.Code, Message: l.Text(f.Message, f.Params)}
+        view = &errorView{Code: f.Code, Message: l.Text(f.Message, f.Params), Stage: fault.Stage(err)}
         view.ProviderCode, _ = f.Params["ProviderCode"].(string)
         view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
         view.AuthStage, _ = f.Params["AuthStage"].(string)
+        if f.Code == "VERSION_MISMATCH" {
+            view.ExpectedVersion, _ = f.Params["Expected"].(string)
+            view.ActualVersion, _ = f.Params["Actual"].(string)
+        }
         if f.Hint != "" {
             parameters := f.Params
             if view.AuthStage != "" {
@@ -302,15 +328,21 @@ func Execute(ctx context.Context, args []string, o Options) int {
         if streamed && result == nil {
             result = map[string]string{"type": "error"}
         }
-        if err := json.NewEncoder(o.Out).Encode(envelope{1, view == nil, result, view}); err != nil {
+        if err := json.NewEncoder(o.Out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: result, Error: view, Trace: o.Trace.Snapshot()}); err != nil {
             return 1
         }
     } else if !jsonMode {
+        if trace := o.Trace.Snapshot(); trace != nil {
+            printTrace(o.Err, *trace, l)
+        }
         if result != nil {
             printResult(o.Out, result, l, view == nil)
         }
         if view != nil {
             fmt.Fprintln(o.Err, view.Message)
+            if view.Stage != "" {
+                fmt.Fprintln(o.Err, l.Text("operation_stage", map[string]any{"Stage": l.Text("operation_stage_" + view.Stage)}))
+            }
             if view.Detail != "" {
                 fmt.Fprintln(o.Err, view.Detail)
             }
@@ -335,7 +367,7 @@ func earlyOptions(args []string) (bool, string, error) {
             i++
             continue
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" {
             i++
             continue
         }
@@ -406,7 +438,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
         if f.Name == "target" && strings.HasPrefix(c.CommandPath(), "loaf cloud") {
             return
         }
-        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean") {
+        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean" || c.Name() == "inspect") {
             return
         }
         name := "--" + f.Name
@@ -465,20 +497,25 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         printPull(out, r, l, ok)
     case cleanBatch:
         printClean(out, r, l)
+    case execution.LocalDetails:
+        printLocalDetails(out, r, l)
     case execution.View:
         printRun(out, r, l)
     case runList:
+        if r.Source == "local" {
+            fmt.Fprintln(out, l.Text("inspect_local"))
+        }
         for _, run := range r.Runs {
             printRun(out, run, l)
         }
         if len(r.Runs) == 0 {
-            if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Since != nil || r.Filters.Until != nil {
+            if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Name != "" || len(r.Filters.Tags) > 0 || r.Filters.Since != nil || r.Filters.Until != nil {
                 fmt.Fprintln(out, l.Text("ps_no_matches"))
             } else {
                 fmt.Fprintln(out, l.Text("runs_empty"))
             }
         }
-        if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Since != nil || r.Filters.Until != nil || r.Truncated {
+        if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Name != "" || len(r.Filters.Tags) > 0 || r.Filters.Since != nil || r.Filters.Until != nil || r.Truncated {
             fmt.Fprintln(out, l.Text("ps_scan_summary", map[string]any{"Count": r.Examined, "Total": r.Eligible, "Matched": r.Matched}))
         }
         if r.Unresolved > 0 {

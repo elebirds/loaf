@@ -13,7 +13,8 @@ import (
 
 // Clean sends one destructive request to the separately deployed current helper.
 // A transport failure is not proof that deletion failed or completed.
-func (c *Client) Clean(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (*wire.CleanupReceipt, error) {
+func (c *Client) Clean(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (receipt *wire.CleanupReceipt, err error) {
+    defer func() { err = fault.At(err, "clean") }()
     if req.Version != wire.Version {
         return nil, cleanVersionError(req.Version)
     }

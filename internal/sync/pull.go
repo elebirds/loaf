@@ -129,7 +129,9 @@ func (s PullService) Pull(ctx context.Context, ref config.RunRef, destination st
             return result, err
         }
         result.DownloadedPaths = append(result.DownloadedPaths, selected.Available...)
-        result.ChangedFiles = &transferred.ChangedFiles
+        if !transferred.Retried {
+            result.ChangedFiles = &transferred.ChangedFiles
+        }
     }
     if len(selected.Missing) > 0 {
         f := fault.New("OUTPUT_MISSING", "pull_missing", nil)

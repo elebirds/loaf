@@ -36,11 +36,20 @@ type SyncInput struct {
 // directory and timestamp/permission-only updates. It does not estimate bytes.
 type Transfer struct {
     ChangedFiles int `json:"changed_files"`
+    // Retried means earlier transfer effects cannot be counted from the last
+    // successful rsync process alone. It is not a completed-file estimate.
+    Retried bool `json:"-"`
 }
 
 // Sync mirrors or updates selected working files. Only rsync carries the payload.
-func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root string, input SyncInput, batch bool) (Transfer, error) {
-    var result Transfer
+func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root string, input SyncInput, batch bool) (result Transfer, err error) {
+    var trace *Trace
+    if r.Client != nil {
+        trace = r.Client.Trace
+    }
+    finish := trace.stage("sync")
+    defer func() { finish(err) }()
+    defer func() { err = fault.At(err, "sync") }()
     if r.Client == nil || r.Client.Binary == "" {
         return result, fault.New("SSH_FAILED", "ssh_missing", nil)
     }

@@ -8,6 +8,8 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/i18n"
+    "github.com/elebirds/loaf/internal/ssh"
     sources "github.com/elebirds/loaf/internal/sync"
 )
 
@@ -23,7 +25,7 @@ type pullBatch struct {
     Unexamined int       `json:"unexamined"`
 }
 
-func batchPull(ctx context.Context, o Options, project config.Project, refs []config.RunRef, into string, paths []string, override bool, policy config.PullPolicy, concurrency int, batch bool) (pullBatch, error) {
+func batchPull(ctx context.Context, o Options, project config.Project, refs []config.RunRef, into string, paths []string, override bool, policy config.PullPolicy, concurrency int, batch bool, l *i18n.Localizer) (pullBatch, error) {
     parent, err := sources.Destination(project.Root, o.CWD, into, "", policy)
     if err != nil {
         return pullBatch{}, err
@@ -63,7 +65,7 @@ func batchPull(ctx context.Context, o Options, project config.Project, refs []co
                 examined[i] = true
                 result.Runs[i].Result = pulled
                 if err != nil {
-                    result.Runs[i].Error = &errorView{Code: executionErrorCode(err), Stage: fault.Stage(err)}
+                    result.Runs[i].Error = batchError(err, l)
                 }
             }
         }()
@@ -76,6 +78,7 @@ func batchPull(ctx context.Context, o Options, project config.Project, refs []co
     for i, row := range result.Runs {
         if !examined[i] {
             result.Unexamined++
+            result.Runs[i].Error = &errorView{Code: "NOT_EXAMINED", Message: l.Text("pull_not_examined")}
         } else if row.Error != nil {
             result.Failed++
         } else {
@@ -94,4 +97,15 @@ func executionErrorCode(err error) string {
         return f.Code
     }
     return "QUERY_FAILED"
+}
+
+// Batch errors retain stable codes and a complete localized message, without
+// dumping arbitrary native diagnostics into every row.
+func batchError(err error, l *i18n.Localizer) *errorView {
+    result := &errorView{Code: executionErrorCode(err), Stage: fault.Stage(err), FailureKind: ssh.FailureKind(err), Message: l.Text("run_query")}
+    var f *fault.Error
+    if errors.As(err, &f) {
+        result.Message = l.Text(f.Message, f.Params)
+    }
+    return result
 }

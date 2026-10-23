@@ -59,7 +59,7 @@ func newPullCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
                 return err
             }
             jsonMode, _ := cmd.Flags().GetBool("json")
-            pulled, err := batchPull(cmd.Context(), o, project, refs, into, paths, cmd.Flags().Changed("path"), policy, concurrency, jsonMode || !o.Interactive)
+            pulled, err := batchPull(cmd.Context(), o, project, refs, into, paths, cmd.Flags().Changed("path"), policy, concurrency, jsonMode || !o.Interactive, l)
             result(pulled)
             return err
         }

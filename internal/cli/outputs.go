@@ -54,7 +54,12 @@ func newOutputsCommand(o Options, target *string, l *i18n.Localizer, result func
 func printOutputs(out io.Writer, r execution.OutputListing, l *i18n.Localizer) {
     fmt.Fprintln(out, l.Text("outputs_heading", map[string]any{"ID": r.RunID}))
     for _, entry := range r.Entries {
-        fmt.Fprintf(out, "%s  %d  %s  %s\n", entry.Type, entry.Size, entry.ModifiedAt.Format("2006-01-02T15:04:05Z07:00"), strconv.Quote(entry.Path))
+        kind := entry.Type
+        switch kind {
+        case "file", "directory", "symlink":
+            kind = l.Text("output_type_" + kind)
+        }
+        fmt.Fprintf(out, "%s  %d  %s  %s\n", kind, entry.Size, entry.ModifiedAt.Format("2006-01-02T15:04:05Z07:00"), strconv.Quote(entry.Path))
     }
     for _, name := range r.Missing {
         fmt.Fprintln(out, l.Text("output_missing_entry", map[string]any{"Path": strconv.Quote(name)}))

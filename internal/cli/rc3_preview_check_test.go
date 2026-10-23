@@ -79,7 +79,7 @@ func TestMultiTargetCheckExportsAllowlistAndKeepsPartialResults(t *testing.T) {
     report := filepath.Join(t.TempDir(), "diagnostic.json")
     for _, lang := range []string{"en", "zh-Hans"} {
         code, out, stderr := run(t, o, "check", "--targets", "ok,bad", "--trace", "--report", report, "--lang", lang, "--json")
-        if code != 1 || stderr != "" || !strings.Contains(out, `"completed":1`) || !strings.Contains(out, `"failure_kind":"name_resolution"`) {
+        if code != 1 || stderr != "" || strings.Contains(out, `"message":""`) || !strings.Contains(out, `"completed":1`) || !strings.Contains(out, `"failure_kind":"name_resolution"`) {
             t.Fatal(code, out, stderr)
         }
         data, err := os.ReadFile(report)

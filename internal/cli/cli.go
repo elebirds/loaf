@@ -454,7 +454,7 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         for _, row := range r.Runs {
             printPull(out, row.Result, l, row.Error == nil)
             if row.Error != nil {
-                fmt.Fprintln(out, row.Error.Code)
+                fmt.Fprintln(out, row.Error.Code+": "+row.Error.Message)
             }
         }
         fmt.Fprintln(out, l.Text("pull_batch_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.Failed, "Matched": r.Unexamined}))

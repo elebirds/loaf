@@ -446,7 +446,7 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
     }
     fmt.Fprintln(out)
     if v.LastObservation != nil {
-        fmt.Fprintln(out, l.Text("last_observation", map[string]any{"Value": v.LastObservation.Status, "Code": v.LastObservation.Phase, "Stage": v.LastObservation.ObservedAt.Format(time.RFC3339)}))
+        fmt.Fprintln(out, l.Text("last_observation", map[string]any{"Value": localizedRunState(v.LastObservation.Status, l), "Code": localizedRunPhase(v.LastObservation.Phase, l), "Stage": v.LastObservation.ObservedAt.Format(time.RFC3339)}))
         if v.LastObservation.ExitCode != nil {
             fmt.Fprintln(out, l.Text("last_observed_exit", map[string]any{"Value": *v.LastObservation.ExitCode}))
         }
@@ -460,4 +460,18 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
             fmt.Fprintln(out, l.Text("logs_truncated"))
         }
     }
+}
+
+func localizedRunState(state string, l *i18n.Localizer) string {
+    switch state {
+    case "starting", "running", "succeeded", "failed", "stopped", "unknown":
+        return l.Text("run_status_" + state)
+    }
+    return state
+}
+func localizedRunPhase(phase string, l *i18n.Localizer) string {
+    if phase == "" {
+        return ""
+    }
+    return l.Text("run_phase_" + phase)
 }

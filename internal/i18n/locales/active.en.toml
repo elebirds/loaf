@@ -1596,3 +1596,30 @@ other = "latest query interrupted; retaining dated observation"
 
 [trace_reason_observation_timeout]
 other = "observation budget expired"
+
+[output_type_file]
+other = "file"
+
+[output_type_directory]
+other = "directory"
+
+[output_type_symlink]
+other = "symlink"
+
+[preview_source_flag]
+other = "explicit flag"
+
+[preview_source_project]
+other = "project config"
+
+[preview_source_user]
+other = "user config"
+
+[preview_source_default]
+other = "built-in default"
+
+[preview_source_local_selection]
+other = "local selection"
+
+[pull_not_examined]
+other = "Download was not attempted before cancellation; no completed transfer is claimed."

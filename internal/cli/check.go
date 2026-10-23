@@ -141,7 +141,8 @@ func newCheckCommand(o Options, cfg config.Global, target *string, l *i18n.Local
                                 kind = "canceled"
                             }
                         }
-                        checked.Error = &errorView{Code: executionErrorCode(err), Stage: fault.Stage(err), FailureKind: kind}
+                        checked.Error = batchError(err, l)
+                        checked.Error.FailureKind = kind
                         if kind == "authentication" {
                             checked.Steps["authentication"] = "failed"
                         }

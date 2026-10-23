@@ -1596,3 +1596,30 @@ other = "末轮查询中断；保留带时间的上次观察"
 
 [trace_reason_observation_timeout]
 other = "观察预算已耗尽"
+
+[output_type_file]
+other = "文件"
+
+[output_type_directory]
+other = "目录"
+
+[output_type_symlink]
+other = "符号链接"
+
+[preview_source_flag]
+other = "显式参数"
+
+[preview_source_project]
+other = "项目配置"
+
+[preview_source_user]
+other = "用户配置"
+
+[preview_source_default]
+other = "内置默认"
+
+[preview_source_local_selection]
+other = "本地选择"
+
+[pull_not_examined]
+other = "取消前未执行此下载，不计为已完成传输。"

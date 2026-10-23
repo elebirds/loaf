@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Current source targets v0.4.0-rc.2, a prerelease with offline task inspection, names/tags, SSH diagnostics and opt-in cursor log recovery, alongside command-scoped cloud SSH reuse. The published [v0.1.0-rc.2 archive](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow; build from current source for newer commands.
+> Current source targets v0.4.0-rc.3, a prerelease with offline task inspection, names/tags, SSH diagnostics and opt-in cursor log recovery, alongside command-scoped cloud SSH reuse. The published [v0.1.0-rc.2 archive](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow; build from current source for newer commands.
 
 ## Install
 
@@ -577,3 +577,19 @@ Maintainers publish by explicitly pushing a `vX.Y.Z` or prerelease tag. The rele
 ## License
 
 [MIT](LICENSE)
+
+### Recover sessions and wait for several tasks
+
+```bash
+loaf logs <run-id> -f --resume-file /tmp/loaf-cursor.json --recovery-budget 2m
+loaf wait r_A r_B --timeout 30m --json
+loaf wait --tag ablation --timeout 1h
+```
+
+`--resume-file` loads an acknowledged cursor and enables recovery. Human terminal output checkpoints only after a successful write. JSON and piped output **never automatically acknowledge processing**: handle a chunk, then save its `data.run.log.cursor` with `loaf logs <run-id> --resume-file /tmp/loaf-cursor.json --ack-cursor "$cursor" --json`. This acknowledgement is offline. Keep cursor files outside source trees. Writes are atomic and cannot rewind a saved stream; unknown formats and symlinks are rejected.
+
+Without an explicit `--recovery-budget`, opt-in recovery still retries once. A positive budget allows consecutive transient failures within a total disconnected-wait budget (up to 24h); healthy streaming does not consume it. Human recovery messages go to stderr. Default `logs -f` is unchanged. Sink failure, cancellation, trust/authentication failure, end and `LOG_CHANGED` never restart the stream.
+
+Successful observations save a separate public `last_observation` with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
+
+`wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. Timeout or cancellation leaves all tasks running. This does not schedule workloads.

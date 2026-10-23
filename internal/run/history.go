@@ -120,7 +120,11 @@ func (s Service) history(ctx context.Context, projectID string, filters HistoryF
     candidates := eligible[:min(len(eligible), limit)]
     if local {
         for _, ref := range candidates {
-            result.Runs = append(result.Runs, view(ref, nil))
+            v, err := s.localView(ref)
+            if err != nil {
+                return result, err
+            }
+            result.Runs = append(result.Runs, v)
         }
         result.Examined, result.Matched = len(candidates), len(candidates)
         result.Truncated = len(candidates) < result.Eligible
@@ -176,6 +180,10 @@ type historyObservation struct {
 }
 
 func (s Service) observeHistory(ctx context.Context, refs []config.RunRef, batch bool) []historyObservation {
+    return s.observeBounded(ctx, refs, batch, 0)
+}
+
+func (s Service) observeBounded(ctx context.Context, refs []config.RunRef, batch bool, perRun time.Duration) []historyObservation {
     observations := make([]historyObservation, len(refs))
     jobs := make(chan int)
     var workers sync.WaitGroup
@@ -193,7 +201,13 @@ func (s Service) observeHistory(ctx context.Context, refs []config.RunRef, batch
                 if ctx.Err() != nil {
                     return
                 }
-                observed, err := s.Observe(ctx, refs[i], 0, 0, batch)
+                query, cancel := context.WithCancel(ctx)
+                if perRun > 0 {
+                    cancel()
+                    query, cancel = context.WithTimeout(ctx, perRun)
+                }
+                observed, err := s.Observe(query, refs[i], 0, 0, batch)
+                cancel()
                 observed.Log = nil
                 observations[i] = historyObservation{view: observed, err: err, examined: true}
             }

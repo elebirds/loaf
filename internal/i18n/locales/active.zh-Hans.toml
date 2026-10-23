@@ -1362,3 +1362,57 @@ other = "日志已被替换、截断，或游标处内容被改写。"
 
 [log_changed_hint]
 other = "请去掉 --resume 重新读取日志尾部，并保存新的游标后续读。"
+
+[flag_resume_file]
+other = "读取已确认处理的游标文件；仅人类终端输出会自动保存。"
+
+[flag_ack_cursor]
+other = "将已处理的游标写入 --resume-file，完全离线（不使用 --follow）。"
+
+[flag_recovery_budget]
+other = "断线重连的累计等待预算，最多 24h；0 保持只重试一次。"
+
+[log_recovery_budget]
+other = "恢复预算必须在 0s 到 24h 之间。"
+
+[log_checkpoint_invalid]
+other = "游标文件无效、属于其他日志流，或会回退已确认的输出。"
+
+[log_recovery_reconnecting]
+other = "连接中断；正在从最后已送达的游标重连……"
+
+[log_recovery_recovered]
+other = "日志连接已恢复。"
+
+[log_recovery_exhausted]
+other = "日志恢复预算已耗尽；保留游标后可继续恢复。"
+
+[wait_args]
+other = "<任务 ID>... | --tag <标签>"
+
+[wait_short]
+other = "前台等待明确选择并冻结的一组任务。"
+
+[flag_wait_timeout]
+other = "前台观察预算，大于 0s 且不超过 24h；不会停止任务。"
+
+[wait_selection]
+other = "请选择 1–1000 个不同任务 ID 或精确标签，两者不能同时使用，且选择不能为空。"
+
+[wait_timeout]
+other = "等待超时必须大于 0s 且不超过 24h。"
+
+[wait_timed_out]
+other = "观察预算结束，仍有未完成或不可达的任务；未停止任何任务。"
+
+[wait_summary]
+other = "已完成 {{.Count}}/{{.Total}}；已观察 {{.Matched}}，查询错误 {{.Value}}。"
+
+[last_observation]
+other = "  上次观察 {{.Stage}}：{{.Value}} / {{.Code}}"
+
+[last_observed_exit]
+other = "  上次观察的退出码：{{.Value}}"
+
+[last_query_failure]
+other = "  最近查询失败 {{.Value}}：{{.Code}}（{{.Stage}}）"

@@ -1362,3 +1362,57 @@ other = "The log was replaced, truncated or rewritten at the saved cursor."
 
 [log_changed_hint]
 other = "Read a fresh tail without --resume and save its new cursor before continuing."
+
+[flag_resume_file]
+other = "Load an acknowledged cursor file; save automatically only to a human terminal."
+
+[flag_ack_cursor]
+other = "Acknowledge a processed cursor into --resume-file, entirely offline (no --follow)."
+
+[flag_recovery_budget]
+other = "Total reconnection waiting budget, up to 24h; 0 keeps one retry."
+
+[log_recovery_budget]
+other = "Recovery budget must be between 0s and 24h."
+
+[log_checkpoint_invalid]
+other = "Cursor file is invalid, belongs to another stream, or would rewind acknowledged output."
+
+[log_recovery_reconnecting]
+other = "Connection lost; reconnecting from the last delivered cursor…"
+
+[log_recovery_recovered]
+other = "Log connection recovered."
+
+[log_recovery_exhausted]
+other = "Log recovery budget exhausted; keep the cursor and resume later."
+
+[wait_args]
+other = "<run-id>... | --tag <tag>"
+
+[wait_short]
+other = "Wait for an explicitly selected, frozen set of tasks."
+
+[flag_wait_timeout]
+other = "Foreground observation budget, greater than 0s and at most 24h; never stops tasks."
+
+[wait_selection]
+other = "Select 1–1000 distinct task IDs or exact tags, not both; the selection must not be empty."
+
+[wait_timeout]
+other = "Wait timeout must be greater than 0s and at most 24h."
+
+[wait_timed_out]
+other = "Observation budget ended with pending or unreachable tasks; none were stopped."
+
+[wait_summary]
+other = "Completed {{.Count}}/{{.Total}}; observed {{.Matched}}, query errors {{.Value}}."
+
+[last_observation]
+other = "  Last observed {{.Stage}}: {{.Value}} / {{.Code}}"
+
+[last_observed_exit]
+other = "  Last observed exit: {{.Value}}"
+
+[last_query_failure]
+other = "  Last query failure {{.Value}}: {{.Code}} ({{.Stage}})"

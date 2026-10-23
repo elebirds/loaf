@@ -14,6 +14,7 @@ import (
     "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/internal/wire"
     "github.com/spf13/cobra"
 )
 
@@ -186,7 +187,7 @@ func newPSCommand(o Options, cfg config.Global, target *string, l *i18n.Localize
         }
         service := o.Runs
         if local {
-            service = &execution.Service{Index: o.Store, Metadata: o.Store}
+            service = &execution.Service{Index: o.Store, Metadata: o.Store, Observations: o.Store}
         }
         if service == nil {
             return fault.New("SSH_FAILED", "ssh_missing", nil)
@@ -273,16 +274,28 @@ func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
     var follow bool
     var resume string
     var reconnect bool
+    var resumeFile, ackCursor string
+    var recoveryBudget time.Duration
     cmd := &cobra.Command{Use: "logs " + l.Text("run_id_arg"), Short: l.Text("logs_short"), Args: arguments(0, 1)}
     cmd.Flags().IntVar(&tail, "tail", 100, l.Text("flag_tail"))
     cmd.Flags().BoolVarP(&follow, "follow", "f", false, l.Text("flag_follow"))
     cmd.Flags().StringVar(&resume, "resume", "", l.Text("flag_log_resume"))
     cmd.Flags().BoolVar(&reconnect, "reconnect", false, l.Text("flag_log_reconnect"))
+    cmd.Flags().StringVar(&resumeFile, "resume-file", "", l.Text("flag_resume_file"))
+    cmd.Flags().StringVar(&ackCursor, "ack-cursor", "", l.Text("flag_ack_cursor"))
+    cmd.Flags().DurationVar(&recoveryBudget, "recovery-budget", 0, l.Text("flag_recovery_budget"))
     cmd.RunE = func(cmd *cobra.Command, args []string) error {
+        if (cmd.Flags().Changed("resume-file") && resumeFile == "") || (cmd.Flags().Changed("ack-cursor") && ackCursor == "") || (resumeFile != "" && cmd.Flags().Changed("resume")) || (ackCursor != "" && (resumeFile == "" || follow || reconnect || cmd.Flags().Changed("tail") || cmd.Flags().Changed("recovery-budget"))) || (resumeFile != "" && ackCursor == "" && !follow) || recoveryBudget < 0 || recoveryBudget > 24*time.Hour || (cmd.Flags().Changed("recovery-budget") && !follow) {
+            return fault.New("BAD_CONFIG", "log_resume_flags", nil)
+        }
         if ((cmd.Flags().Changed("resume") || reconnect) && !follow) || (cmd.Flags().Changed("resume") && (resume == "" || cmd.Flags().Changed("tail"))) {
             return fault.New("BAD_CONFIG", "log_resume_flags", nil)
         }
-        project, file, err := runProject(cmd, o, target)
+        logOptions := o
+        if ackCursor != "" {
+            logOptions.Runs = &execution.Service{Index: o.Store, Metadata: o.Store}
+        }
+        project, file, err := runProject(cmd, logOptions, target)
         if err != nil {
             return err
         }
@@ -298,9 +311,29 @@ func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
         if len(args) > 0 {
             id = args[0]
         }
-        ref, err := o.Runs.Select(project.ID, id)
+        ref, err := logOptions.Runs.Select(project.ID, id)
         if err != nil {
             return err
+        }
+        if ackCursor != "" {
+            c, err := wire.DecodeLogCursor(ackCursor)
+            if err != nil || !c.Matches(wire.Request{Version: ref.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID}) {
+                return fault.New("BAD_CONFIG", "log_cursor_invalid", nil)
+            }
+            if err := config.SaveLogCheckpoint(cmd.Context(), resumeFile, ackCursor); err != nil {
+                return err
+            }
+            result(map[string]any{"run_id": ref.ID, "acknowledged": true, "offset": c.Offset})
+            return nil
+        }
+        if resumeFile != "" {
+            resume, err = config.ReadLogCheckpoint(resumeFile)
+            if err != nil {
+                return err
+            }
+            if resume != "" && cmd.Flags().Changed("tail") {
+                return fault.New("BAD_CONFIG", "log_resume_flags", nil)
+            }
         }
         if err := execution.AvailabilityError(ref); err != nil {
             return err
@@ -311,9 +344,13 @@ func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
                 *streamed = true
             }
             observer := o.Runs.Follow
-            if reconnect || resume != "" {
+            if reconnect || resume != "" || resumeFile != "" || cmd.Flags().Changed("recovery-budget") {
                 observer = func(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, emit func(execution.View, string) error) (execution.View, error) {
-                    return o.Runs.FollowResumable(ctx, ref, wait, tail, batch, resume, emit)
+                    options := execution.RecoveryOptions{Budget: recoveryBudget}
+                    if !jsonMode {
+                        options.Progress = func(state string) { fmt.Fprintln(o.Err, l.Text("log_recovery_"+state)) }
+                    }
+                    return o.Runs.FollowRecovering(ctx, ref, wait, tail, batch, resume, options, emit)
                 }
             }
             last, err := observer(cmd.Context(), ref, 0, lines, jsonMode || !o.Interactive, func(v execution.View, kind string) error {
@@ -324,7 +361,13 @@ func newLogsCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
                     }{kind, v}})
                 }
                 if v.Log != nil {
-                    _, err := io.WriteString(o.Out, v.Log.Text)
+                    n, err := io.WriteString(o.Out, v.Log.Text)
+                    if err == nil && n != len(v.Log.Text) {
+                        err = io.ErrShortWrite
+                    }
+                    if err == nil && resumeFile != "" && o.TerminalOutput {
+                        err = config.SaveLogCheckpoint(cmd.Context(), resumeFile, v.Log.Cursor)
+                    }
                     return err
                 }
                 return nil
@@ -390,6 +433,15 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
         fmt.Fprintf(out, "  %s: %s", l.Text("run_query"), v.QueryError)
     }
     fmt.Fprintln(out)
+    if v.LastObservation != nil {
+        fmt.Fprintln(out, l.Text("last_observation", map[string]any{"Value": v.LastObservation.Status, "Code": v.LastObservation.Phase, "Stage": v.LastObservation.ObservedAt.Format(time.RFC3339)}))
+        if v.LastObservation.ExitCode != nil {
+            fmt.Fprintln(out, l.Text("last_observed_exit", map[string]any{"Value": *v.LastObservation.ExitCode}))
+        }
+    }
+    if v.LastQueryFailure != nil {
+        fmt.Fprintln(out, l.Text("last_query_failure", map[string]any{"Code": v.LastQueryFailure.Code, "Stage": v.LastQueryFailure.Stage, "Value": v.LastQueryFailure.ObservedAt.Format(time.RFC3339)}))
+    }
     if v.Log != nil {
         fmt.Fprint(out, v.Log.Text)
         if v.Log.Truncated {

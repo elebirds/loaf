@@ -25,7 +25,7 @@ func newInspectCommand(o Options, l *i18n.Localizer, result func(any)) *cobra.Co
         if err != nil {
             return err
         }
-        service := execution.Service{Index: o.Store, Metadata: o.Store}
+        service := execution.Service{Index: o.Store, Metadata: o.Store, Observations: o.Store}
         details, err := service.Inspect(project, args[0])
         if err == nil {
             result(details)

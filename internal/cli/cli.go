@@ -38,23 +38,24 @@ type RunnerVerifier interface {
 
 // Options are assembled by the executable, not looked up inside command handlers.
 type Options struct {
-    Store        *config.Store
-    Checker      Checker
-    Runner       RunnerVerifier
-    Syncer       Synchronizer
-    Cleaner      RunCleaner
-    Puller       OutputPuller
-    Runs         *execution.Service
-    Operations   MachineOperations
-    Cloud        *cloud.Service
-    Auth         *cloud.Authentication
-    ReadPassword func(context.Context) ([]byte, error)
-    CWD          string
-    Env          map[string]string
-    In           io.Reader
-    Out, Err     io.Writer
-    Interactive  bool
-    Trace        *ssh.Trace
+    Store          *config.Store
+    Checker        Checker
+    Runner         RunnerVerifier
+    Syncer         Synchronizer
+    Cleaner        RunCleaner
+    Puller         OutputPuller
+    Runs           *execution.Service
+    Operations     MachineOperations
+    Cloud          *cloud.Service
+    Auth           *cloud.Authentication
+    ReadPassword   func(context.Context) ([]byte, error)
+    CWD            string
+    Env            map[string]string
+    In             io.Reader
+    Out, Err       io.Writer
+    TerminalOutput bool
+    Interactive    bool
+    Trace          *ssh.Trace
 }
 
 type errorView struct {
@@ -264,6 +265,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newTargetCommands(o, cfg, l, func(value any) { result = value })...)
     root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
+    root.AddCommand(newWaitCommand(o, l, func(value any) { result = value }))
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
     root.AddCommand(newCleanCommand(o, &target, l, func(value any) { result = value }))
@@ -367,7 +369,7 @@ func earlyOptions(args []string) (bool, string, error) {
             i++
             continue
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" || a == "--resume-file" || a == "--ack-cursor" || a == "--recovery-budget" {
             i++
             continue
         }
@@ -501,6 +503,11 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         printLocalDetails(out, r, l)
     case execution.View:
         printRun(out, r, l)
+    case execution.WaitResult:
+        for _, v := range r.Runs {
+            printRun(out, v, l)
+        }
+        fmt.Fprintln(out, l.Text("wait_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.QueryErrors, "Matched": r.Examined}))
     case runList:
         if r.Source == "local" {
             fmt.Fprintln(out, l.Text("inspect_local"))

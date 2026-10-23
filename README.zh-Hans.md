@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 当前源码目标版本为 v0.4.0-rc.2 候选版，提供离线任务查看、名称／标签、SSH 诊断及显式日志游标续接，并保留命令级云 SSH 复用。已发布的 [v0.1.0-rc.2 压缩包](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环；使用新命令请从当前源码构建。
+> 当前源码目标版本为 v0.4.0-rc.3 候选版，提供离线任务查看、名称／标签、SSH 诊断及显式日志游标续接，并保留命令级云 SSH 复用。已发布的 [v0.1.0-rc.2 压缩包](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环；使用新命令请从当前源码构建。
 
 ## 安装
 
@@ -577,3 +577,19 @@ Loaf 不调度 GPU 任务、不自动修复环境，也不替代实验追踪工�
 ## 许可证
 
 [MIT](LICENSE)
+
+### 恢复日志会话与多任务等待
+
+```bash
+loaf logs <任务ID> -f --resume-file /tmp/loaf-cursor.json --recovery-budget 2m
+loaf wait r_A r_B --timeout 30m --json
+loaf wait --tag ablation --timeout 1h
+```
+
+`--resume-file` 读取已确认处理的游标并启用恢复。人类终端输出仅在写入成功后保存游标。JSON 和管道输出**不会自动确认下游已处理**：先处理一块数据，再用 `loaf logs <任务ID> --resume-file /tmp/loaf-cursor.json --ack-cursor "$cursor" --json` 保存其 `data.run.log.cursor`。确认操作完全离线。游标文件应放在源码树之外；原子写入不能回退，未知格式和符号链接会被拒绝。
+
+未显式指定 `--recovery-budget` 时，启用恢复仍只重试一次。正预算允许在累计断线等待时间内连续恢复（最多 24h），正常日志流不消耗预算；恢复提示写入 stderr。默认 `logs -f` 不变。输出接收失败、取消、认证或信任失败、结束事件及 `LOG_CHANGED` 均不会重启流。
+
+成功观察以独立文件保存公开的 `last_observation`，包含观察时间、阶段和退出结果；`last_query_failure` 只记录最近失败查询的时间、错误码和阶段。离线 `ps --local` 和 `inspect` 展示这些带时间的事实，不将其作为实时状态；不缓存日志正文或执行环境。
+
+`wait` 在开始时冻结明确 ID 或精确标签匹配的本地集合（1–1000 个任务），轮询各自保存的连接，并返回全部任务、已完成／待完成／查询失败及已观察／未观察覆盖数。不可达任务不会妨碍其他任务的观察。人类输出只报告变化，JSON 为单个有限结果。超时或取消不会停止任务；这不是作业调度器。

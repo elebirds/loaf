@@ -38,12 +38,13 @@ type Remote interface {
 
 // Service composes existing SSH, native source transfer and private run locators.
 type Service struct {
-    Index    RunIndex
-    Check    sources.Checker
-    Runner   func(context.Context, config.Target, string, bool) (string, error)
-    Send     sources.Sender
-    Remote   Remote
-    Metadata MetadataStore
+    Index        RunIndex
+    Check        sources.Checker
+    Runner       func(context.Context, config.Target, string, bool) (string, error)
+    Send         sources.Sender
+    Remote       Remote
+    Metadata     MetadataStore
+    Observations ObservationStore
 }
 
 // SubmitInput freezes one project's explicit execution inputs.
@@ -61,26 +62,29 @@ type SubmitInput struct {
 
 // View exposes operational results without leaking private request environments.
 type View struct {
-    ID              string         `json:"run_id"`
-    Version         string         `json:"version"`
-    Name            string         `json:"name,omitempty"`
-    Tags            []string       `json:"tags,omitempty"`
-    Target          string         `json:"target"`
-    RemoteDir       string         `json:"remote_dir"`
-    Status          string         `json:"status"`
-    Submission      string         `json:"submission,omitempty"`
-    Phase           string         `json:"phase,omitempty"`
-    CreatedAt       time.Time      `json:"created_at"`
-    CompletedAt     *time.Time     `json:"completed_at,omitempty"`
-    ExitCode        *int           `json:"exit_code"`
-    Signal          string         `json:"signal,omitempty"`
-    Reason          string         `json:"reason,omitempty"`
-    QueryError      string         `json:"query_error,omitempty"`
-    Log             *wire.LogChunk `json:"log,omitempty"`
-    StopGraceMillis *int64         `json:"stop_grace_millis,omitempty"`
-    CleanedAt       *time.Time     `json:"cleaned_at,omitempty"`
-    CleanupPending  bool           `json:"cleanup_pending,omitempty"`
-    Ref             config.RunRef  `json:"-"`
+    ID               string               `json:"run_id"`
+    Version          string               `json:"version"`
+    Name             string               `json:"name,omitempty"`
+    Tags             []string             `json:"tags,omitempty"`
+    Target           string               `json:"target"`
+    RemoteDir        string               `json:"remote_dir"`
+    Status           string               `json:"status"`
+    Submission       string               `json:"submission,omitempty"`
+    Phase            string               `json:"phase,omitempty"`
+    CreatedAt        time.Time            `json:"created_at"`
+    CompletedAt      *time.Time           `json:"completed_at,omitempty"`
+    ExitCode         *int                 `json:"exit_code"`
+    Signal           string               `json:"signal,omitempty"`
+    Reason           string               `json:"reason,omitempty"`
+    QueryError       string               `json:"query_error,omitempty"`
+    Log              *wire.LogChunk       `json:"log,omitempty"`
+    StopGraceMillis  *int64               `json:"stop_grace_millis,omitempty"`
+    CleanedAt        *time.Time           `json:"cleaned_at,omitempty"`
+    CleanupPending   bool                 `json:"cleanup_pending,omitempty"`
+    LastObservation  *config.ObservedRun  `json:"last_observation,omitempty"`
+    LastQueryFailure *config.QueryFailure `json:"last_query_failure,omitempty"`
+    ObservedAt       time.Time            `json:"-"`
+    Ref              config.RunRef        `json:"-"`
 }
 
 func view(ref config.RunRef, r *wire.RunRecord) View {
@@ -312,7 +316,12 @@ func request(ref config.RunRef, wait time.Duration, tail int) wire.Request {
 }
 
 // Observe queries a bound locator without reading today's target configuration.
-func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool) (View, error) {
+func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool) (result View, resultErr error) {
+    defer func() {
+        if err := s.remember(ctx, ref, result, resultErr); resultErr == nil && err != nil {
+            resultErr = err
+        }
+    }()
     if err := currentVersion(ref); err != nil {
         return view(ref, nil), err
     }
@@ -330,7 +339,7 @@ func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Durat
     timeout, cancel := context.WithTimeout(ctx, wait+20*time.Second)
     defer cancel()
     observed, err := s.Remote.Observe(timeout, ref.Connection, ref.Runner, request(ref, wait, tail), batch)
-    result := view(ref, observed.Record)
+    result = view(ref, observed.Record)
     if err != nil {
         if ctx.Err() != nil {
             return result, fault.Wrap("OBSERVATION_CANCELED", "observation_canceled", ctx.Err())
@@ -354,22 +363,28 @@ func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Durat
         result.Ref = bound
         result.Submission = bound.Submission
     }
+    result.ObservedAt = time.Now().UTC()
     result.Log = &observed.Log
     return result, nil
 }
 
 // Follow observes one run over one SSH connection; callback errors only close it.
 func (s Service) Follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, emit func(View, string) error) (View, error) {
-    return s.follow(ctx, ref, wait, tail, batch, "", false, emit)
+    return s.follow(ctx, ref, wait, tail, batch, "", false, RecoveryOptions{}, emit)
 }
 
 // FollowResumable resumes only confirmed chunks and permits one transient
 // reconnect. Existing Follow keeps its single-connection behavior.
 func (s Service) FollowResumable(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, cursor string, emit func(View, string) error) (View, error) {
-    return s.follow(ctx, ref, wait, tail, batch, cursor, true, emit)
+    return s.follow(ctx, ref, wait, tail, batch, cursor, true, RecoveryOptions{}, emit)
 }
 
-func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, cursor string, recover bool, emit func(View, string) error) (View, error) {
+func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, cursor string, recover bool, recovery RecoveryOptions, emit func(View, string) error) (last View, resultErr error) {
+    defer func() {
+        if err := s.remember(ctx, ref, last, resultErr); resultErr == nil && err != nil {
+            resultErr = err
+        }
+    }()
     if err := AvailabilityError(ref); err != nil {
         return view(ref, nil), err
     }
@@ -388,12 +403,15 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
         return view(ref, nil), err
     }
     ref = prepared
-    last := view(ref, nil)
+    last = view(ref, nil)
     deadline := time.Time{}
     if wait > 0 {
         deadline = time.Now().Add(wait)
     }
-    for attempt := 0; attempt < 2; attempt++ {
+    recoveryDeadline := time.Time{}
+    recovering := false
+    remainingRecovery := recovery.Budget
+    for attempt := 0; ; attempt++ {
         req.Resume = cursor
         if !deadline.IsZero() {
             remaining := time.Until(deadline)
@@ -406,7 +424,12 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             req.WaitMillis = int64((remaining + time.Millisecond - 1) / time.Millisecond)
         }
         consumerFailed, ended, emitted := false, false, false
-        err = s.Remote.Follow(ctx, ref.Connection, ref.Runner, req, batch, func(event wire.LogEvent) error {
+        attemptCtx, cancelAttempt := context.WithCancel(ctx)
+        var budgetTimer *time.Timer
+        if !recoveryDeadline.IsZero() && recovering {
+            budgetTimer = time.AfterFunc(max(0, time.Until(recoveryDeadline)), cancelAttempt)
+        }
+        err = s.Remote.Follow(attemptCtx, ref.Connection, ref.Runner, req, batch, func(event wire.LogEvent) error {
             if event.Record != nil && event.Record.Request.Version != wire.Version {
                 return versionMismatch(event.Record.Request.Version)
             }
@@ -424,11 +447,23 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             }
             next := view(ref, event.Record)
             next.Log = &event.Log
+            next.ObservedAt = time.Now().UTC()
             if emit != nil {
                 if err := emit(next, event.Type); err != nil {
                     consumerFailed = true
                     return err
                 }
+            }
+            if budgetTimer != nil {
+                budgetTimer.Stop()
+            }
+            if recovering {
+                if !recoveryDeadline.IsZero() {
+                    remainingRecovery = max(0, time.Until(recoveryDeadline))
+                    recoveryDeadline = time.Time{}
+                }
+                recovery.notify("recovered")
+                recovering = false
             }
             last = next
             emitted = true
@@ -442,13 +477,44 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             ended = event.Type == "end"
             return nil
         })
+        if budgetTimer != nil {
+            budgetTimer.Stop()
+        }
+        cancelAttempt()
         if err == nil {
             return last, nil
         }
-        if !recover || attempt != 0 || ended || consumerFailed || (emitted && cursor == "") || ctx.Err() != nil || !ssh.IsTransientReadError(err) {
+        if recovery.Budget > 0 && !recoveryDeadline.IsZero() && time.Until(recoveryDeadline) <= 0 {
+            recovery.notify("exhausted")
+            err = fault.Wrap("LOG_RECOVERY_EXHAUSTED", "log_recovery_exhausted", err)
             break
         }
-        timer := time.NewTimer(250 * time.Millisecond)
+        if !recover || ended || consumerFailed || (emitted && cursor == "") || ctx.Err() != nil || !ssh.IsTransientReadError(err) {
+            break
+        }
+        if recovery.Budget == 0 && attempt > 0 {
+            recovery.notify("exhausted")
+            break
+        }
+        if recovery.Budget > 0 {
+            if recoveryDeadline.IsZero() {
+                recoveryDeadline = time.Now().Add(remainingRecovery)
+            }
+            if time.Until(recoveryDeadline) <= 0 {
+                recovery.notify("exhausted")
+                err = fault.Wrap("LOG_RECOVERY_EXHAUSTED", "log_recovery_exhausted", err)
+                break
+            }
+        }
+        if !recovering {
+            recovery.notify("reconnecting")
+            recovering = true
+        }
+        delay := min(2*time.Second, 250*time.Millisecond*time.Duration(1<<min(attempt, 3)))
+        if !recoveryDeadline.IsZero() {
+            delay = min(delay, time.Until(recoveryDeadline))
+        }
+        timer := time.NewTimer(delay)
         select {
         case <-ctx.Done():
             timer.Stop()

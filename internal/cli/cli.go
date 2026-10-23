@@ -43,6 +43,7 @@ type Options struct {
     Runner         RunnerVerifier
     Syncer         Synchronizer
     Cleaner        RunCleaner
+    Outputs        OutputBrowser
     Puller         OutputPuller
     Runs           *execution.Service
     Operations     MachineOperations
@@ -265,6 +266,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newTargetCommands(o, cfg, l, func(value any) { result = value })...)
     root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
+    root.AddCommand(newOutputsCommand(o, &target, l, func(value any) { result = value }))
     root.AddCommand(newWaitCommand(o, l, func(value any) { result = value }))
     root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
     root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
@@ -369,7 +371,7 @@ func earlyOptions(args []string) (bool, string, error) {
             i++
             continue
         }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" || a == "--resume-file" || a == "--ack-cursor" || a == "--recovery-budget" {
+        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" || a == "--depth" || a == "--into" || a == "--concurrency" || a == "--resume-file" || a == "--ack-cursor" || a == "--recovery-budget" {
             i++
             continue
         }
@@ -440,7 +442,7 @@ func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
         if f.Name == "target" && strings.HasPrefix(c.CommandPath(), "loaf cloud") {
             return
         }
-        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean" || c.Name() == "inspect") {
+        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean" || c.Name() == "inspect" || c.Name() == "outputs" || c.Name() == "wait") {
             return
         }
         name := "--" + f.Name
@@ -495,6 +497,16 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
         fmt.Fprintln(out, l.Text("selected", map[string]any{"Root": r.Root, "Target": r.Target}))
     case syncResult:
         printSync(out, r, l)
+    case pullBatch:
+        for _, row := range r.Runs {
+            printPull(out, row.Result, l, row.Error == nil)
+            if row.Error != nil {
+                fmt.Fprintln(out, row.Error.Code)
+            }
+        }
+        fmt.Fprintln(out, l.Text("pull_batch_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.Failed, "Matched": r.Unexamined}))
+    case execution.OutputListing:
+        printOutputs(out, r, l)
     case sources.PullResult:
         printPull(out, r, l, ok)
     case cleanBatch:

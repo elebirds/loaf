@@ -22,11 +22,19 @@ func newPullCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
     var paths []string
     var to string
     var checksum bool
-    cmd := &cobra.Command{Use: "pull " + l.Text("run_id_arg"), Short: l.Text("pull_short"), Args: arguments(0, 1)}
+    var into string
+    var concurrency int
+    cmd := &cobra.Command{Use: "pull " + l.Text("run_id_arg"), Short: l.Text("pull_short"), Args: arguments(0, 1000)}
     cmd.Flags().StringArrayVar(&paths, "path", nil, l.Text("flag_pull_path"))
     cmd.Flags().StringVar(&to, "to", "", l.Text("flag_pull_to"))
     cmd.Flags().BoolVar(&checksum, "checksum", false, l.Text("flag_pull_checksum"))
+    cmd.Flags().StringVar(&into, "into", "", l.Text("flag_pull_into"))
+    cmd.Flags().IntVar(&concurrency, "concurrency", 1, l.Text("flag_pull_concurrency"))
     cmd.RunE = func(cmd *cobra.Command, args []string) error {
+        multi := len(args) > 1 || cmd.Flags().Changed("into")
+        if (multi && (into == "" || len(args) == 0 || cmd.Flags().Changed("to"))) || (!multi && cmd.Flags().Changed("concurrency")) || concurrency < 1 || concurrency > 4 || (concurrency > 1 && o.Interactive) {
+            return fault.New("BAD_CONFIG", "pull_batch_flags", nil)
+        }
         project, file, err := runProject(cmd, o, target)
         if err != nil {
             return err
@@ -41,6 +49,19 @@ func newPullCommand(o Options, cfg config.Global, target *string, l *i18n.Locali
         }
         if cmd.Flags().Changed("to") && to == "" {
             return fault.New("BAD_CONFIG", "pull_destination", nil)
+        }
+        if multi {
+            if o.Puller == nil {
+                return fault.New("SSH_FAILED", "ssh_missing", nil)
+            }
+            refs, err := o.Runs.Freeze(project.ID, args, nil)
+            if err != nil {
+                return err
+            }
+            jsonMode, _ := cmd.Flags().GetBool("json")
+            pulled, err := batchPull(cmd.Context(), o, project, refs, into, paths, cmd.Flags().Changed("path"), policy, concurrency, jsonMode || !o.Interactive)
+            result(pulled)
+            return err
         }
         id := ""
         if len(args) > 0 {

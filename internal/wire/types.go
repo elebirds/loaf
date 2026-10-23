@@ -30,6 +30,8 @@ type Request struct {
     Tail          int               `json:"tail,omitempty"`
     GraceMillis   *int64            `json:"grace_millis,omitempty"`
     Outputs       []string          `json:"outputs,omitempty"`
+    Depth         int               `json:"depth,omitempty"`
+    Limit         int               `json:"limit,omitempty"`
     Resume        string            `json:"resume,omitempty"`
 }
 
@@ -67,6 +69,7 @@ type Response struct {
     Error         *Error           `json:"error,omitempty"`
     Log           *LogChunk        `json:"log,omitempty"`
     Outputs       *OutputSelection `json:"outputs,omitempty"`
+    Inventory     *OutputInventory `json:"inventory,omitempty"`
     Cleanup       *CleanupReceipt  `json:"cleanup,omitempty"`
 }
 

@@ -593,3 +593,16 @@ loaf wait --tag ablation --timeout 1h
 成功观察以独立文件保存公开的 `last_observation`，包含观察时间、阶段和退出结果；`last_query_failure` 只记录最近失败查询的时间、错误码和阶段。离线 `ps --local` 和 `inspect` 展示这些带时间的事实，不将其作为实时状态；不缓存日志正文或执行环境。
 
 `wait` 在开始时冻结明确 ID 或精确标签匹配的本地集合（1–1000 个任务），轮询各自保存的连接，并返回全部任务、已完成／待完成／查询失败及已观察／未观察覆盖数。不可达任务不会妨碍其他任务的观察。人类输出只报告变化，JSON 为单个有限结果。超时或取消不会停止任务；这不是作业调度器。
+
+### 浏览输出与批量对比
+
+```bash
+loaf outputs <任务ID> --depth 2 --limit 200 --json
+loaf outputs <任务ID> --prepare-runner --json  # 明确允许部署或修复辅助程序
+loaf pull r_A r_B --into ./comparison --json
+loaf pull r_A r_B --into ./comparison --concurrency 2 --json
+```
+
+`outputs` 仅浏览任务冻结的输出范围，返回相对路径、类型、大小、修改时间及缺失根目录，并报告已检查根目录与条目的覆盖情况。深度相对于各输出根目录（根为 0），范围 0–20，条目上限 1–1000。`truncated` 和 `depth_limited` 明确标出未访问部分。不读取内容、不计算校验和、不遍历符号链接，也不要求任务成功或仍在运行。默认不会上传辅助程序，缺失或不匹配时返回 `RUNNER_REQUIRED`；只有 `--prepare-runner` 明确允许修复。`pull` 的自动准备行为不变。
+
+多个明确 ID 必须使用 `--into`，各自根据保存的连接和输出路径下载到 `<into>/<任务ID>/`。JSON 保留每个结果或错误及完成、失败、未执行数量，单个失败不会丢弃成功结果。默认串行，`--concurrency 1–4` 显式启用并发，交互认证保持串行。重复下载是增量更新，不删除本地额外文件。单任务 `--to` 仍表示精确目录，不能与批量 `--into` 混用。一次性下载目录若位于源码树中，需要普通忽略或排除规则。

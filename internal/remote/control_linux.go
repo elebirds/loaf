@@ -43,6 +43,12 @@ func Serve(in io.Reader, out io.Writer) int {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()
         response.Cleanup, err = Clean(ctx, req, req.Action == "clean-preview")
+    } else if err == nil && req.Action == "inventory" {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        inventory, inventoryErr := Inventory(ctx, req)
+        response.Inventory = &inventory
+        err = inventoryErr
     } else if err == nil && req.Action == "outputs" {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()

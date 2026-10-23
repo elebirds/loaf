@@ -1416,3 +1416,51 @@ other = "  Last observed exit: {{.Value}}"
 
 [last_query_failure]
 other = "  Last query failure {{.Value}}: {{.Code}} ({{.Stage}})"
+
+[outputs_short]
+other = "Browse bounded output metadata without downloading files."
+
+[flag_outputs_depth]
+other = "Maximum depth below each saved output root (0–20)."
+
+[flag_outputs_limit]
+other = "Maximum metadata entries (1–1000); report omitted coverage."
+
+[flag_outputs_prepare]
+other = "Explicitly deploy/repair the current runner before listing."
+
+[outputs_bounds]
+other = "Output depth must be 0–20 and the entry limit 1–1000."
+
+[outputs_runner_required]
+other = "A matching executable runner is not available; listing made no remote changes."
+
+[outputs_prepare_hint]
+other = "Repeat outputs with --prepare-runner to explicitly deploy or repair the helper."
+
+[outputs_heading]
+other = "Output metadata for {{.ID}} (live tree):"
+
+[output_missing_entry]
+other = "Missing: {{.Path}}"
+
+[outputs_coverage]
+other = "Listed {{.Count}} entries; examined roots {{.Matched}}/{{.Total}}; depth-limited directories {{.Value}}."
+
+[outputs_truncated]
+other = "Listing is incomplete at the depth or entry bound; unvisited contents are unknown."
+
+[flag_pull_into]
+other = "Batch destination parent; each explicit task gets its own run-ID directory."
+
+[flag_pull_concurrency]
+other = "Batch download concurrency (1–4); interactive authentication stays serial."
+
+[pull_batch_flags]
+other = "Multiple IDs require --into, not --to; concurrency 1–4 is batch-only and must be 1 for interactive authentication."
+
+[pull_batch_partial]
+other = "Some selected downloads failed or were not examined; completed destinations remain usable."
+
+[pull_batch_summary]
+other = "Downloaded {{.Count}}/{{.Total}}; failed {{.Value}}, unexamined {{.Matched}}."

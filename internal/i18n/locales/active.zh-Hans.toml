@@ -1416,3 +1416,51 @@ other = "  上次观察的退出码：{{.Value}}"
 
 [last_query_failure]
 other = "  最近查询失败 {{.Value}}：{{.Code}}（{{.Stage}}）"
+
+[outputs_short]
+other = "浏览有界的输出文件元数据，不下载内容。"
+
+[flag_outputs_depth]
+other = "每个已保存输出根目录下的最大深度（0–20）。"
+
+[flag_outputs_limit]
+other = "元数据条目上限（1–1000），报告未覆盖范围。"
+
+[flag_outputs_prepare]
+other = "明确允许在列出前部署或修复当前 runner。"
+
+[outputs_bounds]
+other = "输出深度必须为 0–20，条目上限为 1–1000。"
+
+[outputs_runner_required]
+other = "没有可用的匹配 runner；浏览未修改远端。"
+
+[outputs_prepare_hint]
+other = "使用 outputs --prepare-runner 明确允许部署或修复辅助程序后重试。"
+
+[outputs_heading]
+other = "任务 {{.ID}} 的输出元数据（实时文件树）："
+
+[output_missing_entry]
+other = "缺失：{{.Path}}"
+
+[outputs_coverage]
+other = "已列出 {{.Count}} 个条目；已检查根目录 {{.Matched}}/{{.Total}}；深度受限目录 {{.Value}} 个。"
+
+[outputs_truncated]
+other = "列表达到深度或条目上限，未访问部分的内容未知。"
+
+[flag_pull_into]
+other = "批量目标父目录；每个明确任务使用独立的任务 ID 子目录。"
+
+[flag_pull_concurrency]
+other = "批量下载并发度（1–4）；交互认证保持串行。"
+
+[pull_batch_flags]
+other = "多个 ID 必须使用 --into，不能使用 --to；并发度 1–4 仅适用于批量下载，交互认证必须为 1。"
+
+[pull_batch_partial]
+other = "部分所选下载失败或未执行；已完成的目标仍可使用。"
+
+[pull_batch_summary]
+other = "下载完成 {{.Count}}/{{.Total}}；失败 {{.Value}}，未执行 {{.Matched}}。"

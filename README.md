@@ -593,3 +593,16 @@ Without an explicit `--recovery-budget`, opt-in recovery still retries once. A p
 Successful observations save a separate public `last_observation` with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
 
 `wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. Timeout or cancellation leaves all tasks running. This does not schedule workloads.
+
+### Browse and compare several outputs
+
+```bash
+loaf outputs <run-id> --depth 2 --limit 200 --json
+loaf outputs <run-id> --prepare-runner --json  # Explicit helper deployment/repair
+loaf pull r_A r_B --into ./comparison --json
+loaf pull r_A r_B --into ./comparison --concurrency 2 --json
+```
+
+`outputs` reads only each run's frozen output selection. It reports relative paths, type, bytes, modification time and missing roots, with visited-root and entry coverage. Depth is relative to each output root (root = 0); limits are 0–20 levels and 1–1000 entries. `truncated` and `depth_limited` make unvisited contents explicit. It does not read file contents, checksum files, follow links or require a successful/live task. Ordinary browsing does not upload a helper; a missing/mismatched executable returns `RUNNER_REQUIRED`. Only `--prepare-runner` authorizes repair. `pull` keeps its existing automatic preparation.
+
+Multiple explicit IDs require `--into`; each downloads under `<into>/<run-id>/` using its own saved connection and output paths. JSON retains every result/error with completed, failed and unexamined counts; one failure does not discard successful downloads. Downloads are serial by default; `--concurrency 1–4` is explicit and interactive authentication stays serial. Repeating is incremental and preserves local extras. Single-run `--to` still names the exact directory and cannot be combined with batch `--into`. One-off download destinations need normal ignore/exclude rules if they sit in your source tree.

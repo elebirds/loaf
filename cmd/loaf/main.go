@@ -46,6 +46,7 @@ func main() {
     var runner cli.RunnerVerifier
     var syncer cli.Synchronizer
     var cleaner cli.RunCleaner
+    var browser cli.OutputBrowser
     var puller cli.OutputPuller
     var runs *execution.Service
     var operations cli.MachineOperations
@@ -86,11 +87,12 @@ func main() {
         runs = &execution.Service{Index: store, Metadata: store, Observations: store, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
         syncer = sources.Service{Check: client, Runner: prepare, Send: sender}
         cleaner = execution.CleanupService{Runs: runs, Index: store, Remote: client, Runner: prepare}
+        browser = execution.OutputBrowser{Remote: client, Runner: prepare}
         puller = sources.PullService{Remote: client, Runner: prepare, Receive: sender}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Trace: trace, Cloud: cloudService, Auth: authentication, ReadPassword: terminalPassword, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, TerminalOutput: term.IsTerminal(int(os.Stdout.Fd())), Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Trace: trace, Cloud: cloudService, Auth: authentication, ReadPassword: terminalPassword, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Outputs: browser, Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, TerminalOutput: term.IsTerminal(int(os.Stdout.Fd())), Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
     connections.Close()
     os.Exit(code)
 }

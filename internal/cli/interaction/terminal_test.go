@@ -124,6 +124,13 @@ func (w *renderedPrompt) Write(p []byte) (int, error) {
 }
 
 func TestHuhDefaultNoAndCtrlCRestoreTerminal(t *testing.T) {
+    // Only macOS race runs are quarantined; ordinary terminal coverage remains.
+    // Re-enable when released dependencies fix the upstream reader shutdown race:
+    // https://github.com/charmbracelet/bubbletea/issues/1599
+    // https://github.com/charmbracelet/bubbletea/issues/1875
+    if skipHuhShutdownRace {
+        t.Skip("upstream Bubble Tea/cancelreader shutdown race: https://github.com/charmbracelet/bubbletea/issues/1875")
+    }
     for _, key := range []string{"\r", "\x03"} {
         t.Run(map[string]string{"\r": "default-no", "\x03": "ctrl-c"}[key], func(t *testing.T) {
             master, terminal := openTerminal(t)

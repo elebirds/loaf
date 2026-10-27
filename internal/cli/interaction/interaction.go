@@ -32,6 +32,8 @@ type Prompter interface {
 type TextPrompt struct {
     Title, Description string
     MaxBytes           int
+    // Validate checks local input; it must not perform external operations.
+    Validate func(string) error
 }
 
 type SecretPrompt struct {
@@ -139,12 +141,26 @@ func (s *InputSession) textOwned(ctx context.Context, prompt TextPrompt, rich bo
     if rich {
         return s.richText(ctx, prompt, limit)
     }
-    if err := s.printPrompt(prompt.Title, prompt.Description); err != nil {
-        return "", err
+    for {
+        if err := s.printPrompt(prompt.Title, prompt.Description); err != nil {
+            return "", err
+        }
+        value, err := readLine(ctx, s.options.In, limit)
+        text := string(value)
+        clear(value)
+        if err != nil {
+            return "", err
+        }
+        if prompt.Validate != nil {
+            if err := prompt.Validate(text); err != nil {
+                if err := writeText(s.options.Err, err.Error()+"\n"); err != nil {
+                    return "", err
+                }
+                continue
+            }
+        }
+        return text, nil
     }
-    value, err := readLine(ctx, s.options.In, limit)
-    defer clear(value)
-    return string(value), err
 }
 
 func (s *InputSession) Confirm(ctx context.Context, prompt Confirmation) (bool, error) {

@@ -1,0 +1,94 @@
+# Commands and minimal calls
+
+[Home](../../README.md) · [Guide](guide.md) · [简体中文](../zh-Hans/commands.md)
+
+Generated from the CLI grammar. NAME, IDs, hosts and environment references in examples are placeholders. Cloud calls require a configured, applicable account and resource conditions; mutation still requires explicit authority and confirmation. See [cloud prerequisites](cloud.md). Add `--json` for noninteractive structured results, except native `ssh` and `forward`. Use an explicit run ID for agent follow-ups.
+
+## Global options
+
+| Option | Type | Purpose |
+| --- | --- | --- |
+| `--lang` | `string` | Interface language: auto, en, or zh-Hans. |
+| `--json` | `bool` | Write structured JSON without interaction; exec, logs -f and cloud watch stream NDJSON. |
+| `--trace` | `bool` | Report safe SSH-stage timings and connection/retry counts for a finite command. |
+| `--target` | `string` | Override the project's target alias. |
+| `--help` | `bool` | Show help. |
+| `--version` | `bool` | Show the build version without loading project state. |
+
+## Experiments and project files
+
+| Command | Minimal call | Purpose |
+| --- | --- | --- |
+| `loaf run` | `loaf run -- python3 train.py` | Sync and start a durable background task. |
+| `loaf status` | `loaf status` | Query a run or list recent runs in this project. |
+| `loaf logs` | `loaf logs` | Read a bounded log tail or follow one run. |
+| `loaf stop` | `loaf stop` | Stop a saved run and wait for its confirmed result. |
+| `loaf inspect` | `loaf inspect r_example` | Inspect one saved task offline, including its required CLI version. |
+| `loaf outputs` | `loaf outputs` | Browse bounded output metadata without downloading files. |
+| `loaf wait` | `loaf wait --tag experiment` | Wait for an explicitly selected, frozen set of tasks. |
+| `loaf pull` | `loaf pull` | Download selected outputs from a saved run. |
+| `loaf clean` | `loaf clean r_example --dry-run` | Remove explicitly selected completed runs' remote data |
+| `loaf sync` | `loaf sync --dry-run` | Synchronize working sources to the managed remote cache. |
+
+## Machines and foreground operations
+
+| Command | Minimal call | Purpose |
+| --- | --- | --- |
+| `loaf machine` | `loaf machine` | Manage saved machines and the current project selection. |
+| `loaf machine list` | `loaf machine list` | List saved machines without connecting. |
+| `loaf machine show` | `loaf machine show lab` | Show one saved machine without connecting. |
+| `loaf machine add` | `loaf machine add lab --ssh lab-gpu` | Save an SSH machine alias. |
+| `loaf machine use` | `loaf machine use lab` | Select the default machine for this project. |
+| `loaf machine remove` | `loaf machine remove lab` | Remove a local machine alias, preserving runs and remote files. |
+| `loaf exec` | `loaf exec -- nvidia-smi` | Run a foreground machine command without source sync or a task ID. |
+| `loaf ssh` | `loaf ssh` | Open the selected machine's native interactive SSH shell. |
+| `loaf forward` | `loaf forward 6006` | Forward a local loopback port over a foreground SSH connection. |
+
+## Cloud resources
+
+| Command | Minimal call | Purpose |
+| --- | --- | --- |
+| `loaf cloud` | `loaf cloud --help` | Manage explicit cloud rentals and connect them to SSH targets |
+| `loaf cloud login` | `loaf cloud login main` | Log in with an AutoDL main or subaccount password |
+| `loaf cloud logout` | `loaf cloud logout main` | Clear the selected saved session and login digest |
+| `loaf cloud list` | `loaf cloud list` | List this account’s instances with bounded pagination |
+| `loaf cloud info` | `loaf cloud info instance-id` | Inspect an instance without exposing secrets |
+| `loaf cloud credentials` | `loaf cloud credentials instance-id` | Fetch current SSH connection details; redact passwords by default |
+| `loaf cloud start` | `loaf cloud start instance-id` | Start an existing whole instance after explicit approval |
+| `loaf cloud stop` | `loaf cloud stop instance-id` | Stop a whole instance, not just a Loaf experiment |
+| `loaf cloud search` | `loaf cloud search` | Read inventory once and filter/rank matching offers |
+| `loaf cloud watch` | `loaf cloud watch --wait 10m` | Monitor inventory in the foreground without renting |
+| `loaf cloud acquire` | `loaf cloud acquire gpu` | Acquire at most one instance and bind its SSH target |
+| `loaf cloud bind` | `loaf cloud bind gpu --instance instance-id` | Bind an existing instance and verify SSH authentication |
+| `loaf cloud requests` | `loaf cloud requests` | Inspect local allocation and power-operation receipts |
+| `loaf cloud reconcile` | `loaf cloud reconcile request-id --instance instance-id` | Resolve an uncertain request without replaying its mutation |
+| `loaf cloud account` | `loaf cloud account` | Manage user-owned account credential references |
+| `loaf cloud account list` | `loaf cloud account list` | List account references without reading tokens |
+| `loaf cloud account add` | `loaf cloud account add main --token-env AUTODL_TOKEN` | Save a platform product and token environment-variable reference |
+| `loaf cloud account remove` | `loaf cloud account remove main` | Remove an account alias, keeping frozen instance bindings |
+
+## Diagnostics and help
+
+| Command | Minimal call | Purpose |
+| --- | --- | --- |
+| `loaf check` | `loaf check` | Inspect connectivity and the remote environment. |
+| `loaf version` | `loaf version` | Show build and protocol versions, source revision, and platform. |
+| `loaf help` | `loaf help run` | Show help for a command. |
+
+## Parameters and constraints
+
+Use `loaf help COMMAND` for parameter descriptions, built-in defaults, ranges and examples; `loaf help COMMAND --json` adds machine-readable argument and flag metadata. The same declarations produce this list and the help interface. [Argument construction](guide.md#construct-arguments-without-guessing) covers literal argv, repeated flags, CSV, false/zero/empty values and Shell boundaries. [Configuration](configuration.md) explains effective precedence. [JSON](json.md) explains result types and errors.
+
+`status` with no ID lists recent tasks; `logs`, `stop`, `outputs` and `pull` select the latest submitted or uncertain task when their ID is omitted. `wait` needs explicit IDs or tags; `clean` always needs explicit IDs. Additional common calls:
+
+```bash
+loaf run
+loaf status ID
+loaf logs ID -f
+loaf wait ID1 ID2
+loaf pull ID1 ID2 --into ./comparison
+loaf check --targets a,b
+loaf cloud acquire gpu-copy --clone-from old-gpu
+loaf cloud bind gpu --request REQUEST
+loaf cloud requests REQUEST
+```

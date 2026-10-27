@@ -40,7 +40,11 @@ func ResolveStopGrace(layers ...StopSettings) (*time.Duration, error) {
         }
         duration, err := time.ParseDuration(layer.Grace)
         if err != nil || duration < 0 || duration > wire.MaxStopGrace {
-            return nil, fault.New("BAD_CONFIG", "invalid_stop_grace", nil)
+            reason := "out_of_range"
+            if err != nil {
+                reason = "invalid_type"
+            }
+            return nil, fault.Invalid("--grace", reason, "invalid_stop_grace")
         }
         result = &duration
     }
@@ -56,7 +60,11 @@ func ResolveWait(layers ...string) (time.Duration, error) {
         }
         duration, err := time.ParseDuration(value)
         if err != nil || duration < 0 || duration > 5*time.Minute {
-            return 0, fault.New("BAD_CONFIG", "invalid_wait", nil)
+            reason := "out_of_range"
+            if err != nil {
+                reason = "invalid_type"
+            }
+            return 0, fault.Invalid("--wait", reason, "invalid_wait")
         }
         result = duration
     }
@@ -71,7 +79,7 @@ func ResolveTail(layers ...LogSettings) (int, error) {
             continue
         }
         if *layer.Tail < 0 || *layer.Tail > 10000 {
-            return 0, fault.New("BAD_CONFIG", "invalid_tail", nil)
+            return 0, fault.Invalid("--tail", "out_of_range", "invalid_tail")
         }
         result = *layer.Tail
     }

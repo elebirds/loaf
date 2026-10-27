@@ -72,7 +72,7 @@ func (c *Machines) Forward(ctx context.Context, target string, remote int, local
         port = *local
     }
     if remote < 1 || remote > 65535 || port < 1 || port > 65535 {
-        return fault.New("BAD_CONFIG", "forward_port", nil)
+        return fault.Invalid("port/--local-port", "out_of_range", "forward_port")
     }
     name, machine, _, err := c.machine(ctx, target)
     if err != nil {

@@ -135,7 +135,7 @@ func (c *Projects) Pull(ctx context.Context, in PullInput, emit ProgressFunc) (P
         concurrency = *in.Concurrency
     }
     if (multi && (value(in.Into) == "" || len(in.IDs) == 0 || in.To != nil)) || (!multi && in.Concurrency != nil) || concurrency < 1 || concurrency > 4 || (concurrency > 1 && !in.Policy.Batch) {
-        return PullResult{}, fault.New("BAD_CONFIG", "pull_batch_flags", nil)
+        return PullResult{}, fault.Invalid("--into/--to/--concurrency", "conflicting_arguments", "pull_batch_flags")
     }
     if c.Runs == nil || c.Puller == nil {
         return PullResult{}, fault.New("SSH_FAILED", "ssh_missing", nil)

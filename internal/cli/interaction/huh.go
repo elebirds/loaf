@@ -14,6 +14,9 @@ func (s *InputSession) richText(ctx context.Context, prompt TextPrompt, limit in
     // Keep one overflow character so a long paste fails instead of silently
     // submitting a truncated connection string or confirmation.
     field := huh.NewInput().Title(prompt.Title).Description(prompt.Description).CharLimit(limit + 1).Value(&value)
+    if prompt.Validate != nil {
+        field.Validate(prompt.Validate)
+    }
     if err := s.runForm(ctx, huh.NewForm(huh.NewGroup(field))); err != nil {
         return "", err
     }

@@ -33,11 +33,11 @@ for target in $targets; do
         -ldflags="-s -w -X github.com/elebirds/loaf/internal/wire.Version=$version" \
         -o "$directory/loaf" ./cmd/loaf
     cp LICENSE README.md README.zh-Hans.md "$directory/"
-    cp -R skills examples "$directory/"
+    cp -R skills examples manual "$directory/"
     go run ./scripts/package -out "$directory" -version "$version" "$directory/loaf" \
         internal/bundle/assets/loaf-runner-linux-amd64 internal/bundle/assets/loaf-runner-linux-arm64
     tar -czf "$staging/$package.tar.gz" -C "$directory" \
-        loaf LICENSE README.md README.zh-Hans.md BUILD.json THIRD_PARTY_LICENSES skills examples
+        loaf LICENSE README.md README.zh-Hans.md BUILD.json THIRD_PARTY_LICENSES skills examples manual
     mv "$staging/$package.tar.gz" "dist/$package.tar.gz"
     archives+=("dist/$package.tar.gz")
     if [[ "$target" == "$(go env GOOS)/$(go env GOARCH)" ]]; then

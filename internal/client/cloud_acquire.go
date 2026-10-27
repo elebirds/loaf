@@ -54,10 +54,10 @@ func (c *Resources) acquisitionPlan(ctx context.Context, in CloudAcquireInput) (
     }
     flags := in.Plan.Explicit.AutoDL
     if *in.CloneFrom == "" || in.AllowUnquoted || flags.Image != nil || flags.PrivateImageUUID != nil || flags.GPUSpecUUID != nil || flags.GPUSpecID != nil || flags.CUDAFrom != nil || flags.ExpandSystemDiskGB != nil {
-        return "", cloud.Account{}, plan, fault.New("BAD_CONFIG", "cloud_clone_options", nil)
+        return "", cloud.Account{}, plan, fault.Invalid("--clone-from", "conflicting_arguments", "cloud_clone_options")
     }
     if target, ok := c.Settings.Targets[*in.CloneFrom]; ok && target.Cloud == nil {
-        return "", cloud.Account{}, plan, fault.New("BAD_CONFIG", "cloud_clone_options", nil)
+        return "", cloud.Account{}, plan, fault.Invalid("--clone-from", "conflicting_arguments", "cloud_clone_options")
     }
     selection := in.Select
     if _, ok := c.Settings.Targets[*in.CloneFrom]; !ok && selection.Product == nil && plan.Product != "" {
@@ -121,7 +121,7 @@ func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, appr
         return result, err
     }
     result.Plan = &plan
-    if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: "acquire", Plan: &plan}); err != nil {
+    if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: "acquire", Plan: &plan, Account: name, Product: plan.Product, Target: in.Name}); err != nil {
         return result, err
     }
     var observation *cloud.SearchResult

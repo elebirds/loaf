@@ -2,12 +2,12 @@
 package cli
 
 import (
-    "bytes"
     "context"
     "encoding/json"
     "errors"
     "fmt"
     "io"
+    "runtime/debug"
     "strings"
 
     "github.com/elebirds/loaf/internal/cli/interaction"
@@ -33,17 +33,21 @@ type Options struct {
 }
 
 type errorView struct {
-    FailureKind     string `json:"failure_kind,omitempty"`
-    Code            string `json:"code"`
-    Message         string `json:"message"`
-    Hint            string `json:"hint,omitempty"`
-    Detail          string `json:"detail,omitempty"`
-    ProviderCode    string `json:"provider_code,omitempty"`
-    AuthStage       string `json:"auth_stage,omitempty"`
-    HTTPStatus      int    `json:"http_status,omitempty"`
-    Stage           string `json:"stage,omitempty"`
-    ExpectedVersion string `json:"expected_version,omitempty"`
-    ActualVersion   string `json:"actual_version,omitempty"`
+    Reason          string          `json:"reason,omitempty"`
+    Argument        string          `json:"argument,omitempty"`
+    HelpCommand     []string        `json:"help_command,omitempty"`
+    Location        *fault.Location `json:"location,omitempty"`
+    FailureKind     string          `json:"failure_kind,omitempty"`
+    Code            string          `json:"code"`
+    Message         string          `json:"message"`
+    Hint            string          `json:"hint,omitempty"`
+    Detail          string          `json:"detail,omitempty"`
+    ProviderCode    string          `json:"provider_code,omitempty"`
+    AuthStage       string          `json:"auth_stage,omitempty"`
+    HTTPStatus      int             `json:"http_status,omitempty"`
+    Stage           string          `json:"stage,omitempty"`
+    ExpectedVersion string          `json:"expected_version,omitempty"`
+    ActualVersion   string          `json:"actual_version,omitempty"`
 }
 type envelope struct {
     SchemaVersion int              `json:"schema_version"`
@@ -70,40 +74,57 @@ func Execute(ctx context.Context, args []string, o Options) int {
     if !early.languageSet {
         preferred = o.Env["LOAF_LANG"]
         if preferred == "" {
-            preferred = o.Language
+            if o.InitError == nil {
+                preferred = o.Language
+            }
         }
         if preferred == "" {
             preferred = "auto"
         }
     }
     l, langErr := i18n.New(preferred, o.Env)
+    if langErr != nil && !early.languageSet && o.Env["LOAF_LANG"] == "" && (early.help || early.version || len(args) > 0 && (args[0] == "help" || args[0] == "version")) {
+        l, langErr = i18n.New("auto", o.Env)
+    }
     p := &presenter{json: early.json, out: o.Out, err: o.Err, locale: l, trace: o.Trace}
     if early.languageSet && preferred == "" {
         langErr = fault.New("BAD_CONFIG", "language_invalid", map[string]any{"Languages": strings.Join(i18n.Supported(), ", ")})
     }
     if langErr != nil {
+        var failure *fault.Error
+        if errors.As(langErr, &failure) {
+            argument := "--lang"
+            if !early.languageSet && o.Env["LOAF_LANG"] != "" {
+                argument = "LOAF_LANG"
+            }
+            failure.Input = &fault.Input{Reason: "invalid_value", Argument: argument, HelpCommand: []string{"loaf", "help"}}
+        }
         return p.finish(nil, langErr)
-    }
-    if o.InitError != nil {
-        return p.finish(nil, o.InitError)
     }
     parsed, err := parse(parser, model, args, early)
     if err != nil {
         return p.finish(nil, err)
     }
     if parsed.help {
-        var out bytes.Buffer
-        printHelp(&out, parsed.node, l)
+        help := helpData(parsed.node, l)
         if p.json {
-            return p.finish(map[string]string{"help": out.String()}, nil)
+            return p.finish(help, nil)
         }
-        if _, err := io.Copy(o.Out, &out); err != nil {
+        if _, err := io.WriteString(o.Out, help.Help); err != nil {
             return 1
         }
         return 0
     }
+    p.command = parsed.path
+    if parsed.path == "version" {
+        info, _ := debug.ReadBuildInfo()
+        return p.finish(versionData(info), nil)
+    }
+    if o.InitError != nil {
+        return p.finish(nil, o.InitError)
+    }
     if model.Target != nil && targetForbidden(parsed.path) {
-        return p.finish(nil, parseFailure())
+        return p.finish(nil, inputFailure("conflicting_arguments", "--target", "input_target_forbidden", nil, parsed.node))
     }
     if model.Trace {
         if model.Logs.Follow || parsed.path == "exec" || parsed.path == "ssh" || parsed.path == "forward" || parsed.path == "cloud watch" {
@@ -121,6 +142,8 @@ func Execute(ctx context.Context, args []string, o Options) int {
 }
 
 type presenter struct {
+    waited   bool
+    command  string
     json     bool
     out, err io.Writer
     locale   *i18n.Localizer
@@ -146,7 +169,24 @@ func (p *presenter) error(err error) *errorView {
             f = fault.Wrap("OPERATION_FAILED", "internal_error", err)
         }
     }
-    view := &errorView{FailureKind: ssh.FailureKind(err), Code: f.Code, Message: p.locale.Text(f.Message, f.Params), Stage: fault.Stage(err)}
+    parameters := f.Params
+    if f.Message == "input_invalid_type" {
+        parameters = map[string]any{}
+        for k, v := range f.Params {
+            parameters[k] = v
+        }
+        if kind, ok := parameters["Value"].(string); ok {
+            parameters["Value"] = p.locale.Text("type_" + kind)
+        }
+    }
+    view := &errorView{FailureKind: ssh.FailureKind(err), Code: f.Code, Message: p.locale.Text(f.Message, parameters), Stage: fault.Stage(err)}
+    if f.Input != nil {
+        view.Reason, view.Argument = f.Input.Reason, f.Input.Argument
+        view.Location, view.HelpCommand = f.Input.Location, f.Input.HelpCommand
+        if len(view.HelpCommand) == 0 {
+            view.HelpCommand = append([]string{"loaf", "help"}, strings.Fields(p.command)...)
+        }
+    }
     view.ProviderCode, _ = f.Params["ProviderCode"].(string)
     view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
     view.AuthStage, _ = f.Params["AuthStage"].(string)
@@ -223,9 +263,22 @@ func (p *presenter) finish(data any, err error) int {
         if renderErr := printResult(p.out, data, p.locale, view == nil); renderErr != nil && view == nil {
             view = p.error(renderErr)
         }
+        if run, ok := data.(execution.View); ok && p.command == "run" && run.ID != "" {
+            printRunNext(p.out, run, p.locale, p.waited && err == nil)
+        }
     }
     if view != nil {
         fmt.Fprintln(p.err, view.Message)
+        if view.Location != nil {
+            location := view.Location.File
+            if view.Location.Line > 0 {
+                location += fmt.Sprintf(":%d:%d", view.Location.Line, view.Location.Column)
+            }
+            if view.Location.Field != "" {
+                location += " (" + view.Location.Field + ")"
+            }
+            fmt.Fprintln(p.err, p.locale.Text("input_location", map[string]any{"Path": location}))
+        }
         if view.Stage != "" {
             fmt.Fprintln(p.err, p.locale.Text("operation_stage", map[string]any{"Stage": p.locale.Text("operation_stage_" + view.Stage)}))
         }
@@ -234,6 +287,8 @@ func (p *presenter) finish(data any, err error) int {
         }
         if view.Hint != "" {
             fmt.Fprintln(p.err, view.Hint)
+        } else if len(view.HelpCommand) > 0 {
+            fmt.Fprintln(p.err, p.locale.Text("input_help_hint", map[string]any{"Command": strings.Join(view.HelpCommand, " ")}))
         }
     }
     return exitCode(view)

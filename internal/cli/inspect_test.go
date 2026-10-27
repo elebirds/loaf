@@ -25,7 +25,7 @@ func TestNamedRunsAndLocalLabelFilters(t *testing.T) {
         t.Fatal(remote.req)
     }
     for _, local := range []bool{false, true} {
-        args := []string{"ps", "--name", "中文 A", "--tag", "ab", "--tag", "seed1", "--json"}
+        args := []string{"status", "--name", "中文 A", "--tag", "ab", "--tag", "seed1", "--json"}
         if local {
             args = append(args, "--local")
         }
@@ -40,7 +40,7 @@ func TestNamedRunsAndLocalLabelFilters(t *testing.T) {
             t.Fatal(out)
         }
     }
-    if code, out, stderr := run(t, o, "ps", "--local", "--tag", "absent", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"runs":[]`) {
+    if code, out, stderr := run(t, o, "status", "--local", "--tag", "absent", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"runs":[]`) {
         t.Fatal(code, out, stderr)
     }
 }
@@ -55,12 +55,12 @@ func TestOfflineInspectionSurvivesVersionAndAliasChangesWithoutSSH(t *testing.T)
     if err := o.State.SaveRun(context.Background(), old); err != nil {
         t.Fatal(err)
     }
-    if code, _, _ := run(t, o, "remove", "lab", "--json"); code != 0 {
+    if code, _, _ := run(t, o, "machine", "remove", "lab", "--json"); code != 0 {
         t.Fatal(code)
     }
     o.Runs = nil
     for _, lang := range []string{"en", "zh-Hans"} {
-        for _, args := range [][]string{{"inspect", old.ID}, {"ps", old.ID, "--local"}} {
+        for _, args := range [][]string{{"inspect", old.ID}, {"status", old.ID, "--local"}} {
             code, out, stderr := run(t, o, append(args, "--lang", lang, "--json")...)
             var r struct {
                 Data execution.LocalDetails `json:"data"`
@@ -77,12 +77,12 @@ func TestOfflineInspectionSurvivesVersionAndAliasChangesWithoutSSH(t *testing.T)
     if remote.calls != 0 {
         t.Fatal("offline command contacted a machine", remote.calls)
     }
-    for _, args := range [][]string{{"inspect", "missing"}, {"ps", "missing", "--local"}} {
+    for _, args := range [][]string{{"inspect", "missing"}, {"status", "missing", "--local"}} {
         if code, out, stderr := run(t, o, append(args, "--json")...); code != 1 || stderr != "" || !strings.Contains(out, `"code":"RUN_NOT_FOUND"`) || strings.Contains(out, `"data"`) {
             t.Fatal(args, code, out, stderr)
         }
     }
-    for _, args := range [][]string{{"ps", "--local", "--status", "running"}, {"ps", old.ID, "--local", "--wait", "1s"}, {"ps", old.ID, "--local", "--tag", "x"}, {"inspect", old.ID, "--target", "other"}} {
+    for _, args := range [][]string{{"status", "--local", "--status", "running"}, {"status", old.ID, "--local", "--wait", "1s"}, {"status", old.ID, "--local", "--tag", "x"}, {"inspect", old.ID, "--target", "other"}} {
         if code, out, stderr := run(t, o, append(args, "--json")...); code != 2 || stderr != "" || !json.Valid([]byte(out)) {
             t.Fatal(args, code, out, stderr)
         }
@@ -99,7 +99,7 @@ func TestOfflinePreparationIdentityDoesNotReplaceLatest(t *testing.T) {
     }
     o.Runs = nil
     for _, lang := range []string{"en", "zh-Hans"} {
-        for _, args := range [][]string{{"inspect", preparation.ID}, {"ps", preparation.ID, "--local"}} {
+        for _, args := range [][]string{{"inspect", preparation.ID}, {"status", preparation.ID, "--local"}} {
             code, out, stderr := run(t, o, append(args, "--lang", lang, "--json")...)
             var result struct {
                 Data execution.LocalDetails `json:"data"`
@@ -117,7 +117,7 @@ func TestOfflinePreparationIdentityDoesNotReplaceLatest(t *testing.T) {
             }
         }
     }
-    code, out, stderr := run(t, o, "ps", "--local", "--json")
+    code, out, stderr := run(t, o, "status", "--local", "--json")
     if code != 0 || stderr != "" || strings.Contains(out, preparation.ID) || remote.calls != 0 {
         t.Fatal("preparation changed navigation or contacted remote", code, out, stderr, remote.calls)
     }
@@ -137,7 +137,7 @@ func TestVersionMismatchHasStructuredVersions(t *testing.T) {
         t.Fatal(err)
     }
     for _, lang := range []string{"en", "zh-Hans"} {
-        code, out, stderr := run(t, o, "ps", ref.ID, "--lang", lang, "--json")
+        code, out, stderr := run(t, o, "status", ref.ID, "--lang", lang, "--json")
         var r struct {
             Error errorView      `json:"error"`
             Data  execution.View `json:"data"`

@@ -123,6 +123,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
 
 func (c *invocation) approveCloud(ctx context.Context, approval client.CloudApproval) error {
     p := c.output
+    fmt.Fprintln(p.err, p.locale.Text("cloud_approval_identity", map[string]any{"Account": approval.Account, "Product": approval.Product, "Target": approval.Target, "ID": approval.InstanceID, "Request": approval.RequestID}))
     prompt := p.locale.Text("cloud_power_confirm", map[string]any{"Value": approval.Operation, "ID": approval.InstanceID})
     if approval.Operation == "no-instance" {
         prompt = p.locale.Text("cloud_no_instance_confirm")

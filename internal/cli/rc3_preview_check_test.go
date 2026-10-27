@@ -16,7 +16,7 @@ import (
 
 func TestRunPreviewIsFullyOfflineRedactedAndPreservesExplicitZero(t *testing.T) {
     o := fixture(t)
-    code, out, stderr := run(t, o, "add", "lab", "--ssh", "host-secret", "--json")
+    code, out, stderr := run(t, o, "machine", "add", "lab", "--ssh", "host-secret", "--json")
     if code != 0 {
         t.Fatal(out, stderr)
     }
@@ -72,7 +72,7 @@ func TestMultiTargetCheckExportsAllowlistAndKeepsPartialResults(t *testing.T) {
         if name == "bad" {
             dest = "secret-host"
         }
-        if code, out, stderr := run(t, o, "add", name, "--ssh", dest, "--json"); code != 0 {
+        if code, out, stderr := run(t, o, "machine", "add", name, "--ssh", dest, "--json"); code != 0 {
             t.Fatal(out, stderr)
         }
     }

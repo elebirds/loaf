@@ -59,10 +59,10 @@ func runFixture(t *testing.T) (testOptions, *runRemote) {
     o := fixture(t)
     remote := &runRemote{}
     o.Runs = &execution.Service{Index: o.State, Check: runChecker{}, Runner: func(context.Context, config.Target, string, bool) (string, error) { return "/remote/runner", nil }, Send: runSender{}, Remote: remote}
-    if code, out, stderr := run(t, o, "add", "lab", "--ssh", "lab", "--json"); code != 0 {
+    if code, out, stderr := run(t, o, "machine", "add", "lab", "--ssh", "lab", "--json"); code != 0 {
         t.Fatal(out, stderr)
     }
-    if code, out, stderr := run(t, o, "use", "lab", "--json"); code != 0 {
+    if code, out, stderr := run(t, o, "machine", "use", "lab", "--json"); code != 0 {
         t.Fatal(out, stderr)
     }
     return o, remote
@@ -89,7 +89,7 @@ func TestRunPublicContractsAndLiteralArgv(t *testing.T) {
         if code != 0 || stderr != "" || len(strings.Split(strings.TrimSpace(out), "\n")) != 2 || !strings.Contains(out, `"type":"end"`) {
             t.Fatal(code, out, stderr)
         }
-        for _, command := range []string{"run", "ps", "logs"} {
+        for _, command := range []string{"run", "status", "logs"} {
             if code, out, stderr := run(t, o, "--lang", lang, command, "--help"); code != 0 || out == "" || stderr != "" {
                 t.Fatal(command, out, stderr)
             } else if command == "logs" && strings.Contains(out, "--target") {
@@ -97,7 +97,7 @@ func TestRunPublicContractsAndLiteralArgv(t *testing.T) {
             }
         }
     }
-    for _, args := range [][]string{{"run", "python"}, {"run", "--wait", "-1s"}, {"ps", "--wait", "1s"}, {"ps", "--limit", "0"}, {"logs", "--tail", "-1"}, {"logs", "--target", "lab"}} {
+    for _, args := range [][]string{{"run", "python"}, {"run", "--wait", "-1s"}, {"status", "--wait", "1s"}, {"status", "--limit", "0"}, {"logs", "--tail", "-1"}, {"logs", "--target", "lab"}} {
         code, out, stderr := run(t, o, append(args, "--json")...)
         if code != 2 || stderr != "" || !json.Valid([]byte(out)) {
             t.Fatal(args, code, out, stderr)
@@ -113,7 +113,7 @@ func TestPartialStatusKeepsSuccessfulRows(t *testing.T) {
         }
     }
     remote.failID = remote.req.RunID
-    code, out, stderr := run(t, o, "ps", "--json")
+    code, out, stderr := run(t, o, "status", "--json")
     var response struct {
         Data  runList   `json:"data"`
         Error errorView `json:"error"`
@@ -153,7 +153,7 @@ func TestHumanWaitStreamsWithoutDuplicateTail(t *testing.T) {
     if code != 0 || stderr != "" || !strings.Contains(out, "中文 log") {
         t.Fatal(code, out, stderr)
     }
-    if code, out, stderr = run(t, o, "ps", "--json"); code != 0 || stderr != "" || !strings.Contains(out, fmt.Sprintf(`"total":%d`, 2)) {
+    if code, out, stderr = run(t, o, "status", "--json"); code != 0 || stderr != "" || !strings.Contains(out, fmt.Sprintf(`"total":%d`, 2)) {
         t.Fatal(code, out, stderr)
     }
 }

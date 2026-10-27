@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "data": {
+    "run_id": "r_0123456789abcdef01234567",
+    "version": "example-build",
+    "target": "lab",
+    "remote_dir": "/home/researcher/projects/example",
+    "status": "failed",
+    "submission": "submitted",
+    "phase": "command",
+    "created_at": "2026-01-01T00:00:00Z",
+    "exit_code": 7,
+    "completed_at": "2026-01-01T00:00:02Z"
+  }
+}

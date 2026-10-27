@@ -79,31 +79,31 @@ func psResult(t *testing.T, o testOptions, args ...string) (int, execution.Histo
 
 func TestPSFiltersBoundedHistoryAndSavedAliases(t *testing.T) {
     o, remote, refs := psFixture(t)
-    code, list := psResult(t, o, "ps", "--status", "failed", "--status", "succeeded", "--limit", "2")
+    code, list := psResult(t, o, "status", "--status", "failed", "--status", "succeeded", "--limit", "2")
     if code != 0 || list.Examined != 2 || list.Matched != 1 || !list.Truncated || list.Total != 4 || len(list.Runs) != 1 || list.Runs[0].ID != refs[1].ID || remote.calls != 2 {
         t.Fatal(code, list, remote.calls)
     }
-    code, list = psResult(t, o, "ps", "--since", "2026-10-21T16:00:00+08:00", "--until", "2026-10-21T17:00:00+08:00", "--status", "failed", "--status", "succeeded")
+    code, list = psResult(t, o, "status", "--since", "2026-10-21T16:00:00+08:00", "--until", "2026-10-21T17:00:00+08:00", "--status", "failed", "--status", "succeeded")
     if code != 0 || list.Eligible != 2 || list.Matched != 2 || list.Truncated || list.Filters.Since == nil || list.Filters.Since.Location() != time.UTC || list.Runs[0].ID != refs[1].ID || list.Runs[1].ID != refs[2].ID {
         t.Fatal(code, list)
     }
-    for _, args := range [][]string{{"ps", "--target", "retired"}, {"--target", "retired", "ps"}} {
+    for _, args := range [][]string{{"status", "--target", "retired"}, {"--target", "retired", "status"}} {
         code, list = psResult(t, o, args...)
         if code != 0 || list.Eligible != 1 || list.Matched != 1 || list.Runs[0].ID != refs[3].ID {
             t.Fatal(code, list)
         }
     }
     remote.failID = refs[0].ID
-    code, list = psResult(t, o, "ps", "--status", "failed")
+    code, list = psResult(t, o, "status", "--status", "failed")
     if code != 1 || list.Unresolved != 1 || list.Matched != 2 || len(list.Runs) != 3 || list.Runs[0].QueryError != "SSH_FAILED" || list.Runs[0].Status != "unknown" {
         t.Fatal(code, list)
     }
     for _, lang := range []string{"en", "zh-Hans"} {
-        code, out, stderr := run(t, o, "--lang", lang, "ps", "--help")
+        code, out, stderr := run(t, o, "--lang", lang, "status", "--help")
         if code != 0 || stderr != "" || !strings.Contains(out, "--status") || !strings.Contains(out, "--target") || !strings.Contains(out, "RFC3339") {
             t.Fatal(code, out, stderr)
         }
-        code, out, stderr = run(t, o, "--lang", lang, "ps", "--since", "2027-01-01T00:00:00Z")
+        code, out, stderr = run(t, o, "--lang", lang, "status", "--since", "2027-01-01T00:00:00Z")
         if code != 0 || stderr != "" || out == "" || strings.Contains(out, "<no value>") {
             t.Fatal(code, out, stderr)
         }
@@ -119,23 +119,23 @@ func TestPSPreferencesAndInvalidCombinations(t *testing.T) {
     if err := os.WriteFile(o.Config.ConfigFile, append(data, []byte("\n[ps]\nlimit = 3\n")...), 0600); err != nil {
         t.Fatal(err)
     }
-    if code, list := psResult(t, o, "ps"); code != 0 || list.Examined != 3 || list.Limit != 3 {
+    if code, list := psResult(t, o, "status"); code != 0 || list.Examined != 3 || list.Limit != 3 {
         t.Fatal(code, list)
     }
     if err := os.WriteFile(filepath.Join(o.CWD, "loaf.toml"), []byte("[ps]\nlimit = 1\n"), 0600); err != nil {
         t.Fatal(err)
     }
-    if code, list := psResult(t, o, "ps"); code != 0 || list.Examined != 1 || list.Limit != 1 {
+    if code, list := psResult(t, o, "status"); code != 0 || list.Examined != 1 || list.Limit != 1 {
         t.Fatal(code, list)
     }
-    if code, list := psResult(t, o, "ps", "--limit", "2"); code != 0 || list.Examined != 2 || list.Limit != 2 {
+    if code, list := psResult(t, o, "status", "--limit", "2"); code != 0 || list.Examined != 2 || list.Limit != 2 {
         t.Fatal(code, list)
     }
     for _, args := range [][]string{
-        {"ps", "--limit", "0"}, {"ps", "--status", "complete"}, {"ps", "--status", "failed,succeeded"},
-        {"ps", "--since", "2026-10-21"}, {"ps", "--since", ""}, {"ps", "--until", "yesterday"},
-        {"ps", "--since", "2026-10-22T00:00:00Z", "--until", "2026-10-21T00:00:00Z"},
-        {"ps", "--target", ""}, {"ps", "--wait", "1s"},
+        {"status", "--limit", "0"}, {"status", "--status", "complete"}, {"status", "--status", "failed,succeeded"},
+        {"status", "--since", "2026-10-21"}, {"status", "--since", ""}, {"status", "--until", "yesterday"},
+        {"status", "--since", "2026-10-22T00:00:00Z", "--until", "2026-10-21T00:00:00Z"},
+        {"status", "--target", ""}, {"status", "--wait", "1s"},
     } {
         for _, lang := range []string{"en", "zh-Hans"} {
             code, out, stderr := run(t, o, append([]string{"--lang", lang, "--json"}, args...)...)
@@ -145,12 +145,12 @@ func TestPSPreferencesAndInvalidCombinations(t *testing.T) {
         }
     }
     for _, flag := range []string{"--status=failed", "--since=2026-10-21T00:00:00Z", "--until=2026-10-21T00:00:00Z", "--target=lab", "--limit=1"} {
-        if code, out, stderr := run(t, o, "ps", refs[0].ID, flag, "--json"); code != 2 || stderr != "" || !json.Valid([]byte(out)) {
+        if code, out, stderr := run(t, o, "status", refs[0].ID, flag, "--json"); code != 2 || stderr != "" || !json.Valid([]byte(out)) {
             t.Fatal(flag, code, out, stderr)
         }
     }
     // Configured list limits do not prevent an explicit bound-run observation.
-    if code, out, stderr := run(t, o, "ps", refs[0].ID, "--json"); code != 0 || stderr != "" || !strings.Contains(out, refs[0].ID) {
+    if code, out, stderr := run(t, o, "status", refs[0].ID, "--json"); code != 0 || stderr != "" || !strings.Contains(out, refs[0].ID) {
         t.Fatal(code, out, stderr)
     }
 }

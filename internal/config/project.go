@@ -30,8 +30,13 @@ type ProjectFile struct {
 }
 
 // Discover chooses the nearest project TOML, Git worktree root, or current directory.
-func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
-    var c ProjectFile
+func Discover(ctx context.Context, cwd string) (projectRoot string, c ProjectFile, err error) {
+    file := ""
+    defer func() {
+        if file != "" {
+            err = locateConfig(file, err)
+        }
+    }()
     root, err := filepath.EvalSymlinks(cwd)
     if err != nil {
         return "", c, err
@@ -43,8 +48,9 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
     for dir := root; ; dir = filepath.Dir(dir) {
         data, err := os.ReadFile(filepath.Join(dir, "loaf.toml"))
         if err == nil {
+            file = filepath.Join(dir, "loaf.toml")
             if err := decodeTOML(data, &c); err != nil {
-                return "", c, fault.Wrap("BAD_CONFIG", "project_config", err)
+                return "", c, configFailure(filepath.Join(dir, "loaf.toml"), "project_config", err)
             }
             if c.RemoteDir != "" && !ValidRemotePath(c.RemoteDir) {
                 return "", c, fault.New("BAD_CONFIG", "invalid_remote", nil)
@@ -76,7 +82,7 @@ func Discover(ctx context.Context, cwd string) (string, ProjectFile, error) {
             return dir, c, nil
         }
         if !errors.Is(err, os.ErrNotExist) {
-            return "", c, fault.Wrap("BAD_CONFIG", "project_config", err)
+            return "", c, configFailure(filepath.Join(dir, "loaf.toml"), "project_config", err)
         }
         if filepath.Dir(dir) == dir {
             break

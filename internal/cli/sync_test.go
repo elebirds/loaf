@@ -82,7 +82,7 @@ func TestSyncTargetPrecedenceAndStableProjectIdentity(t *testing.T) {
     syncer := &fakeSyncer{}
     o.Syncer = syncer
     for _, alias := range []string{"shared", "personal", "explicit"} {
-        if code, out, stderr := run(t, o, "add", alias, "--ssh", alias, "--json"); code != 0 {
+        if code, out, stderr := run(t, o, "machine", "add", alias, "--ssh", alias, "--json"); code != 0 {
             t.Fatal(code, out, stderr)
         }
     }
@@ -103,7 +103,7 @@ func TestSyncTargetPrecedenceAndStableProjectIdentity(t *testing.T) {
     for _, alias := range []string{"shared", "personal", "explicit"} {
         args := []string{"sync", "--json"}
         if alias == "personal" {
-            if code, out, stderr := run(t, o, "use", alias, "--json"); code != 0 {
+            if code, out, stderr := run(t, o, "machine", "use", alias, "--json"); code != 0 {
                 t.Fatal(code, out, stderr)
             }
         }
@@ -139,10 +139,10 @@ func TestSyncErrorsDoNotRenderSuccess(t *testing.T) {
     o := fixture(t)
     syncer := &fakeSyncer{Err: fault.New("PROJECT_BUSY", "sync_busy", nil)}
     o.Syncer = syncer
-    if code, out, stderr := run(t, o, "add", "lab", "--ssh", "lab", "--json"); code != 0 {
+    if code, out, stderr := run(t, o, "machine", "add", "lab", "--ssh", "lab", "--json"); code != 0 {
         t.Fatal(code, out, stderr)
     }
-    if code, out, stderr := run(t, o, "use", "lab", "--json"); code != 0 {
+    if code, out, stderr := run(t, o, "machine", "use", "lab", "--json"); code != 0 {
         t.Fatal(code, out, stderr)
     }
     for _, lang := range []string{"en", "zh-Hans"} {

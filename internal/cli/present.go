@@ -29,7 +29,9 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
     case addResult:
         fmt.Fprintln(out, l.Text("added", map[string]any{"Target": r.Target, "Destination": r.Destination}))
     case targetsResult:
-        printTargets(out, r, l)
+        printTargets(out, r, l, false)
+    case machineDetails:
+        printTargets(out, r.targetsResult, l, true)
     case removeResult:
         fmt.Fprintln(out, l.Text("remove_done", map[string]any{"Target": r.Target}))
         if r.Selected {
@@ -63,13 +65,17 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
         for _, v := range r.Runs {
             printRun(out, v, l)
         }
+        if r.TimedOut {
+            fmt.Fprintln(out, l.Text("wait_timed_out"))
+        }
+        fmt.Fprintln(out, l.Text("batch_state_errors", map[string]any{"Count": r.StateErrors, "Total": r.Unexamined}))
         fmt.Fprintln(out, l.Text("wait_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.QueryErrors, "Matched": r.Examined, "Bytes": r.Interrupted}))
     case runList:
         if r.Source == "local" {
             fmt.Fprintln(out, l.Text("inspect_local"))
         }
         for _, run := range r.Runs {
-            printRun(out, run, l)
+            printRunRow(out, run, l)
         }
         if len(r.Runs) == 0 {
             if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Name != "" || len(r.Filters.Tags) > 0 || r.Filters.Since != nil || r.Filters.Until != nil {
@@ -87,6 +93,7 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
         if r.Truncated {
             fmt.Fprintln(out, l.Text("runs_truncated"))
         }
+        fmt.Fprintln(out, l.Text("batch_state_errors", map[string]any{"Count": r.StateErrors, "Total": max(0, r.Eligible-r.Examined)}))
     case checkBatch:
         printCheckBatch(out, r, l)
     case checkResult:

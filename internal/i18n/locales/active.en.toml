@@ -99,7 +99,7 @@ other = "Runner {{.Version}} verified: {{.Path}}"
 [runner_version_mismatch]
 other = "The task or runner version {{.Actual}} does not match CLI version {{.Expected}}."
 [runner_version_hint]
-other = "Update Loaf on the controlling machine. Remote helpers update automatically; tasks created by another version require their matching CLI and are not migrated while running."
+other = "Use the CLI version required by the saved task (see loaf inspect ID). Current helper deployment is automatic; do not replace active supervisors."
 [invalid_flags]
 other = "Cannot parse command options. Check option names and values."
 [invalid_command]
@@ -111,7 +111,7 @@ other = "Use loaf help or loaf <command> --help."
 [language_invalid]
 other = "Unsupported interface language. Available: {{.Languages}}."
 [config_read]
-other = "Cannot read Loaf configuration or state. Check file permissions and TOML/JSON syntax."
+other = "Cannot read Loaf configuration or state. Check file permissions and TOML syntax."
 [project_config]
 other = "Cannot read project configuration. Check loaf.toml and its field names."
 [state_write]
@@ -125,9 +125,9 @@ other = "Remote directory must be absolute or start with ~/; root, home itself, 
 [target_exists]
 other = "Target {{.Target}} already exists. Use --replace to change it."
 [target_unknown]
-other = "Unknown target: {{.Target}}. Add it with loaf add first."
+other = "Unknown target: {{.Target}}. Add it with loaf machine add first."
 [target_required]
-other = "No target selected. Use loaf use <name> or --target <name>."
+other = "No target selected. Use loaf machine use <name> or --target <name>."
 [ssh_input]
 other = "Enter only an SSH connection or Host alias. Commands, expansions, forwarding, and unsafe SSH options are not accepted."
 [ssh_prompt]
@@ -327,7 +327,7 @@ other = "Accepted: {{.ID}}"
 other = "Cannot confirm whether the remote task was accepted. Its ID and location are saved."
 
 [submission_query]
-other = "Query the same ID with loaf ps <run-id> --json. Do not submit a replacement automatically."
+other = "Query the same ID with loaf status <run-id> --json. Do not submit a replacement automatically."
 
 [run_query]
 other = "Cannot obtain a complete run observation."
@@ -446,7 +446,7 @@ other = "Requesting stop and waiting for confirmation…"
 other = "Task termination is not confirmed. An accepted stop request remains active."
 
 [stop_query_hint]
-other = "Query the same ID with loaf ps <run-id> --json to check its current result."
+other = "Query the same ID with loaf status <run-id> --json to check its current result."
 
 [pull_base_dir]
 other = "The result base must be a separate directory, not the project root or an ancestor."
@@ -548,7 +548,7 @@ other = "Use targets [name] or remove <name> instead of --target."
 other = "No machine selected for this project."
 
 [targets_missing_choice]
-other = "Selected machine {{.Target}} is no longer registered. Choose one with loaf use <name>."
+other = "Selected machine {{.Target}} is no longer registered. Choose one with loaf machine use <name>."
 
 [targets_choice]
 other = "Current project machine: {{.Target}}"
@@ -569,7 +569,7 @@ other = "SSH arguments"
 other = "Removed local machine alias {{.Target}}. Runs and remote files were kept."
 
 [remove_reselect]
-other = "This project still names the removed alias. Select another with loaf use <name> before new remote operations."
+other = "This project still names the removed alias. Select another with loaf machine use <name> before new remote operations."
 
 [ps_flag_status]
 other = "Keep observations with this status; repeat for alternatives. Query failures remain visible."
@@ -651,7 +651,7 @@ other = "data cleaned"
 [clean_status_pending]
 other = "cleanup unconfirmed"
 [clean_confirm_submission]
-other = "Query the same run ID with loaf ps to confirm acceptance before cleaning; do not submit a replacement run."
+other = "Query the same run ID with loaf status to confirm acceptance before cleaning; do not submit a replacement run."
 
 [cloud_short]
 other = "Manage explicit cloud rentals and connect them to SSH targets"
@@ -1277,7 +1277,7 @@ other = "Task annotation storage is unavailable."
 other = "Human-readable task name; does not replace the run ID."
 
 [flag_run_tag]
-other = "Task tag; repeat to add tags."
+other = "Task tag; repeat for multiple literal tags (selection requires all tags)."
 
 [flag_ps_local]
 other = "Read saved task facts only; do not connect or query execution status."
@@ -1647,3 +1647,162 @@ other = "Operation canceled."
 
 [log_acknowledged]
 other = "Acknowledged logs for {{.ID}} through byte {{.Offset}}."
+
+
+[machine_short]
+other = "Manage saved machines and the current project selection."
+
+[machine_list_short]
+other = "List saved machines without connecting."
+
+[machine_show_short]
+other = "Show one saved machine without connecting."
+
+[flag_version]
+other = "Show the build version without loading project state."
+
+[group_experiments]
+other = "Experiments and project files:"
+
+[group_machines]
+other = "Machines and foreground operations:"
+
+[group_resources]
+other = "Cloud resources:"
+
+[group_diagnostics]
+other = "Diagnostics and help:"
+
+[help_examples]
+other = "Examples:"
+
+[help_configurable]
+other = "Configurable."
+
+[help_more]
+other = "Use --json for structured results. Full examples and constraints are in the bundled manual."
+
+[input_unknown_option]
+other = "Unknown option {{.Argument}}. Check the spelling and command."
+
+[input_unknown_command]
+other = "Unknown command {{.Argument}}."
+
+[input_missing_argument]
+other = "Missing required argument or value: {{.Argument}}."
+
+[input_invalid_type]
+other = "{{.Argument}} requires a value of type {{.Value}}."
+
+[input_extra_arguments]
+other = "Unexpected positional arguments; check this command’s usage."
+
+[input_command_replaced]
+other = "The {{.Argument}} command has moved. Use {{.Value}}."
+
+[input_help_hint]
+other = "Usage and examples: {{.Command}}"
+
+[input_target_forbidden]
+other = "--target cannot redirect this operation; use its saved binding or explicit machine argument."
+
+[input_location]
+other = "Configuration: {{.Path}}"
+
+[ps_wait_single]
+other = "--wait requires one task ID and a live query; it is not supported by lists or --local."
+
+[type_string]
+other = "text"
+
+[type_int]
+other = "integer"
+
+[type_bool]
+other = "boolean"
+
+[type_duration]
+other = "duration"
+
+[type_path]
+other = "path"
+
+[type_gib]
+other = "GiB"
+
+[type_decimal]
+other = "decimal"
+
+[type_csv]
+other = "value,..."
+
+[type_run-id]
+other = "run-id"
+
+[type_instance-id]
+other = "instance-id"
+
+[type_request-id]
+other = "request-id"
+
+[type_name]
+other = "name"
+
+[type_cursor]
+other = "cursor"
+
+
+[ssh_prompt_help]
+other = "For example: lab-gpu or ssh -p 2222 user@host. Enter submits; Ctrl-C cancels."
+
+[clean_scope]
+other = "Delete data for {{.Count}} explicitly selected tasks:"
+
+[cloud_approval_identity]
+other = "Account: {{.Account}}; product: {{.Product}}; target: {{.Target}}; instance: {{.ID}}; request: {{.Request}}."
+
+[run_submission_uncertain]
+other = "submission unconfirmed; query this ID"
+
+[run_next_inspect]
+other = "Saved preparation: loaf inspect {{.ID}}"
+
+[run_next_query]
+other = "Observe the same task: loaf status {{.ID}}. Do not submit a replacement."
+
+[run_next_pull]
+other = "Retrieve outputs: loaf pull {{.ID}}"
+
+[run_next_logs]
+other = "Inspect the experiment log: loaf logs {{.ID}}"
+
+[run_next_running]
+other = "Status: loaf status {{.ID}}\nLive log: loaf logs {{.ID}} -f"
+
+[run_wait_finished]
+other = "The observation budget ended; the remote task continues independently."
+
+[batch_state_errors]
+other = "Local save failures: {{.Count}}; unexamined: {{.Total}}."
+
+[preview_outputs]
+other = "Outputs: {{.Paths}}"
+
+[preview_wait]
+other = "Observation budget: {{.Value}} (not a runtime limit)."
+
+[preview_provenance]
+other = "Setting sources:"
+
+
+[preview_new_location]
+other = "assigned at submission, without allocating an ID in this preview"
+
+[preview_policies]
+other = "Log tail: {{.Count}} lines; sync: {{.Mode}}."
+
+[help_defaults]
+other = "Shown defaults are built-ins; project and user settings may override them."
+
+[input_out_of_range]
+other = "{{.Argument}} is outside the supported numeric range."

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "ok": false,
+  "data": {
+    "runs": [
+      {
+        "run_id": "r_0123456789abcdef01234567",
+        "version": "example-build",
+        "target": "lab",
+        "remote_dir": "/home/researcher/projects/example",
+        "status": "succeeded",
+        "submission": "submitted",
+        "phase": "command",
+        "created_at": "2026-01-01T00:00:00Z",
+        "exit_code": 0
+      },
+      {
+        "run_id": "r_0123456789abcdef01234567",
+        "version": "example-build",
+        "target": "lab",
+        "remote_dir": "/home/researcher/projects/example",
+        "status": "unknown",
+        "submission": "submitted",
+        "created_at": "2026-01-01T00:00:00Z",
+        "exit_code": null,
+        "query_error": "SSH_FAILED"
+      }
+    ],
+    "total": 2,
+    "truncated": false,
+    "eligible": 2,
+    "examined": 2,
+    "limit": 20,
+    "matched": 1,
+    "unresolved": 1,
+    "state_errors": 0,
+    "filters": {}
+  },
+  "error": {
+    "code": "QUERY_PARTIAL",
+    "message": "Some tasks could not be queried."
+  }
+}

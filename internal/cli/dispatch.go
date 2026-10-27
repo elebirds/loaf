@@ -3,6 +3,7 @@ package cli
 import (
     "context"
     "encoding/json"
+    "errors"
     "fmt"
     "io"
     "runtime/debug"
@@ -13,6 +14,7 @@ import (
     "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/ssh"
 )
 
 type invocation struct {
@@ -31,25 +33,41 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
     case "version":
         info, _ := debug.ReadBuildInfo()
         return versionData(info), nil
-    case "add":
-        connection := g.Add.SSH
+    case "machine add":
+        connection := g.Machine.Add.SSH
         if connection == "" {
             if c.policy.Batch {
-                return nil, fault.New("BAD_CONFIG", "ssh_required", nil)
+                return nil, fault.Invalid("--ssh", "missing_argument", "ssh_required")
             }
             var err error
-            connection, err = c.input.Text(ctx, interaction.TextPrompt{Title: p.locale.Text("ssh_prompt"), MaxBytes: 8192})
+            connection, err = c.input.Text(ctx, interaction.TextPrompt{Title: p.locale.Text("ssh_prompt"), Description: p.locale.Text("ssh_prompt_help"), MaxBytes: 8192, Validate: func(value string) error {
+                if _, err := ssh.ParseConnection(value); err != nil {
+                    var f *fault.Error
+                    if errors.As(err, &f) {
+                        return errors.New(p.locale.Text(f.Message, f.Params))
+                    }
+                    return errors.New(p.locale.Text("ssh_input"))
+                }
+                return nil
+            }})
             if err != nil {
                 return nil, err
             }
         }
-        return complete(c.app.Machines.AddTarget(ctx, g.Add.Name, connection, g.Add.RemoteDir, g.Add.Replace))
-    case "use":
-        return complete(c.app.Machines.UseTarget(ctx, g.Use.Name))
-    case "targets":
-        return complete(c.app.Machines.Targets(ctx, g.Targets.Name))
-    case "remove":
-        return complete(c.app.Machines.RemoveTarget(ctx, g.Remove.Name))
+        return complete(c.app.Machines.AddTarget(ctx, g.Machine.Add.Name, connection, g.Machine.Add.RemoteDir, g.Machine.Add.Replace))
+    case "machine use":
+        return complete(c.app.Machines.UseTarget(ctx, g.Machine.Use.Name))
+    case "machine", "machine list", "machine show":
+        result, err := c.app.Machines.Targets(ctx, g.Machine.Show.Name)
+        if err != nil {
+            return nil, err
+        }
+        if path == "machine show" {
+            return machineDetails{result}, nil
+        }
+        return result, nil
+    case "machine remove":
+        return complete(c.app.Machines.RemoveTarget(ctx, g.Machine.Remove.Name))
     case "check":
         v := g.Check
         result, err := c.app.Machines.Check(ctx, client.CheckInput{Target: g.Target, Targets: v.Targets.Values, Timeout: v.Timeout, Runner: v.Runner, Report: v.Report, Policy: c.policy})
@@ -69,7 +87,7 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
         return result, nil
     case "run":
         return c.run(ctx)
-    case "ps":
+    case "status":
         v := g.PS
         result, err := c.app.Projects.PS(ctx, client.PSInput{ID: v.ID, Local: v.Local, Wait: v.Wait, Limit: v.Limit, Target: g.Target, Name: v.Name, Since: v.Since, Until: v.Until, Statuses: v.Status, Tags: v.Tag, Policy: c.policy})
         if result.View != nil {
@@ -113,13 +131,14 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
         return nil, err
     case "clean":
         if !g.Clean.DryRun && !g.Clean.Yes && c.policy.Batch {
-            return nil, fault.New("BAD_CONFIG", "clean_confirmation_required", nil)
+            return nil, fault.Invalid("--yes", "missing_argument", "clean_confirmation_required")
         }
         preview, err := c.app.Projects.PrepareClean(ctx, client.CleanInput{IDs: g.Clean.IDs, PrepareRunner: !g.Clean.DryRun, Policy: c.policy})
         if err != nil || g.Clean.DryRun {
             return preview, err
         }
         if !g.Clean.Yes {
+            fmt.Fprintln(p.err, p.locale.Text("clean_scope", map[string]any{"Count": len(preview.Runs)}))
             printClean(p.err, preview, p.locale)
             yes, err := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("clean_confirm"), Kind: interaction.ConfirmDefaultNo, AcceptLabel: p.locale.Text("yes"), RejectLabel: p.locale.Text("no")})
             if err != nil {
@@ -196,6 +215,7 @@ func (c *invocation) run(ctx context.Context) (any, error) {
         return *result.Preview, err
     }
     if result.Run != nil {
+        c.output.waited = result.Observed
         return *result.Run, err
     }
     return nil, err
@@ -279,10 +299,10 @@ func commandArgs(args []string, required bool) ([]string, error) {
     if len(args) > 0 && args[0] == "--" {
         args = args[1:]
     } else if len(args) > 0 {
-        return nil, fault.New("BAD_CONFIG", "run_command", nil)
+        return nil, fault.Invalid("--", "missing_argument", "run_command")
     }
     if required && len(args) == 0 {
-        return nil, fault.New("BAD_CONFIG", "exec_command", nil)
+        return nil, fault.Invalid("command", "missing_argument", "exec_command")
     }
     return args, nil
 }

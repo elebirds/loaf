@@ -7,6 +7,7 @@ import (
     "os"
     "path/filepath"
     "reflect"
+    "regexp"
     "strings"
     "testing"
 
@@ -74,7 +75,7 @@ func TestPackagedMetadataAndDependencyNotices(t *testing.T) {
             t.Fatal("linked dependency missing or mismatched", module.Path)
         }
     }
-    expected := map[string]bool{"loaf": true, "LICENSE": true, "README.md": true, "README.zh-Hans.md": true, "BUILD.json": true, "THIRD_PARTY_LICENSES": true, "skills": true, "examples": true}
+    expected := map[string]bool{"loaf": true, "LICENSE": true, "README.md": true, "README.zh-Hans.md": true, "BUILD.json": true, "THIRD_PARTY_LICENSES": true, "skills": true, "examples": true, "manual": true}
     entries, err := os.ReadDir(directory)
     if err != nil || len(entries) != len(expected) {
         t.Fatal("unexpected package inventory", entries, err)
@@ -84,4 +85,41 @@ func TestPackagedMetadataAndDependencyNotices(t *testing.T) {
             t.Fatal("unexpected packaged file", entry.Name())
         }
     }
+    // README, manuals and copied Skills must remain usable outside the checkout.
+    links := regexp.MustCompile(`\[[^\]\n]+\]\(([^)]+)\)`)
+    err = filepath.WalkDir(directory, func(path string, d fs.DirEntry, err error) error {
+        if err != nil {
+            return err
+        }
+        if d.IsDir() || !strings.HasSuffix(path, ".md") || strings.Contains(path, "THIRD_PARTY_LICENSES") {
+            return nil
+        }
+        text, err := os.ReadFile(path)
+        if err != nil {
+            return err
+        }
+        for _, match := range links.FindAllStringSubmatch(string(text), -1) {
+            target := strings.SplitN(match[1], "#", 2)[0]
+            if target == "" || strings.Contains(target, "://") {
+                continue
+            }
+            if filepath.IsAbs(target) {
+                t.Errorf("nonportable packaged link: %s", target)
+                continue
+            }
+            if _, err := os.Stat(filepath.Join(filepath.Dir(path), filepath.FromSlash(target))); err != nil {
+                t.Errorf("broken packaged link %s in %s", target, path)
+            }
+        }
+        return nil
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+    for _, name := range []string{"manual/en/commands.md", "manual/zh-Hans/json.md", "skills/loaf/references/cloud.md", "skills/loaf/references/streams.md"} {
+        if _, err := os.Stat(filepath.Join(directory, filepath.FromSlash(name))); err != nil {
+            t.Fatal("missing public documentation", name, err)
+        }
+    }
+
 }

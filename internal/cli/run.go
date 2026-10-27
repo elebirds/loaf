@@ -25,6 +25,9 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
     if v.Status == "unknown" && v.Submission == "submitted" {
         fmt.Fprintf(out, "  %s", l.Text("run_submission_confirmed"))
     }
+    if v.Submission == "uncertain" {
+        fmt.Fprintf(out, "  %s", l.Text("run_submission_uncertain"))
+    }
     if v.Submission == "preparing" {
         fmt.Fprintf(out, "  %s", l.Text("run_submission_preparing"))
     }
@@ -69,6 +72,64 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
         if v.Log.Truncated {
             fmt.Fprintln(out, l.Text("logs_truncated"))
         }
+    }
+}
+
+func printRunNext(out io.Writer, v execution.View, l *i18n.Localizer, waited bool) {
+    if v.Submission == "preparing" {
+        fmt.Fprintln(out, l.Text("run_next_inspect", map[string]any{"ID": v.ID}))
+        return
+    }
+    if v.Submission == "uncertain" || v.QueryError != "" || v.Status == "unknown" {
+        fmt.Fprintln(out, l.Text("run_next_query", map[string]any{"ID": v.ID}))
+        return
+    }
+    if v.Status == "succeeded" {
+        fmt.Fprintln(out, l.Text("run_next_pull", map[string]any{"ID": v.ID}))
+        return
+    }
+    if v.Status == "failed" || v.Status == "stopped" {
+        fmt.Fprintln(out, l.Text("run_next_logs", map[string]any{"ID": v.ID}))
+        return
+    }
+    if waited {
+        fmt.Fprintln(out, l.Text("run_wait_finished"))
+    }
+    fmt.Fprintln(out, l.Text("run_next_running", map[string]any{"ID": v.ID}))
+}
+
+// printRunRow keeps navigation compact without hiding errors or dated facts.
+func printRunRow(out io.Writer, v execution.View, l *i18n.Localizer) {
+    fmt.Fprintf(out, "%s  %s  %s", v.ID, v.Target, localizedRunState(v.Status, l))
+    if v.Name != "" {
+        fmt.Fprintf(out, "  %q", v.Name)
+    }
+    fmt.Fprintln(out)
+    if !v.CreatedAt.IsZero() {
+        fmt.Fprintln(out, "  "+v.CreatedAt.Format(time.RFC3339))
+    }
+    if v.Phase != "" {
+        fmt.Fprintln(out, "  "+localizedRunPhase(v.Phase, l))
+    }
+    if v.Submission == "uncertain" {
+        fmt.Fprintln(out, "  "+l.Text("run_submission_uncertain"))
+    }
+    if v.QueryError != "" {
+        fmt.Fprintln(out, "  "+l.Text("run_query")+": "+v.QueryError)
+    }
+    if v.StateError != "" {
+        fmt.Fprintln(out, "  "+l.Text("run_state_save_failed", map[string]any{"Code": v.StateError}))
+    }
+    if v.LastObservation != nil {
+        fmt.Fprintln(out, l.Text("last_observation", map[string]any{"Value": localizedRunState(v.LastObservation.Status, l), "Code": localizedRunPhase(v.LastObservation.Phase, l), "Stage": v.LastObservation.ObservedAt.Format(time.RFC3339)}))
+    }
+    if v.LastQueryFailure != nil {
+        fmt.Fprintln(out, l.Text("last_query_failure", map[string]any{"Code": v.LastQueryFailure.Code, "Stage": v.LastQueryFailure.Stage, "Value": v.LastQueryFailure.ObservedAt.Format(time.RFC3339)}))
+    }
+    if v.CleanedAt != nil {
+        fmt.Fprintln(out, "  "+l.Text("clean_status_cleaned"))
+    } else if v.CleanupPending {
+        fmt.Fprintln(out, "  "+l.Text("clean_status_pending"))
     }
 }
 

@@ -115,7 +115,7 @@ func TestPublicPullWorkflow(t *testing.T) {
         t.Fatal(repeated)
     }
     before := f.remoteRecord(started.RemoteDir, started.ID)
-    for _, args := range [][]string{{"add", "other", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json"}, {"use", "other", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "other", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json"}, {"machine", "use", "other", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(code, string(out))
         }
@@ -287,7 +287,7 @@ func TestInterruptedPullDoesNotStopTrainingOrBlockSyncAndStop(t *testing.T) {
         })
     }
     interrupted(false)
-    if observed := runCLI(t, project, "ps", started.ID, "--json"); observed.Status != "running" {
+    if observed := runCLI(t, project, "status", started.ID, "--json"); observed.Status != "running" {
         t.Fatal("pull cancellation stopped training", observed)
     }
     interrupted(true)

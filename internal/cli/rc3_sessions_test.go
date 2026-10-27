@@ -84,7 +84,7 @@ func TestWaitCLIAndOfflineObservations(t *testing.T) {
         t.Fatal(code, out, stderr)
     }
     for _, lang := range []string{"en", "zh-Hans"} {
-        code, out, stderr = run(t, o, "ps", "--local", "--lang", lang)
+        code, out, stderr = run(t, o, "status", "--local", "--lang", lang)
         if code != 0 || stderr != "" || out == "" {
             t.Fatal(code, out, stderr)
         }

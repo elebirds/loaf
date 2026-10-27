@@ -98,7 +98,7 @@ func TestRunnerStopGraceAndGroupCleanup(t *testing.T) {
 func stopProject(t *testing.T, f *fixture) string {
     t.Helper()
     project := t.TempDir()
-    for _, args := range [][]string{{"add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "lab", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"machine", "use", "lab", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(code, string(out))
         }
@@ -138,7 +138,7 @@ func TestPublicStopWorkflow(t *testing.T) {
         t.Fatal(err)
     }
     // A different default connection and directory must not redirect stop.
-    for _, args := range [][]string{{"add", "other", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json"}, {"use", "other", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "other", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json"}, {"machine", "use", "other", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(code, string(out))
         }
@@ -157,7 +157,7 @@ func TestPublicStopWorkflow(t *testing.T) {
     if logs.Log == nil || !strings.Contains(logs.Log.Text, "cleaned") {
         t.Fatal("cleanup log lost", logs)
     }
-    if code, out := cli(t, project, "use", "lab", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "use", "lab", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
     sourceFile(t, project, "loaf.toml", "[run]\nsetup = 'echo ready >ready; while :; do sleep .02; done'\n[stop]\ngrace = '1s'\n")
@@ -244,7 +244,7 @@ func TestCanceledStopKeepsAcceptedRequest(t *testing.T) {
         t.Fatal("canceled confirmation", err, out.String(), diagnostic.String())
     }
     f.shell(`touch "$1/runs/$2/work/release-cleanup"`, started.RemoteDir, started.ID)
-    done := runCLI(t, project, "ps", started.ID, "--wait", "5s", "--json")
+    done := runCLI(t, project, "status", started.ID, "--wait", "5s", "--json")
     if done.Status != "stopped" || done.ExitCode == nil || *done.ExitCode != 19 {
         t.Fatal("accepted stop was withdrawn", done)
     }
@@ -264,7 +264,7 @@ func TestPublicStopRefusesLostSupervisor(t *testing.T) {
     }
     f.shell(`kill -KILL "$1"`, fmt.Sprint(record.SupervisorPID))
     wait(t, 5*time.Second, func() bool {
-        observed := runCLI(t, project, "ps", started.ID, "--json")
+        observed := runCLI(t, project, "status", started.ID, "--json")
         return observed.Status == "unknown"
     })
     code, out := cli(t, project, "stop", started.ID, "--json")
@@ -336,7 +336,7 @@ exit $?
         } else if code != 0 || !bytes.Contains(out, []byte(`"status":"stopped"`)) {
             t.Fatal(code, string(out))
         }
-        after := runCLI(t, project, "ps", started.ID, "--json")
+        after := runCLI(t, project, "status", started.ID, "--json")
         if after.Status != "stopped" || after.StopGraceMillis == nil || *after.StopGraceMillis != wire.DefaultStopGrace.Milliseconds() {
             t.Fatal("original run was not stopped", after)
         }

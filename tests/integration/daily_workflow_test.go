@@ -35,12 +35,12 @@ func TestDailyWorkflowBoundRunsAndCleanup(t *testing.T) {
     }
     // Queries repair the current helper without mutating the saved run outcome.
     f.shell(`rm "$HOME/.local/share/loaf/bin/$1/loaf-runner"`, wire.Version)
-    if observed := runCLI(t, project, "ps", older.ID, "--json"); observed.Status != "failed" {
+    if observed := runCLI(t, project, "status", older.ID, "--json"); observed.Status != "failed" {
         t.Fatal("missing runner was not repaired", observed)
     }
     mismatched := "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"format_version\":99,\"version\":\"wrong-version\",\"ok\":true}'\n"
     f.shell(`set -eu; target="$HOME/.local/share/loaf/bin/$1/loaf-runner"; printf '%s' "$2" >"$target.replacement"; chmod 700 "$target.replacement"; mv "$target.replacement" "$target"`, wire.Version, mismatched)
-    if observed := runCLI(t, project, "ps", latest.ID, "--json"); observed.Status != "succeeded" {
+    if observed := runCLI(t, project, "status", latest.ID, "--json"); observed.Status != "succeeded" {
         t.Fatal("mismatched runner was not updated", observed)
     }
     downloaded := pullCLI(t, project, 0, latest.ID, "--json")
@@ -49,16 +49,16 @@ func TestDailyWorkflowBoundRunsAndCleanup(t *testing.T) {
         t.Fatal(string(data), err)
     }
     for _, args := range [][]string{
-        {"add", "other", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--remote-dir", "~/other-projects", "--json"},
-        {"use", "other", "--json"},
-        {"remove", "lab", "--json"},
+        {"machine", "add", "other", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--remote-dir", "~/other-projects", "--json"},
+        {"machine", "use", "other", "--json"},
+        {"machine", "remove", "lab", "--json"},
     } {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(args, code, string(out))
         }
     }
     // A removed alias still identifies the original bound historical runs.
-    code, out := cli(t, project, "ps", "--target", "lab", "--status", "succeeded", "--json")
+    code, out := cli(t, project, "status", "--target", "lab", "--status", "succeeded", "--json")
     var list struct {
         Data struct {
             Runs []execution.View `json:"runs"`
@@ -76,7 +76,7 @@ func TestDailyWorkflowBoundRunsAndCleanup(t *testing.T) {
             t.Fatal("repeatable explicit cleanup", code, string(out))
         }
     }
-    observed := runCLI(t, project, "ps", latest.ID, "--json")
+    observed := runCLI(t, project, "status", latest.ID, "--json")
     if observed.Status != "succeeded" || observed.Target != "lab" || observed.ExitCode == nil || *observed.ExitCode != 0 || observed.CleanedAt == nil || observed.CleanupPending {
         t.Fatal("retained execution summary", observed)
     }
@@ -85,7 +85,7 @@ func TestDailyWorkflowBoundRunsAndCleanup(t *testing.T) {
             t.Fatal("latest must not fall back", command, code, string(out))
         }
     }
-    preserved := runCLI(t, project, "ps", older.ID, "--json")
+    preserved := runCLI(t, project, "status", older.ID, "--json")
     if preserved.Status != "failed" || preserved.ExitCode == nil || *preserved.ExitCode != 7 {
         t.Fatal("other run changed", preserved)
     }

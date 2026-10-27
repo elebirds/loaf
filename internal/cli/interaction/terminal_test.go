@@ -4,6 +4,7 @@ import (
     "bytes"
     "context"
     "errors"
+    "fmt"
     "io"
     "os"
     "sync"
@@ -131,9 +132,16 @@ func TestHuhDefaultNoAndCtrlCRestoreTerminal(t *testing.T) {
     if skipHuhShutdownRace {
         t.Skip("upstream Bubble Tea/cancelreader shutdown race: https://github.com/charmbracelet/bubbletea/issues/1875")
     }
-    for _, key := range []string{"\r", "\x03"} {
-        t.Run(map[string]string{"\r": "default-no", "\x03": "ctrl-c"}[key], func(t *testing.T) {
+    for _, tc := range []struct {
+        key     string
+        columns uint16
+    }{{"\r", 80}, {"\x03", 80}, {"\r", 120}, {"\x03", 120}} {
+        key := tc.key
+        t.Run(fmt.Sprintf("%s-%d", map[string]string{"\r": "default-no", "\x03": "ctrl-c"}[key], tc.columns), func(t *testing.T) {
             master, terminal := openTerminal(t)
+            if err := pty.Setsize(terminal, &pty.Winsize{Rows: 24, Cols: tc.columns}); err != nil {
+                t.Fatal(err)
+            }
             before := terminalState(t, terminal)
             output := &renderedPrompt{File: terminal, ready: make(chan struct{})}
             session := New(Options{In: terminal, Err: output, Interactive: true, Rich: true})

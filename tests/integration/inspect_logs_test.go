@@ -24,7 +24,7 @@ func TestPublicInspectionNamesTraceAndCursor(t *testing.T) {
     f := newFixture(t)
     project := t.TempDir()
     sourceFile(t, project, "loaf.toml", "[run]\nwait = '5s'\n")
-    for _, args := range [][]string{{"add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "lab", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"machine", "use", "lab", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(string(out))
         }
@@ -37,7 +37,7 @@ func TestPublicInspectionNamesTraceAndCursor(t *testing.T) {
     if code != 0 || json.Unmarshal(out, &accepted) != nil || accepted.Data.Name != "seed A 中文" || accepted.Data.Version != wire.Version || accepted.Data.Log == nil || accepted.Data.Log.Cursor == "" || accepted.Trace == nil || len(accepted.Trace.Stages) == 0 {
         t.Fatal(code, string(out))
     }
-    for _, args := range [][]string{{"inspect", accepted.Data.ID, "--json"}, {"ps", accepted.Data.ID, "--local", "--json"}, {"ps", "--name", "seed A 中文", "--tag", "ab", "--tag", "seed1", "--limit", "1", "--json"}} {
+    for _, args := range [][]string{{"inspect", accepted.Data.ID, "--json"}, {"status", accepted.Data.ID, "--local", "--json"}, {"status", "--name", "seed A 中文", "--tag", "ab", "--tag", "seed1", "--limit", "1", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 || !bytes.Contains(out, []byte(accepted.Data.ID)) || !bytes.Contains(out, []byte("seed A 中文")) {
             t.Fatal(code, string(out))
         }
@@ -75,7 +75,7 @@ func TestPublicInspectionNamesTraceAndCursor(t *testing.T) {
         t.Fatal("resumed EOF replayed text", string(streamed))
     }
     // Removing the alias cannot remove offline access or reinterpret binding.
-    if code, out := cli(t, project, "remove", "lab", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "remove", "lab", "--json"); code != 0 {
         t.Fatal(string(out))
     }
     if code, out := cli(t, project, "inspect", accepted.Data.ID, "--json"); code != 0 || !bytes.Contains(out, []byte(`"source":"local"`)) {

@@ -17,7 +17,7 @@ func ResolvePSLimit(layers ...PSSettings) (int, error) {
             continue
         }
         if *layer.Limit < 1 || *layer.Limit > 1000 {
-            return 0, fault.New("BAD_CONFIG", "ps_invalid_limit", nil)
+            return 0, fault.Invalid("--limit", "out_of_range", "ps_invalid_limit")
         }
         limit = *layer.Limit
     }

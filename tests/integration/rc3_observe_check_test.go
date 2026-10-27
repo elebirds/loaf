@@ -35,7 +35,7 @@ func TestPublicOfflinePreviewWaitAndMultiCheck(t *testing.T) {
     if code != 0 || !strings.Contains(string(out), `"dry_run":true`) || !strings.Contains(string(out), `"command":["flag"]`) {
         t.Fatal(code, string(out))
     }
-    code, out = cli(t, project, "add", "bad", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json")
+    code, out = cli(t, project, "machine", "add", "bad", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json")
     if code != 0 {
         t.Fatal(code, string(out))
     }

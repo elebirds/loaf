@@ -69,17 +69,18 @@ func decodeTOML(data []byte, dst any) error {
 }
 
 // Load reads configuration without creating files. Unknown formats are preserved.
-func (s *Store) Load() (Global, error) {
-    c := Global{FormatVersion: 1, Targets: map[string]Target{}}
+func (s *Store) Load() (c Global, err error) {
+    defer func() { err = locateConfig(s.ConfigFile, err) }()
+    c = Global{FormatVersion: 1, Targets: map[string]Target{}}
     data, err := os.ReadFile(s.ConfigFile)
     if errors.Is(err, os.ErrNotExist) {
         return c, nil
     }
     if err != nil {
-        return c, fault.Wrap("BAD_CONFIG", "config_read", err)
+        return c, configFailure(s.ConfigFile, "config_read", err)
     }
     if err := decodeTOML(data, &c); err != nil {
-        return c, fault.Wrap("BAD_CONFIG", "config_read", err)
+        return c, configFailure(s.ConfigFile, "config_read", err)
     }
     if c.FormatVersion != 1 {
         return c, fault.New("BAD_CONFIG", "unknown_format", nil)

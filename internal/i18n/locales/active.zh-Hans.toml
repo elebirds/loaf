@@ -99,7 +99,7 @@ other = "已验证远端封装 {{.Version}}：{{.Path}}"
 [runner_version_mismatch]
 other = "任务或远端封装版本 {{.Actual}} 与本地 CLI 版本 {{.Expected}} 不一致。"
 [runner_version_hint]
-other = "请更新控制端 Loaf，远端辅助程序会自动更新。其他版本创建的任务需要对应版本的 CLI，运行中不会迁移。"
+other = "请使用保存任务所需的 CLI 版本（见 loaf inspect ID）。当前 helper 自动部署；不要替换运行中的监督器。"
 [invalid_flags]
 other = "无法解析命令选项，请检查选项名称及取值。"
 [invalid_command]
@@ -111,7 +111,7 @@ other = "请使用 loaf help 或 loaf <命令> --help。"
 [language_invalid]
 other = "不支持该界面语言。可用语言：{{.Languages}}。"
 [config_read]
-other = "无法读取 Loaf 配置或状态，请检查文件权限及 TOML/JSON 语法。"
+other = "无法读取 Loaf 配置或状态，请检查文件权限及 TOML 语法。"
 [project_config]
 other = "无法读取项目配置，请检查 loaf.toml 及字段名称。"
 [state_write]
@@ -125,9 +125,9 @@ other = "远端目录须为绝对路径或以 ~/ 开头，不允许根目录、�
 [target_exists]
 other = "目标 {{.Target}} 已存在，修改时请使用 --replace。"
 [target_unknown]
-other = "未知目标：{{.Target}}。请先使用 loaf add 添加。"
+other = "未知目标：{{.Target}}。请先使用 loaf machine add 添加。"
 [target_required]
-other = "尚未选择目标，请使用 loaf use <别名> 或 --target <别名>。"
+other = "尚未选择目标，请使用 loaf machine use <别名> 或 --target <别名>。"
 [ssh_input]
 other = "请仅输入 SSH 连接或 Host 别名，不接受远端命令、变量展开、端口转发或不安全的 SSH 选项。"
 [ssh_prompt]
@@ -327,7 +327,7 @@ other = "远端已接管：{{.ID}}"
 other = "无法确认远端是否已接管任务，任务 ID 和位置已经保存。"
 
 [submission_query]
-other = "请用 loaf ps <任务 ID> --json 查询同一任务，不要自动重新提交。"
+other = "请用 loaf status <任务 ID> --json 查询同一任务，不要自动重新提交。"
 
 [run_query]
 other = "无法获取完整的任务查询结果。"
@@ -446,7 +446,7 @@ other = "正在请求停止并等待确认……"
 other = "尚未确认任务已结束；远端已接收的停止请求仍然有效。"
 
 [stop_query_hint]
-other = "请用 loaf ps <任务 ID> --json 查询同一任务的当前结果。"
+other = "请用 loaf status <任务 ID> --json 查询同一任务的当前结果。"
 
 [pull_base_dir]
 other = "结果根目录必须是独立目录，不能是项目根目录或其上级目录。"
@@ -548,7 +548,7 @@ other = "请使用 targets [名称] 或 remove <名称>，不要使用 --target�
 other = "当前项目尚未选择机器。"
 
 [targets_missing_choice]
-other = "当前选择的机器 {{.Target}} 已移除。请使用 loaf use <名称> 重新选择。"
+other = "当前选择的机器 {{.Target}} 已移除。请使用 loaf machine use <名称> 重新选择。"
 
 [targets_choice]
 other = "当前项目机器：{{.Target}}"
@@ -569,7 +569,7 @@ other = "SSH 参数"
 other = "已移除本地机器别名 {{.Target}}，保留任务和远端文件。"
 
 [remove_reselect]
-other = "当前项目仍引用已移除的别名。发起新的远程操作前，请使用 loaf use <名称> 重新选择。"
+other = "当前项目仍引用已移除的别名。发起新的远程操作前，请使用 loaf machine use <名称> 重新选择。"
 
 [ps_flag_status]
 other = "按状态筛选，可重复指定多个状态；查询失败的任务仍会显示。"
@@ -651,7 +651,7 @@ other = "数据已清理"
 [clean_status_pending]
 other = "清理未确认"
 [clean_confirm_submission]
-other = "先用 loaf ps 查询同一任务 ID，确认已接受后再清理；不要提交替代任务。"
+other = "先用 loaf status 查询同一任务 ID，确认已接受后再清理；不要提交替代任务。"
 
 [cloud_short]
 other = "管理显式授权的云实例租用并接入 SSH 机器"
@@ -867,7 +867,7 @@ other = "loaf.toml 或用户配置中的可选资源模板"
 other = "要求的 GPU 厂商（例如 nvidia）"
 
 [cloud_flag_gpu_model]
-other = "允许的型号，整体替换配置中的型号列表"
+other = "允许的型号，CSV 或重复选项；整体替换配置列表"
 
 [cloud_flag_gpu_count]
 other = "要求的 GPU 卡数（内置默认值：1）"
@@ -885,7 +885,7 @@ other = "实例最小内存，必须带 GiB 单位"
 other = "最小分配磁盘容量，必须带 GiB 单位"
 
 [cloud_flag_region]
-other = "允许的地区 ID，整体替换配置中的地区列表"
+other = "允许的地区 ID，CSV 或重复选项；整体替换配置列表"
 
 [cloud_flag_max_compute_hourly_price]
 other = "整实例每小时计算费用上限，十进制小数（存储另计）"
@@ -1277,7 +1277,7 @@ other = "任务名称和标签存储不可用。"
 other = "便于识别的任务名称，不替代任务 ID。"
 
 [flag_run_tag]
-other = "任务标签，可重复指定。"
+other = "任务标签，可重复传入字面值；筛选时要求全部匹配。"
 
 [flag_ps_local]
 other = "只读本地任务资料，不连接或查询执行状态。"
@@ -1647,3 +1647,162 @@ other = "操作已取消。"
 
 [log_acknowledged]
 other = "已确认任务 {{.ID}} 的日志消费至字节 {{.Offset}}。"
+
+
+[machine_short]
+other = "管理已保存的机器与当前项目的机器选择。"
+
+[machine_list_short]
+other = "列出已保存的机器，不连接远端。"
+
+[machine_show_short]
+other = "查看一台机器的本地配置，不连接远端。"
+
+[flag_version]
+other = "显示构建版本，不读取项目状态。"
+
+[group_experiments]
+other = "实验与项目文件："
+
+[group_machines]
+other = "机器与前台操作："
+
+[group_resources]
+other = "云资源："
+
+[group_diagnostics]
+other = "诊断与帮助："
+
+[help_examples]
+other = "示例："
+
+[help_configurable]
+other = "可配置。"
+
+[help_more]
+other = "使用 --json 获取结构化结果；完整示例和参数条件见随包手册。"
+
+[input_unknown_option]
+other = "未知选项 {{.Argument}}，请检查拼写及所属命令。"
+
+[input_unknown_command]
+other = "未知命令 {{.Argument}}。"
+
+[input_missing_argument]
+other = "缺少必需参数或选项值：{{.Argument}}。"
+
+[input_invalid_type]
+other = "{{.Argument}} 需要 {{.Value}} 类型的值。"
+
+[input_extra_arguments]
+other = "出现多余的位置参数，请检查此命令的用法。"
+
+[input_command_replaced]
+other = "{{.Argument}} 命令已调整，请使用 {{.Value}}。"
+
+[input_help_hint]
+other = "用法与示例：{{.Command}}"
+
+[input_target_forbidden]
+other = "此操作不接受 --target 改向；请使用已保存的绑定或明确的机器参数。"
+
+[input_location]
+other = "配置：{{.Path}}"
+
+[ps_wait_single]
+other = "--wait 需要单个任务 ID 和实时查询，不能用于列表或 --local。"
+
+[type_string]
+other = "文本"
+
+[type_int]
+other = "整数"
+
+[type_bool]
+other = "布尔值"
+
+[type_duration]
+other = "时长"
+
+[type_path]
+other = "路径"
+
+[type_gib]
+other = "GiB"
+
+[type_decimal]
+other = "十进制价格"
+
+[type_csv]
+other = "值,..."
+
+[type_run-id]
+other = "任务ID"
+
+[type_instance-id]
+other = "实例ID"
+
+[type_request-id]
+other = "请求ID"
+
+[type_name]
+other = "别名"
+
+[type_cursor]
+other = "游标"
+
+
+[ssh_prompt_help]
+other = "例如 lab-gpu 或 ssh -p 2222 user@host。按 Enter 提交，Ctrl-C 取消。"
+
+[clean_scope]
+other = "将删除 {{.Count}} 个明确选定任务的数据："
+
+[cloud_approval_identity]
+other = "账号：{{.Account}}；产品：{{.Product}}；机器别名：{{.Target}}；实例：{{.ID}}；请求：{{.Request}}。"
+
+[run_submission_uncertain]
+other = "提交未确认，请查询此 ID"
+
+[run_next_inspect]
+other = "查看已保存的准备记录：loaf inspect {{.ID}}"
+
+[run_next_query]
+other = "查询同一任务：loaf status {{.ID}}。不要另行提交替代任务。"
+
+[run_next_pull]
+other = "取回输出：loaf pull {{.ID}}"
+
+[run_next_logs]
+other = "查看实验日志：loaf logs {{.ID}}"
+
+[run_next_running]
+other = "查看状态：loaf status {{.ID}}\n持续日志：loaf logs {{.ID}} -f"
+
+[run_wait_finished]
+other = "本次等待已结束，远端任务仍独立继续运行。"
+
+[batch_state_errors]
+other = "本地保存失败：{{.Count}}；未检查：{{.Total}}。"
+
+[preview_outputs]
+other = "输出：{{.Paths}}"
+
+[preview_wait]
+other = "观察预算：{{.Value}}（不是运行时限）。"
+
+[preview_provenance]
+other = "配置来源："
+
+
+[preview_new_location]
+other = "提交时分配；预览不创建 ID"
+
+[preview_policies]
+other = "日志尾部：{{.Count}} 行；同步：{{.Mode}}。"
+
+[help_defaults]
+other = "显示的是内置默认值，项目和用户配置可覆盖。"
+
+[input_out_of_range]
+other = "{{.Argument}} 超出支持的数值范围。"

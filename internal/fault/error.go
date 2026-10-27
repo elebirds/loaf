@@ -10,6 +10,23 @@ type Error struct {
     Hint    string
     Params  map[string]any
     Cause   error
+    Input   *Input
+}
+
+// Location identifies an input field without retaining its contents.
+type Location struct {
+    File   string `json:"file"`
+    Field  string `json:"field,omitempty"`
+    Line   int    `json:"line,omitempty"`
+    Column int    `json:"column,omitempty"`
+}
+
+// Input is safe, language-independent context for correcting an invocation.
+type Input struct {
+    Reason      string
+    Argument    string
+    HelpCommand []string
+    Location    *Location
 }
 
 func (e *Error) Error() string {
@@ -29,4 +46,11 @@ func New(code, message string, params map[string]any) *Error {
 // Wrap associates an underlying error with a stable user-facing failure.
 func Wrap(code, message string, cause error) *Error {
     return &Error{Code: code, Message: message, Cause: cause}
+}
+
+// Invalid reports a specific input problem while retaining the existing code.
+func Invalid(argument, reason, message string) *Error {
+    e := New("BAD_CONFIG", message, nil)
+    e.Input = &Input{Reason: reason, Argument: argument}
+    return e
 }

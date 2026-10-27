@@ -249,7 +249,7 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             if created != 1 || cloning && cloned != 1 {
                 t.Fatal(created)
             }
-            invoke("use", "gpu")
+            invoke("machine", "use", "gpu")
             var started struct{ Data execution.View }
             // Flags must precede --; the experiment argv must be preserved literally.
             var out, diagnostic bytes.Buffer

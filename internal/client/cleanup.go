@@ -11,7 +11,7 @@ import (
 // Outputs observes metadata without starting a process or deploying implicitly.
 func (c *Projects) OutputsList(ctx context.Context, id string, depth, limit int, prepare bool, policy CallPolicy) (execution.OutputListing, error) {
     if depth < 0 || depth > 20 || limit < 1 || limit > 1000 {
-        return execution.OutputListing{}, fault.New("BAD_CONFIG", "outputs_bounds", nil)
+        return execution.OutputListing{}, fault.Invalid("--depth/--limit", "out_of_range", "outputs_bounds")
     }
     if c.Runs == nil || c.Outputs == nil {
         return execution.OutputListing{}, fault.New("SSH_FAILED", "ssh_missing", nil)

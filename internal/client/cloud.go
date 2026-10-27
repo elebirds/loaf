@@ -99,7 +99,7 @@ func approveCloud(ctx context.Context, yes bool, approve ApproveCloud, request C
         return nil
     }
     if approve == nil {
-        return fault.New("BAD_CONFIG", "cloud_confirm_required", nil)
+        return fault.Invalid("--yes", "missing_argument", "cloud_confirm_required")
     }
     return approve(ctx, request)
 }
@@ -118,7 +118,7 @@ func (c *Resources) CloudPower(ctx context.Context, in CloudPowerInput, approve 
     if in.Start {
         op = "start"
     }
-    if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: op, InstanceID: b.Ref.ID}); err != nil {
+    if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: op, InstanceID: b.Ref.ID, Account: b.Ref.Account, Product: b.Ref.Product, Target: in.ID}); err != nil {
         return result, err
     }
     r, err := c.Cloud.Power(ctx, b, in.Start, in.Wait)
@@ -194,7 +194,11 @@ func (c *Resources) CloudReconcile(ctx context.Context, in CloudReconcileInput, 
         return saved, err
     }
     if in.NoInstance {
-        if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: "no-instance", InstanceID: in.Instance}); err != nil {
+        product := saved.Plan.Product
+        if saved.Instance != nil {
+            product = saved.Instance.Product
+        }
+        if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: "no-instance", InstanceID: in.Instance, Account: saved.Account, Product: product, RequestID: saved.ID}); err != nil {
             return saved, err
         }
     }

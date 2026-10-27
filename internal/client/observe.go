@@ -37,10 +37,10 @@ func (c *Projects) PS(ctx context.Context, in PSInput) (PSResult, error) {
         return PSResult{}, err
     }
     if (in.ID == "" || in.Local) && budget > 0 {
-        return PSResult{}, fault.New("BAD_CONFIG", "invalid_flags", nil)
+        return PSResult{}, fault.Invalid("--wait", "conflicting_arguments", "ps_wait_single")
     }
     if in.ID != "" && (in.Target != nil || in.Name != nil || in.Since != nil || in.Until != nil || in.Limit != nil || in.Statuses != nil || in.Tags != nil) {
-        return PSResult{}, fault.New("BAD_CONFIG", "ps_list_only", nil)
+        return PSResult{}, fault.Invalid("run-id", "conflicting_arguments", "ps_list_only")
     }
     service := c.Runs
     if in.Local {
@@ -96,7 +96,7 @@ func (c *Projects) PS(ctx context.Context, in PSInput) (PSResult, error) {
         }
         parsed, err := time.Parse(time.RFC3339Nano, *bound.input)
         if err != nil {
-            return PSResult{}, fault.New("BAD_CONFIG", "ps_invalid_time", nil)
+            return PSResult{}, fault.Invalid("--since/--until", "invalid_type", "ps_invalid_time")
         }
         parsed = parsed.UTC()
         *bound.dest = &parsed
@@ -161,7 +161,7 @@ func (c *Projects) Stop(ctx context.Context, in StopInput, emit ProgressFunc) (e
 // Wait observes a frozen set without scheduling or stopping workloads.
 func (c *Projects) Wait(ctx context.Context, ids, tags []string, timeout time.Duration, policy CallPolicy, changed func(execution.View)) (execution.WaitResult, error) {
     if timeout <= 0 || timeout > 24*time.Hour {
-        return execution.WaitResult{}, fault.New("BAD_CONFIG", "wait_timeout", nil)
+        return execution.WaitResult{}, fault.Invalid("--timeout", "out_of_range", "wait_timeout")
     }
     if c.Runs == nil {
         return execution.WaitResult{}, fault.New("SSH_FAILED", "ssh_missing", nil)
@@ -210,7 +210,7 @@ func (c *Projects) Logs(ctx context.Context, in LogsInput, feedback LogsFeedback
         (ack != "" && (fileName == "" || in.Follow || in.Reconnect || in.Tail != nil || in.RecoveryBudget != nil)) ||
         (fileName != "" && ack == "" && !in.Follow) || budget < 0 || budget > 24*time.Hour || (in.RecoveryBudget != nil && !in.Follow) ||
         ((in.Resume != nil || in.Reconnect) && !in.Follow) || (in.Resume != nil && (resume == "" || in.Tail != nil)) {
-        return LogsResult{}, fault.New("BAD_CONFIG", "log_resume_flags", nil)
+        return LogsResult{}, fault.Invalid("--resume", "conflicting_arguments", "log_resume_flags")
     }
     service := c.Runs
     if ack != "" {
@@ -254,7 +254,7 @@ func (c *Projects) Logs(ctx context.Context, in LogsInput, feedback LogsFeedback
             return LogsResult{}, err
         }
         if resume != "" && in.Tail != nil {
-            return LogsResult{}, fault.New("BAD_CONFIG", "log_resume_flags", nil)
+            return LogsResult{}, fault.Invalid("--resume", "conflicting_arguments", "log_resume_flags")
         }
     }
     if err := execution.AvailabilityError(ref); err != nil {

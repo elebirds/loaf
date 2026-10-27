@@ -62,7 +62,7 @@ func run(t *testing.T, o testOptions, args ...string) (int, string, string) {
 
 func TestConnectionWorkflowJSON(t *testing.T) {
     o := fixture(t)
-    for _, args := range [][]string{{"add", "demo", "--ssh", "ssh -p 2222 root@example.com", "--json"}, {"use", "demo", "--json"}, {"check", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "demo", "--ssh", "ssh -p 2222 root@example.com", "--json"}, {"machine", "use", "demo", "--json"}, {"check", "--json"}} {
         code, out, stderr := run(t, o, args...)
         if code != 0 || stderr != "" {
             t.Fatalf("%v: %d %s %s", args, code, out, stderr)
@@ -82,7 +82,7 @@ func TestConnectionWorkflowJSON(t *testing.T) {
 }
 
 func TestLocalizedHelpAndParserErrors(t *testing.T) {
-    for _, args := range [][]string{{"--help"}, {"add", "--help"}, {"check", "--help"}, {"sync", "--help"}, {"help", "use"}, {"add"}, {"check", "--bad"}, {"check", "--timeout", "bad"}, {"bogus"}} {
+    for _, args := range [][]string{{"--help"}, {"machine", "add", "--help"}, {"check", "--help"}, {"sync", "--help"}, {"help", "machine", "use"}, {"machine", "add"}, {"check", "--bad"}, {"check", "--timeout", "bad"}, {"bogus"}} {
         for _, lang := range []string{"en", "zh-Hans"} {
             o := fixture(t)
             code, out, stderr := run(t, o, append([]string{"--lang", lang}, args...)...)
@@ -116,7 +116,7 @@ func TestLanguagePrecedenceAndJSONStability(t *testing.T) {
     }
     var errorsByLanguage []errorView
     for _, lang := range []string{"en", "zh-Hans"} {
-        code, out, stderr := run(t, o, "--lang", lang, "use", "missing", "--json")
+        code, out, stderr := run(t, o, "--lang", lang, "machine", "use", "missing", "--json")
         if code != 2 || stderr != "" {
             t.Fatal(code, out, stderr)
         }
@@ -135,7 +135,7 @@ func TestLanguagePrecedenceAndJSONStability(t *testing.T) {
             t.Fatal(code, out)
         }
     }
-    code, out, _ := run(t, o, "add", "demo", "--json")
+    code, out, _ := run(t, o, "machine", "add", "demo", "--json")
     if code != 2 || !strings.Contains(out, "BAD_CONFIG") {
         t.Fatal(code, out)
     }

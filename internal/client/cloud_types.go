@@ -18,8 +18,9 @@ type CloudPlanInput struct {
 
 // CloudApproval identifies the exact lifecycle operation requiring consent.
 type CloudApproval struct {
-    Operation, InstanceID string
-    Plan                  *cloud.Plan
+    Operation, InstanceID               string
+    Account, Product, Target, RequestID string
+    Plan                                *cloud.Plan
 }
 
 // ApproveCloud is supplied only by an authorized caller; it does not mutate resources.

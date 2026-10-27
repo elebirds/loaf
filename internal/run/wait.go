@@ -27,7 +27,7 @@ type WaitResult struct {
 // Freeze selects explicit IDs or all exact tags once, without remote access.
 func (s Service) Freeze(projectID string, ids, tags []string) ([]task.RunRef, error) {
     if (len(ids) == 0) == (len(tags) == 0) || len(ids) > 1000 {
-        return nil, fault.New("BAD_CONFIG", "wait_selection", nil)
+        return nil, fault.Invalid("run-id/--tag", "conflicting_arguments", "wait_selection")
     }
     if _, err := task.NormalizeRunMetadata(task.RunMetadata{Tags: tags}); err != nil {
         return nil, err
@@ -41,7 +41,7 @@ func (s Service) Freeze(projectID string, ids, tags []string) ([]task.RunRef, er
     if len(ids) > 0 {
         for _, id := range ids {
             if seen[id] {
-                return nil, fault.New("BAD_CONFIG", "wait_selection", nil)
+                return nil, fault.Invalid("run-id/--tag", "conflicting_arguments", "wait_selection")
             }
             seen[id] = true
             found := false
@@ -75,7 +75,7 @@ func (s Service) Freeze(projectID string, ids, tags []string) ([]task.RunRef, er
         }
     }
     if len(selected) == 0 || len(selected) > 1000 {
-        return nil, fault.New("BAD_CONFIG", "wait_selection", nil)
+        return nil, fault.Invalid("run-id/--tag", "conflicting_arguments", "wait_selection")
     }
     for i, ref := range selected {
         selected[i], err = s.describe(ref)
@@ -91,7 +91,7 @@ func (s Service) Freeze(projectID string, ids, tags []string) ([]task.RunRef, er
 func (s Service) Wait(ctx context.Context, refs []task.RunRef, timeout time.Duration, batch bool, changed func(View)) (WaitResult, error) {
     result := WaitResult{Runs: []View{}, Selected: len(refs)}
     if len(refs) == 0 || len(refs) > 1000 || timeout <= 0 || timeout > 24*time.Hour {
-        return result, fault.New("BAD_CONFIG", "wait_timeout", nil)
+        return result, fault.Invalid("--timeout", "out_of_range", "wait_timeout")
     }
     for _, ref := range refs {
         result.Runs = append(result.Runs, view(ref, nil))

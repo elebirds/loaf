@@ -56,7 +56,7 @@ type CheckOutcome struct {
 func (c *Machines) Check(ctx context.Context, in CheckInput) (CheckOutcome, error) {
     multiple := in.Targets != nil
     if in.Timeout <= 0 || (multiple && (len(in.Targets) == 0 || len(in.Targets) > 32 || in.Target != nil)) || (in.Report != nil && *in.Report == "") {
-        return CheckOutcome{}, fault.New("BAD_CONFIG", "check_batch_flags", nil)
+        return CheckOutcome{}, fault.Invalid("--targets", "conflicting_arguments", "check_batch_flags")
     }
     if in.Report != nil {
         if err := validateDiagnosticPath(*in.Report); err != nil {
@@ -82,7 +82,7 @@ func (c *Machines) Check(ctx context.Context, in CheckInput) (CheckOutcome, erro
     }
     for i, name := range names {
         if !config.ValidName(name) || slices.Contains(names[:i], name) {
-            return CheckOutcome{}, fault.New("BAD_CONFIG", "check_batch_flags", nil)
+            return CheckOutcome{}, fault.Invalid("--targets", "conflicting_arguments", "check_batch_flags")
         }
         if _, _, err := config.Resolve(name, project, file, c.Settings); err != nil {
             return CheckOutcome{}, err

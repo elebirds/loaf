@@ -31,8 +31,10 @@ type RunFeedback struct {
 
 // RunResult is either an offline preview or the saved submission/observation.
 type RunResult struct {
-    Preview *execution.RunPreview
-    Run     *execution.View
+    // Observed distinguishes a bounded observation from immediate acceptance.
+    Observed bool
+    Preview  *execution.RunPreview
+    Run      *execution.View
 }
 
 type runPlan struct {
@@ -128,6 +130,7 @@ func (c *Projects) Run(ctx context.Context, in RunInput, feedback RunFeedback) (
     if err != nil || p.wait == 0 {
         return result, err
     }
+    result.Observed = true
     if feedback.Log == nil {
         observed, err := c.Runs.Observe(ctx, submitted.Ref, p.wait, p.tail, in.Policy.Batch)
         result.Run = &observed

@@ -86,7 +86,7 @@ func TestPublicLogCursorAcrossProcessesAndChangedLogs(t *testing.T) {
     if err == nil || scanner.Err() != nil || !canceled || originalDiagnostic.Len() != 0 {
         t.Fatal("cancellation did not finish the observing CLI", err, scanner.Err(), originalDiagnostic.String())
     }
-    if current := runCLI(t, project, "ps", submitted.ID, "--json"); current.Status != "running" {
+    if current := runCLI(t, project, "status", submitted.ID, "--json"); current.Status != "running" {
         t.Fatal("canceling logs stopped the accepted task", current)
     }
 

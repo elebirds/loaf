@@ -24,7 +24,7 @@ func (o RecoveryOptions) notify(state string) {
 // FollowRecovering extends opt-in recovery without changing existing callers.
 func (s Service) FollowRecovering(ctx context.Context, ref task.RunRef, wait time.Duration, tail int, batch bool, cursor string, options RecoveryOptions, emit func(View, string) error) (View, error) {
     if options.Budget < 0 || options.Budget > 24*time.Hour {
-        return view(ref, nil), fault.New("BAD_CONFIG", "log_recovery_budget", nil)
+        return view(ref, nil), fault.Invalid("--recovery-budget", "out_of_range", "log_recovery_budget")
     }
     return s.follow(ctx, ref, wait, tail, batch, cursor, true, options, emit)
 }

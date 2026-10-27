@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "ok": false,
+  "data": {
+    "run_id": "r_0123456789abcdef01234567",
+    "version": "example-build",
+    "target": "lab",
+    "remote_dir": "/home/researcher/projects/example",
+    "status": "unknown",
+    "submission": "submitted",
+    "created_at": "2026-01-01T00:00:00Z",
+    "exit_code": null,
+    "query_error": "SSH_FAILED"
+  },
+  "error": {
+    "code": "SSH_FAILED",
+    "message": "SSH connection or remote operation failed.",
+    "stage": "observe"
+  }
+}

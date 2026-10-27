@@ -44,8 +44,8 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
         }
         return out
     }
-    invoke("add", "self", "--ssh", "ssh -F /tmp/linux-client/config self", "--json")
-    invoke("use", "self", "--json")
+    invoke("machine", "add", "self", "--ssh", "ssh -F /tmp/linux-client/config self", "--json")
+    invoke("machine", "use", "self", "--json")
     if out := invokeRaw("exec", "--", "printf", "%s", "linux 前台"); string(out) != "linux 前台" {
         t.Fatal(string(out))
     }
@@ -55,7 +55,7 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
             Targets []struct{ Name string } `json:"targets"`
         } `json:"data"`
     }
-    if out := invoke("targets", "--json"); json.Unmarshal(out, &targets) != nil || len(targets.Data.Targets) != 1 || targets.Data.Targets[0].Name != "self" {
+    if out := invoke("machine", "list", "--json"); json.Unmarshal(out, &targets) != nil || len(targets.Data.Targets) != 1 || targets.Data.Targets[0].Name != "self" {
         t.Fatal(string(out))
     }
     invoke("sync", "--json")
@@ -67,7 +67,7 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     }
     // GNU rsync must not inject -l after SSH's -- when an endpoint includes a
     // user. Exercise both upload and download with this connection form.
-    invoke("add", "self", "--ssh", "ssh -F /tmp/linux-client/config researcher@self", "--replace", "--json")
+    invoke("machine", "add", "self", "--ssh", "ssh -F /tmp/linux-client/config researcher@self", "--replace", "--json")
     out := invoke("sync", "--json")
     var result struct {
         Data struct {
@@ -90,10 +90,10 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     var history struct {
         Data execution.History `json:"data"`
     }
-    if out := invoke("ps", "--status", "failed", "--target", "self", "--json"); json.Unmarshal(out, &history) != nil || history.Data.Matched != 1 || history.Data.Unresolved != 0 || len(history.Data.Runs) != 1 || history.Data.Runs[0].ID != failed.ID {
+    if out := invoke("status", "--status", "failed", "--target", "self", "--json"); json.Unmarshal(out, &history) != nil || history.Data.Matched != 1 || history.Data.Unresolved != 0 || len(history.Data.Runs) != 1 || history.Data.Runs[0].ID != failed.ID {
         t.Fatal(string(out))
     }
-    invoke("ps", ran.Data.ID, "--json")
+    invoke("status", ran.Data.ID, "--json")
     invoke("logs", ran.Data.ID, "--json")
     for _, want := range []int{1, 0} {
         out = invoke("pull", ran.Data.ID, "--json")
@@ -144,13 +144,13 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     f.shell(`test -d "$1/runs/$2/work"`, failed.RemoteDir, failed.ID)
     invoke("clean", failed.ID, "--yes", "--json")
     invoke("clean", failed.ID, "--yes", "--json")
-    out = invoke("ps", failed.ID, "--json")
+    out = invoke("status", failed.ID, "--json")
     if json.Unmarshal(out, &ran) != nil || ran.Data.Status != "failed" || ran.Data.ExitCode == nil || *ran.Data.ExitCode != 7 || ran.Data.CleanedAt == nil || ran.Data.CleanupPending {
         t.Fatal(string(out))
     }
     f.shell(`set -eu; test ! -e "$1/runs/$2"; test -d "$1/runs/$3/work"; test "$(wc -c </tmp/linux-retry/outputs/result.txt)" -eq 2097152`, failed.RemoteDir, failed.ID, stopped.ID)
-    invoke("remove", "self", "--json")
-    out = invoke("ps", stopped.ID, "--json")
+    invoke("machine", "remove", "self", "--json")
+    out = invoke("status", stopped.ID, "--json")
     // Decode into a fresh view: omitted cleanup fields must not leak from the
     // preceding cleaned-run response through encoding/json's merge semantics.
     var retained struct {

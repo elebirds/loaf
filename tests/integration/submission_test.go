@@ -19,7 +19,7 @@ func TestLostSubmissionConfirmationUsesTheOriginalID(t *testing.T) {
     }
     f := newFixture(t)
     project := t.TempDir()
-    for _, args := range [][]string{{"add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "lab", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"machine", "use", "lab", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(code, string(out))
         }

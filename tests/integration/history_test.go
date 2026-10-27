@@ -24,11 +24,11 @@ func TestHistoryFiltersAndRemovedMachineBindings(t *testing.T) {
     project := t.TempDir()
     sourceFile(t, project, "loaf.toml", "[run]\nwait = '5s'\n[ps]\nlimit = 2\n")
     for _, name := range []string{"lab", "other"} {
-        if code, out := cli(t, project, "add", name, "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
+        if code, out := cli(t, project, "machine", "add", name, "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
             t.Fatal(code, string(out))
         }
     }
-    if code, out := cli(t, project, "use", "lab", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "use", "lab", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
     success := runCLI(t, project, "run", "--json", "--", "/bin/true")
@@ -39,7 +39,7 @@ func TestHistoryFiltersAndRemovedMachineBindings(t *testing.T) {
     }
     list := func(args ...string) (int, execution.History) {
         t.Helper()
-        code, out := cli(t, project, append(append([]string{"ps"}, args...), "--json")...)
+        code, out := cli(t, project, append(append([]string{"status"}, args...), "--json")...)
         var response struct {
             Data execution.History `json:"data"`
         }
@@ -74,10 +74,10 @@ func TestHistoryFiltersAndRemovedMachineBindings(t *testing.T) {
     if code, data := list("--since", boundary, "--until", boundary); code != 0 || data.Eligible != 1 || data.Matched != 1 || data.Runs[0].ID != failed.ID {
         t.Fatal(code, data)
     }
-    if code, out := cli(t, project, "remove", "lab", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "remove", "lab", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
-    if code, out := cli(t, project, "targets", "--json"); code != 0 || !strings.Contains(string(out), `"target":"lab"`) || !strings.Contains(string(out), `"available":false`) {
+    if code, out := cli(t, project, "machine", "list", "--json"); code != 0 || !strings.Contains(string(out), `"target":"lab"`) || !strings.Contains(string(out), `"available":false`) {
         t.Fatal(code, string(out))
     }
     if code, out := cli(t, project, "check", "--json"); code != 2 {
@@ -93,10 +93,10 @@ func TestHistoryFiltersAndRemovedMachineBindings(t *testing.T) {
         t.Fatal(code, data)
     }
     // Replacing a connection must not redirect previously saved observations.
-    if code, out := cli(t, project, "add", "other", "--replace", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture-missing", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "add", "other", "--replace", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture-missing", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
-    if kept := runCLI(t, project, "ps", other.ID, "--json"); kept.Status != "succeeded" {
+    if kept := runCLI(t, project, "status", other.ID, "--json"); kept.Status != "succeeded" {
         t.Fatal(kept)
     }
     after, err := store.Runs(personal.ID)

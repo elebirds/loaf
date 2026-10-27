@@ -184,10 +184,10 @@ func TestPackagedSyncPoliciesAndConnectionForms(t *testing.T) {
         t.Fatal(err)
     }
     for _, args := range [][]string{
-        {"add", "lab", "--ssh", "ssh -F " + ssh.Quote(spaced) + " fixture", "--json"},
-        {"use", "lab", "--json"},
-        {"add", "uri", "--ssh", "ssh -F " + ssh.Quote(f.config) + " ssh://researcher@127.0.0.1:" + f.port, "--json"},
-        {"add", "jump", "--ssh", "ssh -F " + ssh.Quote(f.config) + " jumped", "--json"},
+        {"machine", "add", "lab", "--ssh", "ssh -F " + ssh.Quote(spaced) + " fixture", "--json"},
+        {"machine", "use", "lab", "--json"},
+        {"machine", "add", "uri", "--ssh", "ssh -F " + ssh.Quote(f.config) + " ssh://researcher@127.0.0.1:" + f.port, "--json"},
+        {"machine", "add", "jump", "--ssh", "ssh -F " + ssh.Quote(f.config) + " jumped", "--json"},
     } {
         code, out := cli(t, project, args...)
         if code != 0 {

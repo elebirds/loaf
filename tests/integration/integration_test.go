@@ -190,7 +190,7 @@ func TestSSHAndDetachedRunner(t *testing.T) {
     f := newFixture(t)
     project := t.TempDir()
     connection := "ssh -F " + ssh.Quote(f.config) + " -p " + f.port + " researcher@127.0.0.1"
-    for _, args := range [][]string{{"add", "direct", "--ssh", connection, "--json"}, {"add", "alias", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "alias", "--json"}, {"check", "--json"}, {"check", "--target", "direct", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "direct", "--ssh", connection, "--json"}, {"machine", "add", "alias", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"machine", "use", "alias", "--json"}, {"check", "--json"}, {"check", "--target", "direct", "--json"}} {
         code, out := cli(t, project, args...)
         if code != 0 {
             t.Fatalf("%v: %d %s", args, code, out)
@@ -328,7 +328,7 @@ func TestSSHAndDetachedRunner(t *testing.T) {
         if err := os.WriteFile(broken, data, 0600); err != nil {
             t.Fatal(err)
         }
-        code, out := cli(t, project, "add", kind, "--ssh", "ssh -F "+ssh.Quote(broken)+" fixture", "--json")
+        code, out := cli(t, project, "machine", "add", kind, "--ssh", "ssh -F "+ssh.Quote(broken)+" fixture", "--json")
         if code != 0 {
             t.Fatal(string(out))
         }

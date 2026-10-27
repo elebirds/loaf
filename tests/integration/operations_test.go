@@ -38,7 +38,7 @@ func TestForegroundExecWorkflow(t *testing.T) {
     }
     f := newFixture(t)
     project := t.TempDir()
-    if code, out := cli(t, project, "add", "machine", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "add", "machine", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
     // These operations need neither a selected project nor an uploaded runner.
@@ -258,7 +258,7 @@ func TestForwardIsolationAndInteractiveSSH(t *testing.T) {
         t.Fatal("the native script utility is required for the PTY integration case", err)
     }
     project := t.TempDir()
-    if code, out := cli(t, project, "add", "machine", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "add", "machine", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
     client := operationCLI(t, project, "ssh", "--target", "machine")

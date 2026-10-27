@@ -42,7 +42,7 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     project := t.TempDir()
     sourceFile(t, project, "loaf.toml", "[run]\nwait = '5s'\n[logs]\ntail = 100\n")
     sourceFile(t, project, "source.txt", "original")
-    for _, args := range [][]string{{"add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "lab", "--json"}} {
+    for _, args := range [][]string{{"machine", "add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"machine", "use", "lab", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(code, string(out))
         }
@@ -62,7 +62,7 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     if configured.Status != "succeeded" || configured.Log == nil || !strings.Contains(configured.Log.Text, "baseline|unset") {
         t.Fatalf("setup: %+v", configured)
     }
-    _, out := cli(t, project, "ps", configured.ID, "--json")
+    _, out := cli(t, project, "status", configured.ID, "--json")
     if bytes.Contains(out, []byte("not-in-observations")) || bytes.Contains(out, []byte("PRIVATE_VALUE")) {
         t.Fatalf("environment leaked: %s", out)
     }
@@ -85,10 +85,10 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     f.shell(`grep -q 'echo final' "$1/runs/$2/work/long.sh"; grep -q changed "$1/cache/long.sh"; test "$(wc -l <"$1/runs/$2/work/launch-count")" -eq 1`, long.RemoteDir, long.ID)
 
     // The default machine and TOML directory can change without redirecting logs.
-    if code, out := cli(t, project, "add", "other", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "add", "other", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
         t.Fatal(string(out))
     }
-    if code, out := cli(t, project, "use", "other", "--json"); code != 0 {
+    if code, out := cli(t, project, "machine", "use", "other", "--json"); code != 0 {
         t.Fatal(string(out))
     }
     sourceFile(t, project, "loaf.toml", "remote_dir = '/home/researcher/foreign'\n")
@@ -100,7 +100,7 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     if code != 1 || json.Unmarshal(failedOutput, &preparation) != nil || preparation.Data.ID == "" || preparation.Data.Submission != "preparing" {
         t.Fatal(code, string(failedOutput))
     }
-    for _, args := range [][]string{{"inspect", preparation.Data.ID, "--json"}, {"ps", preparation.Data.ID, "--local", "--json"}} {
+    for _, args := range [][]string{{"inspect", preparation.Data.ID, "--json"}, {"status", preparation.Data.ID, "--local", "--json"}} {
         saved := runCLI(t, project, args...)
         if saved.ID != preparation.Data.ID || saved.Submission != "preparing" || saved.Status != "unknown" || saved.Target != "other" {
             t.Fatalf("preparation identity was not retained: %+v", saved)
@@ -146,12 +146,12 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     if !sawCanceled || diagnostic.Len() != 0 {
         t.Fatal("cancellation did not preserve JSON observation result", err, diagnostic.String())
     }
-    observed := runCLI(t, project, "ps", long.ID, "--json")
+    observed := runCLI(t, project, "status", long.ID, "--json")
     if observed.Status != "running" {
         t.Fatalf("log cancellation stopped training: %+v", observed)
     }
     f.shell(`touch "$1/runs/$2/work/release"`, long.RemoteDir, long.ID)
-    done := runCLI(t, project, "ps", long.ID, "--wait", "5s", "--json")
+    done := runCLI(t, project, "status", long.ID, "--wait", "5s", "--json")
     if done.Status != "failed" || done.ExitCode == nil || *done.ExitCode != 7 || done.Log == nil || !strings.Contains(done.Log.Text, "final") {
         t.Fatalf("retained result: %+v", done)
     }
@@ -277,7 +277,7 @@ func TestPackagedCPUExamples(t *testing.T) {
         if err := os.CopyFS(project, os.DirFS(filepath.Join(packageDir, "examples", example))); err != nil {
             t.Fatal(err)
         }
-        for _, args := range [][]string{{"add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"use", "lab", "--json"}} {
+        for _, args := range [][]string{{"machine", "add", "lab", "--ssh", "ssh -F " + ssh.Quote(f.config) + " fixture", "--json"}, {"machine", "use", "lab", "--json"}} {
             if code, out := cli(t, project, args...); code != 0 {
                 t.Fatal(code, string(out))
             }
@@ -287,7 +287,15 @@ func TestPackagedCPUExamples(t *testing.T) {
             t.Fatalf("example %s: %+v", example, ran)
         }
         f.shell(`test -d "$1/runs/$2/work/outputs"`, ran.RemoteDir, ran.ID)
-        pulled := pullCLI(t, project, 0, ran.ID, "--json")
+        listedCode, listed := cli(t, project, "status", "--json")
+        if listedCode != 0 || !bytes.Contains(listed, []byte(ran.ID)) {
+            t.Fatal(listedCode, string(listed))
+        }
+        logCode, log := cli(t, project, "logs", "--json")
+        if logCode != 0 || !bytes.Contains(log, []byte(ran.ID)) {
+            t.Fatal(logCode, string(log))
+        }
+        pulled := pullCLI(t, project, 0, "--json")
         name, want := "result.txt", "result=42\n"
         if example == "setup" {
             name, want = "experiment.txt", "baseline\n"

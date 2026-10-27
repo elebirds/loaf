@@ -30,11 +30,11 @@ func (f HistoryFilters) Validate() error {
         switch status {
         case "starting", "running", "succeeded", "failed", "stopped", "unknown":
         default:
-            return fault.New("BAD_CONFIG", "ps_invalid_status", nil)
+            return fault.Invalid("--status", "invalid_value", "ps_invalid_status")
         }
     }
     if f.Since != nil && f.Until != nil && f.Since.After(*f.Until) {
-        return fault.New("BAD_CONFIG", "ps_invalid_range", nil)
+        return fault.Invalid("--since/--until", "conflicting_arguments", "ps_invalid_range")
     }
     return nil
 }
@@ -75,13 +75,13 @@ func (s Service) history(ctx context.Context, projectID string, filters HistoryF
         return result, err
     }
     if local && len(filters.Statuses) != 0 {
-        return result, fault.New("BAD_CONFIG", "ps_local_status", nil)
+        return result, fault.Invalid("--local/--status", "conflicting_arguments", "ps_local_status")
     }
     if local {
         result.Source = "local"
     }
     if limit < 1 || limit > 1000 {
-        return result, fault.New("BAD_CONFIG", "ps_invalid_limit", nil)
+        return result, fault.Invalid("--limit", "out_of_range", "ps_invalid_limit")
     }
     refs, err := s.Index.Runs(projectID)
     if err != nil {

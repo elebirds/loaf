@@ -3,6 +3,7 @@ package ssh
 import (
     "bytes"
     "context"
+    "errors"
     "os"
     "os/exec"
     "path/filepath"
@@ -71,8 +72,12 @@ func TestNativePrivateConnectionWithRsync(t *testing.T) {
     }
     req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", Root: root, ProjectID: projectID, RunID: runID, Args: []string{"/bin/sh", "-c", "mkdir outputs; cp " + Quote(name) + " outputs/a-result.txt; cp payload.bin outputs/z-payload.bin"}}
     if _, err := client.Control(ctx, target, runner, req, true); err != nil {
-        t.Fatal(err)
+        var remote *RemoteError
+        if !errors.As(err, &remote) || remote.Code != "SUBMISSION_UNKNOWN" {
+            t.Fatal(err)
+        }
     }
+    // Bounded observation confirms this same launch, including a late supervisor.
     req.WaitMillis = 5000
     observed, err := client.Observe(ctx, target, runner, req, true)
     if err != nil || observed.Record == nil || observed.Record.Status != "succeeded" {

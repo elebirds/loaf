@@ -19,6 +19,16 @@ import (
 )
 
 func TestNativeResumableLogConnection(t *testing.T) {
+    for _, unconfirmed := range []bool{false, true} {
+        name := "confirmed"
+        if unconfirmed {
+            name = "unconfirmed"
+        }
+        t.Run(name, func(t *testing.T) { nativeResumableLogConnection(t, unconfirmed) })
+    }
+}
+
+func nativeResumableLogConnection(t *testing.T, unconfirmed bool) {
     runner := os.Getenv("LOAF_NATIVE_SCOPE_RUNNER")
     if runner == "" {
         t.Skip("run bash scripts/integration.sh")
@@ -35,6 +45,9 @@ func TestNativeResumableLogConnection(t *testing.T) {
         root = filepath.Join(t.TempDir(), "logs")
     } else {
         root += "-logs"
+        if unconfirmed {
+            root += "-unconfirmed"
+        }
     }
     ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
     defer cancel()
@@ -62,8 +75,36 @@ func TestNativeResumableLogConnection(t *testing.T) {
     }
     release := filepath.Join(root, "release-log")
     req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", Root: root, ProjectID: projectID, RunID: runID, Args: []string{"/bin/sh", "-c", "printf 'first\\n'; i=0; while [ ! -f " + ssh.Quote(release) + " ]; do i=$((i+1)); test $i -lt 400 || exit 90; sleep .05; done; printf 'second 中文\\n'"}}
-    if _, err := client.Control(ctx, target, runner, req, true); err != nil {
-        t.Fatal(err)
+    record, err := client.Control(ctx, target, runner, req, true)
+    if err == nil && unconfirmed {
+        // Lose one acceptance response so recovery is exercised even when the
+        // fixture's supervisor starts within the normal confirmation budget.
+        record, err = nil, &ssh.RemoteError{Code: "SUBMISSION_UNKNOWN"}
+    }
+    if err != nil {
+        var remote *ssh.RemoteError
+        if !errors.As(err, &remote) || remote.Code != "SUBMISSION_UNKNOWN" {
+            t.Fatal(err)
+        }
+    }
+    // A slow supervisor can outlive launch's finite confirmation budget. Logs
+    // need a live owner; observe this same ID until it is ready, never relaunch.
+    query := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "status", Root: root, ProjectID: projectID, RunID: runID}
+    tick := time.NewTicker(100 * time.Millisecond)
+    defer tick.Stop()
+    for record == nil || record.SupervisorPID == 0 {
+        select {
+        case <-ctx.Done():
+            t.Fatal("supervisor acceptance was not confirmed", ctx.Err())
+        case <-tick.C:
+        }
+        record, err = client.Control(ctx, target, runner, query, true)
+        if err != nil {
+            t.Fatal("observe original launch", err)
+        }
+        if record != nil && (wire.Terminal(record.Status) || record.Status == "unknown") {
+            t.Fatalf("log fixture did not reach a live supervisor: status=%s phase=%s reason=%s", record.Status, record.Phase, record.Reason)
+        }
     }
     ref := task.RunRef{ID: runID, ProjectID: projectID, Target: "fixture", Connection: target, RemoteDir: root, Runner: runner, Version: wire.Version, CreatedAt: time.Now(), Submission: "submitted"}
     service := execution.Service{Remote: client, Runner: func(context.Context, config.Target, string, bool) (string, error) { return runner, nil }}

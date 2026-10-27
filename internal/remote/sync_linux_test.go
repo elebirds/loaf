@@ -8,6 +8,7 @@ import (
     "strings"
     "testing"
 
+    remotestate "github.com/elebirds/loaf/internal/state/remote"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -36,7 +37,7 @@ func TestInitializeOnlyOwnedOrEmptyDirectories(t *testing.T) {
     if err != nil || got != root {
         t.Fatal(got, err)
     }
-    info, err := os.Stat(filepath.Join(root, ".loaf-project"))
+    info, err := os.Stat(remotestate.Path(root))
     if err != nil || info.Mode().Perm() != 0600 {
         t.Fatal(info, err)
     }
@@ -49,7 +50,7 @@ func TestInitializeOnlyOwnedOrEmptyDirectories(t *testing.T) {
     writeSource(t, foreign, "research.py", "do not delete")
     _, err = initProject(foreign, "project")
     expectCode(t, err, "PROJECT_UNOWNED")
-    if _, err := os.Stat(filepath.Join(foreign, ".loaf-project")); !errors.Is(err, os.ErrNotExist) {
+    if _, err := os.Stat(remotestate.Path(foreign)); !errors.Is(err, os.ErrNotExist) {
         t.Fatal("claimed a foreign directory")
     }
     home, _ := os.UserHomeDir()
@@ -117,13 +118,13 @@ func TestCacheLockCoversReceptionAndSourceCopyEntry(t *testing.T) {
 
 func TestUnrecognizedCacheFormatIsPreserved(t *testing.T) {
     root := managedRoot(t)
-    original := `{"format_version":99,"complete":true}`
-    writeSource(t, root, ".loaf-cache.json", original)
+    testSQL(t, root, "PRAGMA user_version=99")
     expectCode(t, updateCache(root, "project", func(string, *os.File) error { t.Fatal("ignored an unknown format"); return nil }), "BAD_FORMAT")
-    data, err := os.ReadFile(filepath.Join(root, ".loaf-cache.json"))
-    if err != nil || string(data) != original {
-        t.Fatal(string(data), err)
+    // A writer must refuse the unknown schema before changing any table.
+    if _, err := loadCacheState(root); err == nil {
+        t.Fatal("changed unknown schema")
     }
+
 }
 
 func TestReceiverChecksContextAndDestinationWithoutReadingTheStream(t *testing.T) {

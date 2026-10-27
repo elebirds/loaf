@@ -10,14 +10,6 @@ import (
     "github.com/elebirds/loaf/internal/i18n"
 )
 
-var cloudValueFlags = map[string]bool{
-    "--credential-store": true, "--username": true, "--phone-area": true, "--auth": true,
-    "--account": true, "--product": true, "--token-env": true, "--app-version": true, "--profile": true,
-    "--gpu-vendor": true, "--gpu-model": true, "--gpu-count": true, "--min-gpu-memory": true, "--min-cpus": true, "--min-memory": true, "--min-disk": true, "--region": true,
-    "--max-compute-hourly-price": true, "--currency": true, "--poll-interval": true, "--image": true, "--private-image": true, "--gpu-spec": true, "--gpu-spec-id": true, "--cuda-from": true, "--expand-system-disk": true, "--expand-data-disk": true,
-    "--instance": true, "--request": true, "--ready-timeout": true, "--clone-from": true,
-}
-
 func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
     switch r := data.(type) {
     case loginResult:

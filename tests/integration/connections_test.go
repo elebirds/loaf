@@ -20,6 +20,7 @@ import (
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
     sources "github.com/elebirds/loaf/internal/sync"
 )
 
@@ -106,7 +107,7 @@ func TestCommandScopedCloudConnections(t *testing.T) {
                 return info.Path, err
             }
             sender := ssh.Rsync{Client: client, Binary: "rsync"}
-            store := config.New(t.TempDir(), "", "")
+            store := local.New(t.TempDir())
             root := t.TempDir()
             project, err := store.Select(ctx, root, "")
             if err != nil {

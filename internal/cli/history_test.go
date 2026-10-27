@@ -13,6 +13,7 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -34,28 +35,28 @@ func (r *psRemote) Observe(ctx context.Context, target config.Target, runner str
     return result, err
 }
 
-func psFixture(t *testing.T) (Options, *psRemote, []config.RunRef) {
+func psFixture(t *testing.T) (testOptions, *psRemote, []task.RunRef) {
     t.Helper()
     o, remote := runFixture(t)
     root, _, err := config.Discover(context.Background(), o.CWD)
     if err != nil {
         t.Fatal(err)
     }
-    project, err := o.Store.Existing(root)
+    project, err := o.State.Existing(root)
     if err != nil {
         t.Fatal(err)
     }
     observer := &psRemote{runRemote: remote, statuses: map[string]string{}}
     o.Runs.Remote = observer
-    refs := []config.RunRef{}
+    refs := []task.RunRef{}
     now := time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC)
     for i, status := range []string{"running", "failed", "succeeded", "failed"} {
         attempted := now.Add(-time.Duration(i) * time.Hour)
-        ref := config.RunRef{ID: fmt.Sprintf("r_%024d", i), ProjectID: project.ID, Target: "lab", Connection: config.Target{Destination: "original", RemoteBase: "~/projects"}, RemoteDir: "/remote/project", Runner: "/runner", Version: wire.Version, CreatedAt: attempted.Add(-time.Minute), AttemptedAt: &attempted, Submission: "submitted"}
+        ref := task.RunRef{Outputs: []string{"outputs"}, ID: fmt.Sprintf("r_%024d", i), ProjectID: project.ID, Target: "lab", Connection: config.Target{Destination: "original", RemoteBase: "~/projects"}, RemoteDir: "/remote/project", Runner: "/runner", Version: wire.Version, CreatedAt: attempted.Add(-time.Minute), AttemptedAt: &attempted, Submission: "submitted"}
         if i == 3 {
             ref.Target = "retired"
         }
-        if err := o.Store.SaveRun(context.Background(), ref); err != nil {
+        if err := o.State.SaveRun(context.Background(), ref); err != nil {
             t.Fatal(err)
         }
         observer.statuses[ref.ID] = status
@@ -64,7 +65,7 @@ func psFixture(t *testing.T) (Options, *psRemote, []config.RunRef) {
     return o, observer, refs
 }
 
-func psResult(t *testing.T, o Options, args ...string) (int, execution.History) {
+func psResult(t *testing.T, o testOptions, args ...string) (int, execution.History) {
     t.Helper()
     code, out, stderr := run(t, o, append(args, "--json")...)
     var response struct {
@@ -111,11 +112,11 @@ func TestPSFiltersBoundedHistoryAndSavedAliases(t *testing.T) {
 
 func TestPSPreferencesAndInvalidCombinations(t *testing.T) {
     o, _, refs := psFixture(t)
-    data, err := os.ReadFile(o.Store.ConfigFile)
+    data, err := os.ReadFile(o.Config.ConfigFile)
     if err != nil {
         t.Fatal(err)
     }
-    if err := os.WriteFile(o.Store.ConfigFile, append(data, []byte("\n[ps]\nlimit = 3\n")...), 0600); err != nil {
+    if err := os.WriteFile(o.Config.ConfigFile, append(data, []byte("\n[ps]\nlimit = 3\n")...), 0600); err != nil {
         t.Fatal(err)
     }
     if code, list := psResult(t, o, "ps"); code != 0 || list.Examined != 3 || list.Limit != 3 {

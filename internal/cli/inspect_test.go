@@ -13,7 +13,7 @@ import (
 
 func TestNamedRunsAndLocalLabelFilters(t *testing.T) {
     o, remote := runFixture(t)
-    o.Runs.Metadata = o.Store
+    o.Runs.Metadata = o.State
     code, out, stderr := run(t, o, "run", "--name", "中文 A", "--tag", "seed1", "--tag", "ab", "--tag", "seed1", "--json", "--", "python", "--name", "literal")
     var accepted struct {
         Data execution.View `json:"data"`
@@ -48,10 +48,11 @@ func TestNamedRunsAndLocalLabelFilters(t *testing.T) {
 func TestOfflineInspectionSurvivesVersionAndAliasChangesWithoutSSH(t *testing.T) {
     o, remote, refs := psFixture(t)
     old := refs[0]
+    old.ID = "r_aaaaaaaaaaaaaaaaaaaaaaaa"
     old.Version = "older-version"
     old.Connection.Cloud = &cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "standard", Account: "original", ID: "instance-original"}, Settings: cloud.Account{Credential: cloud.CredentialRef{Mode: "session", Key: "must-not-show-credential-reference", Store: "keyring"}}}
     old.Connection.Args = []string{"-i", "must-not-show-private-key-path"}
-    if err := o.Store.SaveRun(context.Background(), old); err != nil {
+    if err := o.State.SaveRun(context.Background(), old); err != nil {
         t.Fatal(err)
     }
     if code, _, _ := run(t, o, "remove", "lab", "--json"); code != 0 {
@@ -88,11 +89,51 @@ func TestOfflineInspectionSurvivesVersionAndAliasChangesWithoutSSH(t *testing.T)
     }
 }
 
+func TestOfflinePreparationIdentityDoesNotReplaceLatest(t *testing.T) {
+    o, remote, refs := psFixture(t)
+    preparation := refs[0]
+    preparation.ID = "r_cccccccccccccccccccccccc"
+    preparation.Submission, preparation.AttemptedAt = "preparing", nil
+    if err := o.State.SaveRun(context.Background(), preparation); err != nil {
+        t.Fatal(err)
+    }
+    o.Runs = nil
+    for _, lang := range []string{"en", "zh-Hans"} {
+        for _, args := range [][]string{{"inspect", preparation.ID}, {"ps", preparation.ID, "--local"}} {
+            code, out, stderr := run(t, o, append(args, "--lang", lang, "--json")...)
+            var result struct {
+                Data execution.LocalDetails `json:"data"`
+            }
+            if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &result) != nil || result.Data.ID != preparation.ID || result.Data.Submission != "preparing" || result.Data.Status != "unknown" || result.Data.AttemptedAt != nil {
+                t.Fatal(code, out, stderr)
+            }
+            code, out, stderr = run(t, o, append(args, "--lang", lang)...)
+            label := "preparation record"
+            if lang == "zh-Hans" {
+                label = "准备记录"
+            }
+            if code != 0 || stderr != "" || !strings.Contains(out, label) {
+                t.Fatal(code, out, stderr)
+            }
+        }
+    }
+    code, out, stderr := run(t, o, "ps", "--local", "--json")
+    if code != 0 || stderr != "" || strings.Contains(out, preparation.ID) || remote.calls != 0 {
+        t.Fatal("preparation changed navigation or contacted remote", code, out, stderr, remote.calls)
+    }
+    service := execution.Service{Index: o.State}
+    latest, err := service.Select(preparation.ProjectID, "")
+    if err != nil || latest.ID != refs[0].ID {
+        t.Fatal("preparation replaced latest", latest, err)
+    }
+}
+
 func TestVersionMismatchHasStructuredVersions(t *testing.T) {
     o, _, refs := psFixture(t)
     ref := refs[0]
+    ref.ID = "r_bbbbbbbbbbbbbbbbbbbbbbbb"
     ref.Version = "old-build"
-    if err := o.Store.SaveRun(context.Background(), ref); err != nil {
+    if err := o.State.SaveRun(context.Background(), ref); err != nil {
         t.Fatal(err)
     }
     for _, lang := range []string{"en", "zh-Hans"} {

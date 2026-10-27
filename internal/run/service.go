@@ -4,29 +4,29 @@ import (
     "context"
     "crypto/rand"
     "encoding/hex"
-    "encoding/json"
     "errors"
-    "strings"
     "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
 // RunIndex is the concrete local storage seam consumed by execution.
 type RunIndex interface {
-    SaveRun(context.Context, config.RunRef) error
-    Runs(string) ([]config.RunRef, error)
+    SaveRun(context.Context, task.RunRef) error
+    Run(string, string) (task.RunRef, error)
+    Runs(string) ([]task.RunRef, error)
 }
 
 // MetadataStore is optional for existing execution callers, required only for
 // annotations. Storage remains local and separate from execution records.
 type MetadataStore interface {
-    RunMetadata(string, string) (config.RunMetadata, error)
-    SaveRunMetadata(context.Context, string, string, config.RunMetadata) error
+    RunMetadata(string, string) (task.RunMetadata, error)
+    SaveRunMetadata(context.Context, string, string, task.RunMetadata) error
 }
 
 // Remote is the SSH control and observation boundary, independent of rendering.
@@ -57,38 +57,39 @@ type SubmitInput struct {
     Plan       sources.Plan
     Args       []string
     Batch      bool
-    Metadata   config.RunMetadata
+    Metadata   task.RunMetadata
 }
 
 // View exposes operational results without leaking private request environments.
 type View struct {
-    ID               string               `json:"run_id"`
-    Version          string               `json:"version"`
-    Name             string               `json:"name,omitempty"`
-    Tags             []string             `json:"tags,omitempty"`
-    Target           string               `json:"target"`
-    RemoteDir        string               `json:"remote_dir"`
-    Status           string               `json:"status"`
-    Submission       string               `json:"submission,omitempty"`
-    Phase            string               `json:"phase,omitempty"`
-    CreatedAt        time.Time            `json:"created_at"`
-    CompletedAt      *time.Time           `json:"completed_at,omitempty"`
-    ExitCode         *int                 `json:"exit_code"`
-    Signal           string               `json:"signal,omitempty"`
-    Reason           string               `json:"reason,omitempty"`
-    QueryError       string               `json:"query_error,omitempty"`
-    Log              *wire.LogChunk       `json:"log,omitempty"`
-    StopGraceMillis  *int64               `json:"stop_grace_millis,omitempty"`
-    CleanedAt        *time.Time           `json:"cleaned_at,omitempty"`
-    CleanupPending   bool                 `json:"cleanup_pending,omitempty"`
-    LastObservation  *config.ObservedRun  `json:"last_observation,omitempty"`
-    LastQueryFailure *config.QueryFailure `json:"last_query_failure,omitempty"`
-    ObservedAt       time.Time            `json:"observed_at,omitzero"`
-    QueryInterrupted bool                 `json:"query_interrupted,omitempty"`
-    Ref              config.RunRef        `json:"-"`
+    ID               string             `json:"run_id"`
+    Version          string             `json:"version"`
+    Name             string             `json:"name,omitempty"`
+    Tags             []string           `json:"tags,omitempty"`
+    Target           string             `json:"target"`
+    RemoteDir        string             `json:"remote_dir"`
+    Status           string             `json:"status"`
+    Submission       string             `json:"submission,omitempty"`
+    Phase            string             `json:"phase,omitempty"`
+    CreatedAt        time.Time          `json:"created_at"`
+    CompletedAt      *time.Time         `json:"completed_at,omitempty"`
+    ExitCode         *int               `json:"exit_code"`
+    Signal           string             `json:"signal,omitempty"`
+    Reason           string             `json:"reason,omitempty"`
+    QueryError       string             `json:"query_error,omitempty"`
+    StateError       string             `json:"state_error,omitempty"`
+    Log              *wire.LogChunk     `json:"log,omitempty"`
+    StopGraceMillis  *int64             `json:"stop_grace_millis,omitempty"`
+    CleanedAt        *time.Time         `json:"cleaned_at,omitempty"`
+    CleanupPending   bool               `json:"cleanup_pending,omitempty"`
+    LastObservation  *task.ObservedRun  `json:"last_observation,omitempty"`
+    LastQueryFailure *task.QueryFailure `json:"last_query_failure,omitempty"`
+    ObservedAt       time.Time          `json:"observed_at,omitzero"`
+    QueryInterrupted bool               `json:"query_interrupted,omitempty"`
+    Ref              task.RunRef        `json:"-"`
 }
 
-func view(ref config.RunRef, r *wire.RunRecord) View {
+func view(ref task.RunRef, r *wire.RunRecord) View {
     v := View{ID: ref.ID, Version: ref.Version, Name: ref.Name, Tags: ref.Tags, Target: ref.Target, RemoteDir: ref.RemoteDir, CreatedAt: ref.CreatedAt, Status: "unknown", Submission: ref.Submission, Ref: ref}
     if ref.Cleanup != nil {
         summary := ref.Cleanup.Summary
@@ -119,20 +120,18 @@ func view(ref config.RunRef, r *wire.RunRecord) View {
 // Submit never retries execution. Lost confirmation is resolved against the
 // same already-persisted ID, not by replaying a start request.
 func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(string)) (View, error) {
-    metadata, err := config.NormalizeRunMetadata(in.Metadata)
+    metadata, err := task.NormalizeRunMetadata(in.Metadata)
     if err != nil {
         return View{}, err
     }
     if (metadata.Name != "" || len(metadata.Tags) > 0) && s.Metadata == nil {
         return View{}, fault.New("BAD_CONFIG", "run_metadata_unavailable", nil)
     }
-    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", ProjectID: in.Project.ID, Args: append([]string(nil), in.Args...), Setup: in.File.Run.Setup, Env: in.File.Run.Env}
-    if len(req.Args) == 0 && strings.TrimSpace(in.File.Run.Command) != "" {
-        req.Args = []string{"/bin/sh", "-c", in.File.Run.Command}
-    }
-    if err := validateCommand(req); err != nil {
+    spec, err := ResolveExecution(in.File, in.Args)
+    if err != nil {
         return View{}, err
     }
+    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", ProjectID: in.Project.ID, Args: spec.Args, Setup: spec.Setup, Env: spec.Env}
     notify := func(stage string) {
         if progress != nil {
             progress(stage)
@@ -154,18 +153,16 @@ func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(strin
     if _, err := rand.Read(id[:]); err != nil {
         return View{}, err
     }
-    outputs := append([]string(nil), in.File.Outputs.Paths...)
-    if len(outputs) == 0 {
-        outputs = []string{"outputs"}
-    }
-    ref := config.RunRef{ID: "r_" + hex.EncodeToString(id[:]), ProjectID: in.Project.ID, Target: in.Target, Connection: in.Connection, RemoteDir: report.RemoteDir, Runner: runner, Version: wire.Version, Outputs: outputs, CreatedAt: time.Now().UTC(), Submission: "preparing"}
+    ref := task.RunRef{ID: "r_" + hex.EncodeToString(id[:]), ProjectID: in.Project.ID, Target: in.Target, Connection: in.Connection, RemoteDir: report.RemoteDir, Runner: runner, Version: wire.Version, Outputs: spec.Outputs, CreatedAt: time.Now().UTC(), Submission: "preparing"}
     ref.Name, ref.Tags = metadata.Name, metadata.Tags
     if err := s.Index.SaveRun(ctx, ref); err != nil {
         return View{}, err
     }
     if metadata.Name != "" || len(metadata.Tags) > 0 {
         if err := s.Metadata.SaveRunMetadata(ctx, ref.ProjectID, ref.ID, metadata); err != nil {
-            return View{}, err
+            result := view(ref, nil)
+            err = recordStateError(&result, err)
+            return result, err
         }
     }
     input := ssh.SyncInput{Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Mode: in.Plan.Policy.Mode}
@@ -180,13 +177,17 @@ func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(strin
             copy.Hint = "run_sync_retry"
             err = &copy
         }
-        return View{}, err
+        return view(ref, nil), err
     }
     now := time.Now().UTC()
     ref.AttemptedAt = &now
     ref.Submission = "uncertain"
     if err := s.Index.SaveRun(ctx, ref); err != nil {
-        return View{}, err
+        ref.Submission = "preparing"
+        ref.AttemptedAt = nil
+        result := view(ref, nil)
+        err = recordStateError(&result, err)
+        return result, err
     }
     req.RunID = ref.ID
     req.Root = ref.RemoteDir
@@ -203,7 +204,9 @@ func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(strin
             saveErr := s.Index.SaveRun(saveCtx, ref)
             cancel()
             if saveErr != nil {
-                return view(ref, record), saveErr
+                result := view(ref, record)
+                saveErr = recordStateError(&result, saveErr)
+                return result, saveErr
             }
             return view(ref, record), remoteFault(err)
         }
@@ -233,33 +236,9 @@ func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(strin
     saved, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
     saveErr := s.Index.SaveRun(saved, ref)
     cancelSave()
-    return view(ref, record), saveErr
-}
-
-func validateCommand(req wire.Request) error {
-    if len(req.Args) == 0 || req.Args[0] == "" {
-        return fault.New("BAD_CONFIG", "run_command", nil)
-    }
-    for _, arg := range append(append([]string(nil), req.Args...), req.Setup) {
-        if strings.ContainsRune(arg, 0) {
-            return fault.New("BAD_CONFIG", "run_command", nil)
-        }
-    }
-    for key, value := range req.Env {
-        if key == "" || strings.ContainsAny(key, "=\x00") || strings.ContainsRune(value, 0) {
-            return fault.New("BAD_CONFIG", "run_env", nil)
-        }
-        for i, r := range key {
-            if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || i > 0 && r >= '0' && r <= '9') {
-                return fault.New("BAD_CONFIG", "run_env", nil)
-            }
-        }
-    }
-    data, err := json.Marshal(req)
-    if err != nil || len(data) > 900*1024 {
-        return fault.New("BAD_CONFIG", "run_command", nil)
-    }
-    return nil
+    result := view(ref, record)
+    saveErr = recordStateError(&result, saveErr)
+    return result, saveErr
 }
 
 func definiteRejection(code string) bool {
@@ -270,38 +249,37 @@ func definiteRejection(code string) bool {
     return false
 }
 
-func matching(ref config.RunRef, r *wire.RunRecord) bool {
+func matching(ref task.RunRef, r *wire.RunRecord) bool {
     return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.Version == wire.Version && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir
 }
-func accepted(ref config.RunRef, r *wire.RunRecord) bool {
+func accepted(ref task.RunRef, r *wire.RunRecord) bool {
     return matching(ref, r) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
 }
 
 // Select resolves an ID only within the current project. Ambiguity never falls
 // back to an older, successful run.
-func (s Service) Select(projectID, id string) (config.RunRef, error) {
+func (s Service) Select(projectID, id string) (task.RunRef, error) {
+    if id != "" {
+        ref, err := s.Index.Run(projectID, id)
+        if err != nil {
+            return task.RunRef{}, err
+        }
+        return s.describe(ref)
+    }
     refs, err := s.Index.Runs(projectID)
     if err != nil {
-        return config.RunRef{}, err
-    }
-    if id != "" {
-        for _, ref := range refs {
-            if ref.ID == id {
-                return s.describe(ref)
-            }
-        }
-        return config.RunRef{}, fault.New("RUN_NOT_FOUND", "run_not_found", nil)
+        return task.RunRef{}, err
     }
     if len(refs) == 0 {
-        return config.RunRef{}, fault.New("RUN_NOT_FOUND", "run_not_found", nil)
+        return task.RunRef{}, fault.New("RUN_NOT_FOUND", "run_not_found", nil)
     }
     if len(refs) > 1 && refs[0].AttemptedAt.Equal(*refs[1].AttemptedAt) {
-        return config.RunRef{}, fault.New("RUN_AMBIGUOUS", "run_ambiguous", nil)
+        return task.RunRef{}, fault.New("RUN_AMBIGUOUS", "run_ambiguous", nil)
     }
     return s.describe(refs[0])
 }
 
-func (s Service) describe(ref config.RunRef) (config.RunRef, error) {
+func (s Service) describe(ref task.RunRef) (task.RunRef, error) {
     if s.Metadata != nil {
         m, err := s.Metadata.RunMetadata(ref.ProjectID, ref.ID)
         if err != nil {
@@ -312,15 +290,16 @@ func (s Service) describe(ref config.RunRef) (config.RunRef, error) {
     return ref, nil
 }
 
-func request(ref config.RunRef, wait time.Duration, tail int) wire.Request {
+func request(ref task.RunRef, wait time.Duration, tail int) wire.Request {
     return wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, WaitMillis: int64((wait + time.Millisecond - 1) / time.Millisecond), Tail: tail}
 }
 
 // Observe queries a bound locator without reading today's target configuration.
-func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool) (result View, resultErr error) {
+func (s Service) Observe(ctx context.Context, ref task.RunRef, wait time.Duration, tail int, batch bool) (result View, resultErr error) {
+    var queryErr error
     defer func() {
-        if err := s.remember(ctx, ref, result, resultErr); resultErr == nil && err != nil {
-            resultErr = err
+        if err := s.remember(ctx, ref, result, queryErr); err != nil {
+            resultErr = errors.Join(resultErr, recordStateError(&result, err))
         }
     }()
     if err := currentVersion(ref); err != nil {
@@ -334,56 +313,70 @@ func (s Service) Observe(ctx context.Context, ref config.RunRef, wait time.Durat
     if prepareErr != nil {
         result := view(ref, nil)
         result.QueryError = errorCode(prepareErr)
+        queryErr = prepareErr
         return result, prepareErr
     }
     ref = prepared
     timeout, cancel := context.WithTimeout(ctx, wait+20*time.Second)
     defer cancel()
     observed, err := s.Remote.Observe(timeout, ref.Connection, ref.Runner, request(ref, wait, tail), batch)
-    result = view(ref, observed.Record)
+    result = view(ref, nil)
+    if matching(ref, observed.Record) {
+        result = view(ref, observed.Record)
+    }
     if err != nil {
         if ctx.Err() != nil {
             return result, fault.Wrap("OBSERVATION_CANCELED", "observation_canceled", ctx.Err())
         }
         result.QueryError = errorCode(err)
-        return result, remoteFault(err)
+        queryErr = remoteFault(err)
+        return result, queryErr
     }
     if observed.Record != nil && observed.Record.Request.Version != wire.Version {
-        return result, versionMismatch(observed.Record.Request.Version)
+        queryErr = versionMismatch(observed.Record.Request.Version)
+        result.QueryError = errorCode(queryErr)
+        return result, queryErr
     }
     if !matching(ref, observed.Record) {
-        return result, fault.New("BAD_RESPONSE", "run_query", nil)
+        queryErr = fault.New("BAD_RESPONSE", "run_query", nil)
+        result.QueryError = errorCode(queryErr)
+        return result, queryErr
     }
+    result.ObservedAt = time.Now().UTC()
+    result.Log = &observed.Log
     if ref.Submission == "uncertain" && result.Status != "unknown" && accepted(ref, observed.Record) {
         // Confirm the saved ID after a successful observation. This changes
         // only its local submission locator, never sends another start.
         bound.Submission = "submitted"
-        if err := s.Index.SaveRun(ctx, bound); err != nil {
-            return result, err
-        }
         result.Ref = bound
         result.Submission = bound.Submission
+        saved, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+        saveErr := s.Index.SaveRun(saved, bound)
+        cancelSave()
+        if saveErr != nil {
+            saveErr = recordStateError(&result, saveErr)
+            return result, saveErr
+        }
     }
-    result.ObservedAt = time.Now().UTC()
-    result.Log = &observed.Log
     return result, nil
 }
 
 // Follow observes one run over one SSH connection; callback errors only close it.
-func (s Service) Follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, emit func(View, string) error) (View, error) {
+func (s Service) Follow(ctx context.Context, ref task.RunRef, wait time.Duration, tail int, batch bool, emit func(View, string) error) (View, error) {
     return s.follow(ctx, ref, wait, tail, batch, "", false, RecoveryOptions{}, emit)
 }
 
 // FollowResumable resumes only confirmed chunks and permits one transient
 // reconnect. Existing Follow keeps its single-connection behavior.
-func (s Service) FollowResumable(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, cursor string, emit func(View, string) error) (View, error) {
+func (s Service) FollowResumable(ctx context.Context, ref task.RunRef, wait time.Duration, tail int, batch bool, cursor string, emit func(View, string) error) (View, error) {
     return s.follow(ctx, ref, wait, tail, batch, cursor, true, RecoveryOptions{}, emit)
 }
 
-func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, cursor string, recover bool, recovery RecoveryOptions, emit func(View, string) error) (last View, resultErr error) {
+func (s Service) follow(ctx context.Context, ref task.RunRef, wait time.Duration, tail int, batch bool, cursor string, recover bool, recovery RecoveryOptions, emit func(View, string) error) (last View, resultErr error) {
+    var queryErr error
     defer func() {
-        if err := s.remember(ctx, ref, last, resultErr); resultErr == nil && err != nil {
-            resultErr = err
+        if err := s.remember(ctx, ref, last, queryErr); err != nil {
+            resultErr = errors.Join(resultErr, recordStateError(&last, err))
         }
     }()
     if err := AvailabilityError(ref); err != nil {
@@ -399,9 +392,13 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
         }
         confirmedOffset, confirmedFile = c.Offset, c.FileID
     }
+    bound := ref
     prepared, err := s.prepareRef(ctx, ref, batch)
     if err != nil {
-        return view(ref, nil), err
+        queryErr = err
+        last = view(ref, nil)
+        last.QueryError = errorCode(err)
+        return last, err
     }
     ref = prepared
     last = view(ref, nil)
@@ -424,7 +421,8 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             }
             req.WaitMillis = int64((remaining + time.Millisecond - 1) / time.Millisecond)
         }
-        consumerFailed, ended, emitted := false, false, false
+        ended, emitted := false, false
+        var localErr error
         attemptCtx, cancelAttempt := context.WithCancel(ctx)
         var budgetTimer *time.Timer
         if !recoveryDeadline.IsZero() && recovering {
@@ -449,10 +447,33 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             next := view(ref, event.Record)
             next.Log = &event.Log
             next.ObservedAt = time.Now().UTC()
+            confirm := ref.Submission == "uncertain" && next.Status != "unknown" && accepted(ref, event.Record)
+            if confirm {
+                bound.Submission, ref.Submission = "submitted", "submitted"
+                next.Submission, next.Ref = "submitted", bound
+            }
+            // The execution fact is known before the consumer accepts the log.
+            // Keep only the previous consumed chunk in the returned log/cursor.
+            consumedLog := last.Log
+            last = next
+            last.Log = consumedLog
+            if confirm {
+                saved, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+                saveErr := s.Index.SaveRun(saved, bound)
+                cancelSave()
+                if saveErr != nil {
+                    localErr = recordStateError(&last, saveErr)
+                    return localErr
+                }
+            }
             if emit != nil {
                 if err := emit(next, event.Type); err != nil {
-                    consumerFailed = true
-                    return err
+                    var known *fault.Error
+                    localErr = err
+                    if !errors.As(err, &known) {
+                        localErr = fault.Wrap("LOG_CONSUMER_FAILED", "log_consumer_failed", err)
+                    }
+                    return localErr
                 }
             }
             if budgetTimer != nil {
@@ -482,6 +503,9 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             budgetTimer.Stop()
         }
         cancelAttempt()
+        if localErr != nil {
+            return last, localErr
+        }
         if err == nil {
             return last, nil
         }
@@ -490,7 +514,7 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
             err = fault.Wrap("LOG_RECOVERY_EXHAUSTED", "log_recovery_exhausted", err)
             break
         }
-        if !recover || ended || consumerFailed || (emitted && cursor == "") || ctx.Err() != nil || !ssh.IsTransientReadError(err) {
+        if !recover || ended || (emitted && cursor == "") || ctx.Err() != nil || !ssh.IsTransientReadError(err) {
             break
         }
         if recovery.Budget == 0 && attempt > 0 {
@@ -528,7 +552,9 @@ func (s Service) follow(ctx context.Context, ref config.RunRef, wait time.Durati
     if ctx.Err() != nil {
         return last, fault.Wrap("OBSERVATION_CANCELED", "observation_canceled", ctx.Err())
     }
-    return last, remoteFault(err)
+    queryErr = remoteFault(err)
+    last.QueryError = errorCode(queryErr)
+    return last, queryErr
 }
 
 func errorCode(err error) string {

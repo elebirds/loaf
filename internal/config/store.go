@@ -1,14 +1,10 @@
-// Package config manages user configuration and project-local selections.
+// Package config manages user and project TOML configuration.
 package config
 
 import (
     "bytes"
     "context"
-    "crypto/rand"
-    "encoding/hex"
-    "encoding/json"
     "errors"
-    "io"
     "os"
     "path"
     "path/filepath"
@@ -54,13 +50,8 @@ type Project struct {
     Target string `json:"target,omitempty"`
 }
 
-type index struct {
-    FormatVersion int                `json:"format_version"`
-    Projects      map[string]Project `json:"projects"`
-}
-
-// Store uses private user directories and atomic, locked updates.
-type Store struct{ ConfigFile, IndexFile string }
+// Store reads and writes user TOML; runtime state has a separate store.
+type Store struct{ ConfigFile, StateDir string }
 
 // New uses XDG directory overrides, or their documented home-relative defaults.
 func New(home, configHome, stateHome string) *Store {
@@ -70,7 +61,7 @@ func New(home, configHome, stateHome string) *Store {
     if stateHome == "" {
         stateHome = filepath.Join(home, ".local", "state")
     }
-    return &Store{filepath.Join(configHome, "loaf", "config.toml"), filepath.Join(stateHome, "loaf", "index.json")}
+    return &Store{filepath.Join(configHome, "loaf", "config.toml"), filepath.Join(stateHome, "loaf")}
 }
 
 func decodeTOML(data []byte, dst any) error {
@@ -129,7 +120,6 @@ func (s *Store) Load() (Global, error) {
 }
 
 var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-var projectIDPattern = regexp.MustCompile(`^p_[0-9a-f]{24}$`)
 
 // ValidName restricts aliases to unambiguous CLI identifiers.
 func ValidName(name string) bool { return namePattern.MatchString(name) }
@@ -175,85 +165,6 @@ func (s *Store) Add(ctx context.Context, name string, target Target, replace boo
         }
         return atomicfile.Write(s.ConfigFile, data)
     })
-}
-
-func (s *Store) loadIndex() (index, error) {
-    i := index{1, map[string]Project{}}
-    data, err := os.ReadFile(s.IndexFile)
-    if errors.Is(err, os.ErrNotExist) {
-        return i, nil
-    }
-    if err != nil {
-        return i, err
-    }
-    decoder := json.NewDecoder(bytes.NewReader(data))
-    decoder.DisallowUnknownFields()
-    if err := decoder.Decode(&i); err != nil {
-        return i, err
-    }
-    if decoder.Decode(new(any)) != io.EOF {
-        return i, fault.New("BAD_CONFIG", "config_read", nil)
-    }
-    if i.FormatVersion != 1 {
-        return i, fault.New("BAD_CONFIG", "unknown_format", nil)
-    }
-    if i.Projects == nil {
-        i.Projects = map[string]Project{}
-    }
-    for root, p := range i.Projects {
-        if p.Root != root || !filepath.IsAbs(root) || !projectIDPattern.MatchString(p.ID) || (p.Target != "" && !ValidName(p.Target)) {
-            return i, fault.New("BAD_CONFIG", "config_read", nil)
-        }
-    }
-    return i, nil
-}
-
-// Select returns a stable project identity, optionally saving a default target.
-func (s *Store) Select(ctx context.Context, root, target string) (Project, error) {
-    var result Project
-    if !filepath.IsAbs(root) || (target != "" && !ValidName(target)) {
-        return result, fault.New("BAD_CONFIG", "invalid_target", nil)
-    }
-    err := locked(ctx, s.IndexFile, func() error {
-        i, err := s.loadIndex()
-        if err != nil {
-            return err
-        }
-        result = i.Projects[root]
-        if result.ID == "" {
-            var id [12]byte
-            if _, err := rand.Read(id[:]); err != nil {
-                return err
-            }
-            result = Project{ID: "p_" + hex.EncodeToString(id[:]), Root: root}
-        }
-        if target != "" {
-            result.Target = target
-        }
-        i.Projects[root] = result
-        data, err := json.MarshalIndent(i, "", "    ")
-        if err != nil {
-            return err
-        }
-        return atomicfile.Write(s.IndexFile, append(data, '\n'))
-    })
-    if err != nil {
-        var f *fault.Error
-        if errors.As(err, &f) {
-            return result, err
-        }
-        return result, fault.Wrap("BAD_CONFIG", "state_write", err)
-    }
-    return result, nil
-}
-
-// Existing returns a project's saved selection without creating state.
-func (s *Store) Existing(root string) (Project, error) {
-    i, err := s.loadIndex()
-    if err != nil {
-        return Project{}, fault.Wrap("BAD_CONFIG", "config_read", err)
-    }
-    return i.Projects[root], nil
 }
 
 // Resolve applies command-line, personal project, then shared TOML precedence.

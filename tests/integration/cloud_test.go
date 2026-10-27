@@ -14,11 +14,13 @@ import (
 
     "github.com/elebirds/loaf/internal/autodl"
     commands "github.com/elebirds/loaf/internal/cli"
+    application "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/credentials"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
     sources "github.com/elebirds/loaf/internal/sync"
 )
 
@@ -162,7 +164,8 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(data))}, nil
             })}}
             store := config.New(project, filepath.Join(project, "config"), filepath.Join(project, "state"))
-            auth := &cloud.Authentication{Files: credentials.File{Dir: filepath.Join(filepath.Dir(store.IndexFile), "credentials")}}
+            state := local.New(store.StateDir)
+            auth := &cloud.Authentication{Files: credentials.File{Dir: filepath.Join(store.StateDir, "credentials")}}
             auth.Authenticate = factory.Login
             factory.ReadSecret = auth.Token
             f.client.AskpassExecutable = os.Getenv("LOAF_BIN")
@@ -197,13 +200,20 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 return info.Path, err
             }
             sender := ssh.Rsync{Client: f.client, Binary: "rsync"}
-            runs := &execution.Service{Index: store, Check: integrationPreflight{f.client}, Runner: prepare, Send: sender, Remote: f.client}
-            o := commands.Options{Store: store, Auth: auth, Cloud: commands.DefaultCloudService(store, factory.Open), Runs: runs, Checker: f.client, Runner: bootstrap, Operations: f.client, Puller: sources.PullService{Remote: f.client, Runner: prepare, Receive: sender}, CWD: project, Env: map[string]string{"LANG": "C"}, In: strings.NewReader("")}
+            runs := &execution.Service{Index: state, Metadata: state, Observations: state, Check: integrationPreflight{f.client}, Runner: prepare, Send: sender, Remote: f.client}
+            dependencies := application.Dependencies{Config: store, State: state, Auth: auth, Cloud: &cloud.Service{Open: factory.Open, Receipts: cloud.Receipts{Dir: filepath.Dir(state.Path)}}, Runs: runs, Checker: f.client, Runner: bootstrap, Operations: f.client, Puller: sources.PullService{Remote: f.client, Runner: prepare, Receive: sender}, CWD: project}
+            o := commands.Options{Env: map[string]string{"LANG": "C"}, In: strings.NewReader("")}
+            execute := func(args []string) int {
+                settings, err := store.Load()
+                o.App = application.New(dependencies, settings)
+                o.Language, o.InitError = settings.Language, err
+                return commands.Execute(context.Background(), args, o)
+            }
             invoke := func(args ...string) []byte {
                 t.Helper()
                 var out, diagnostic bytes.Buffer
                 o.Out, o.Err = &out, &diagnostic
-                code := commands.Execute(context.Background(), append(args, "--json"), o)
+                code := execute(append(args, "--json"))
                 if code != 0 || diagnostic.Len() != 0 {
                     t.Fatalf("%v: %d %s %s", args, code, out.String(), diagnostic.String())
                 }
@@ -244,7 +254,7 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             // Flags must precede --; the experiment argv must be preserved literally.
             var out, diagnostic bytes.Buffer
             o.Out, o.Err = &out, &diagnostic
-            code := commands.Execute(context.Background(), []string{"run", "--json", "--", "/bin/sh", "experiment.sh"}, o)
+            code := execute([]string{"run", "--json", "--", "/bin/sh", "experiment.sh"})
             if code != 0 || json.Unmarshal(out.Bytes(), &started) != nil || started.Data.Status != "failed" || started.Data.ExitCode == nil || *started.Data.ExitCode != 7 {
                 t.Fatal(code, out.String(), diagnostic.String())
             }
@@ -283,11 +293,11 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             if err != nil {
                 t.Fatal(err)
             }
-            projectRecord, err := store.Existing(root)
+            projectRecord, err := state.Existing(root)
             if err != nil {
                 t.Fatal(err)
             }
-            records, err := store.Runs(projectRecord.ID)
+            records, err := state.Runs(projectRecord.ID)
             if err != nil || len(records) != 1 || records[0].Connection.Cloud.Ref.ID != "instance-fixture" {
                 t.Fatal(records, err)
             }

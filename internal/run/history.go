@@ -6,8 +6,8 @@ import (
     "sync"
     "time"
 
-    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
 )
 
 // HistoryFilters narrows saved submission attempts before querying their bound
@@ -23,7 +23,7 @@ type HistoryFilters struct {
 
 // Validate rejects unknown statuses and inverted, inclusive submission boundaries.
 func (f HistoryFilters) Validate() error {
-    if _, err := config.NormalizeRunMetadata(config.RunMetadata{Name: f.Name, Tags: f.Tags}); err != nil {
+    if _, err := task.NormalizeRunMetadata(task.RunMetadata{Name: f.Name, Tags: f.Tags}); err != nil {
         return err
     }
     for _, status := range f.Statuses {
@@ -44,16 +44,17 @@ func (f HistoryFilters) Validate() error {
 // observations. Rows with QueryError are retained even when their status match
 // cannot be established; Matched excludes those Unresolved rows.
 type History struct {
-    Runs       []View         `json:"runs"`
-    Total      int            `json:"total"`
-    Truncated  bool           `json:"truncated"`
-    Eligible   int            `json:"eligible"`
-    Examined   int            `json:"examined"`
-    Limit      int            `json:"limit"`
-    Matched    int            `json:"matched"`
-    Unresolved int            `json:"unresolved"`
-    Filters    HistoryFilters `json:"filters"`
-    Source     string         `json:"source,omitempty"`
+    Runs        []View         `json:"runs"`
+    Total       int            `json:"total"`
+    Truncated   bool           `json:"truncated"`
+    Eligible    int            `json:"eligible"`
+    Examined    int            `json:"examined"`
+    Limit       int            `json:"limit"`
+    Matched     int            `json:"matched"`
+    Unresolved  int            `json:"unresolved"`
+    StateErrors int            `json:"state_errors"`
+    Filters     HistoryFilters `json:"filters"`
+    Source      string         `json:"source,omitempty"`
 }
 
 // History queries at most limit locally eligible entries and shares the existing
@@ -87,7 +88,7 @@ func (s Service) history(ctx context.Context, projectID string, filters HistoryF
         return result, err
     }
     result.Total = len(refs)
-    eligible := make([]config.RunRef, 0, len(refs))
+    eligible := make([]task.RunRef, 0, len(refs))
     for _, ref := range refs {
         if filters.Target != "" && ref.Target != filters.Target {
             continue
@@ -139,16 +140,24 @@ func (s Service) history(ctx context.Context, projectID string, filters HistoryF
         }
         observed, err := item.view, item.err
         result.Examined++
+        if observed.StateError != "" {
+            result.StateErrors++
+        }
         if err != nil {
-            failed = true
-            if observed.QueryError == "" {
+            if observed.QueryError == "" && observed.StateError == "" {
                 observed.QueryError = errorCode(err)
             }
+        }
+        if observed.QueryError != "" {
+            failed = true
             result.Unresolved++
             result.Runs = append(result.Runs, observed)
             continue
         }
         if !filters.matchesStatus(observed.Status) {
+            if observed.StateError != "" {
+                result.Runs = append(result.Runs, observed)
+            }
             continue
         }
         result.Matched++
@@ -157,6 +166,9 @@ func (s Service) history(ctx context.Context, projectID string, filters HistoryF
     result.Truncated = result.Examined < result.Eligible
     if failed {
         return result, fault.New("QUERY_PARTIAL", "run_query_partial", nil)
+    }
+    if result.StateErrors > 0 {
+        return result, fault.New("STATE_PARTIAL", "run_state_partial", nil)
     }
     return result, nil
 }
@@ -180,11 +192,11 @@ type historyObservation struct {
     interrupted bool
 }
 
-func (s Service) observeHistory(ctx context.Context, refs []config.RunRef, batch bool) []historyObservation {
+func (s Service) observeHistory(ctx context.Context, refs []task.RunRef, batch bool) []historyObservation {
     return s.observeBounded(ctx, refs, batch, 0)
 }
 
-func (s Service) observeBounded(ctx context.Context, refs []config.RunRef, batch bool, perRun time.Duration) []historyObservation {
+func (s Service) observeBounded(ctx context.Context, refs []task.RunRef, batch bool, perRun time.Duration) []historyObservation {
     observations := make([]historyObservation, len(refs))
     jobs := make(chan int)
     var workers sync.WaitGroup

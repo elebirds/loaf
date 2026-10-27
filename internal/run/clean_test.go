@@ -3,13 +3,15 @@ package run
 import (
     "context"
     "errors"
-    "os"
+    "reflect"
     "testing"
     "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -43,7 +45,7 @@ func (r *cleanupRemote) Clean(_ context.Context, _ config.Target, _ string, req 
     return &wire.CleanupReceipt{FormatVersion: 1, Version: wire.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, Summary: r.summary, CleanedAt: &now}, nil
 }
 
-func cleanupFixture(t *testing.T) (CleanupService, config.RunRef, *cleanupRemote, *config.Store) {
+func cleanupFixture(t *testing.T) (CleanupService, task.RunRef, *cleanupRemote, *local.Store) {
     t.Helper()
     runs, input, _, _ := executionFixture(t)
     submitted, err := runs.Submit(context.Background(), input, nil)
@@ -53,7 +55,7 @@ func cleanupFixture(t *testing.T) (CleanupService, config.RunRef, *cleanupRemote
     completed := submitted.Ref.CreatedAt.Add(time.Second)
     remote := &cleanupRemote{summary: wire.RunSummary{Status: "failed", Phase: "command", CreatedAt: submitted.Ref.CreatedAt, CompletedAt: &completed, ExitCode: new(7)}}
     runs.Remote = remote
-    store := runs.Index.(*config.Store)
+    store := runs.Index.(*local.Store)
     service := CleanupService{Runs: &runs, Index: store, Remote: remote, Runner: func(context.Context, config.Target, string, bool) (string, error) {
         remote.deploys++
         return "/current/helper", nil
@@ -63,7 +65,7 @@ func cleanupFixture(t *testing.T) (CleanupService, config.RunRef, *cleanupRemote
 
 func TestCleanupPreviewDoesNotDeployOrWriteAndRefusesUnconfirmed(t *testing.T) {
     service, ref, remote, store := cleanupFixture(t)
-    before, err := os.ReadFile(store.IndexFile)
+    before, err := store.Runs(ref.ProjectID)
     if err != nil {
         t.Fatal(err)
     }
@@ -75,8 +77,8 @@ func TestCleanupPreviewDoesNotDeployOrWriteAndRefusesUnconfirmed(t *testing.T) {
     if refs[0].Cleanup != nil {
         t.Fatal(refs)
     }
-    after, _ := os.ReadFile(store.IndexFile)
-    if string(before) != string(after) {
+    after, _ := store.Runs(ref.ProjectID)
+    if !reflect.DeepEqual(before, after) {
         t.Fatal("preview changed local state")
     }
     ref.Submission = "uncertain"
@@ -177,17 +179,19 @@ func TestSuccessfulObservationConfirmsOnlyAcceptedUncertainLocator(t *testing.T)
         {"failed", errors.New("query lost"), "uncertain"},
     } {
         t.Run(tc.want+tc.status, func(t *testing.T) {
-            service, ref, _, store := cleanupFixture(t)
-            ref.Submission = "uncertain"
-            if err := store.SaveRun(context.Background(), ref); err != nil {
-                t.Fatal(err)
+            runs, input, _, remote := executionFixture(t)
+            remote.lost, remote.unknown = true, true
+            submitted, err := runs.Submit(context.Background(), input, nil)
+            if err == nil || submitted.Ref.Submission != "uncertain" {
+                t.Fatal(submitted, err)
             }
-            service.Runs.Remote = confirmedObservation{status: tc.status, err: tc.err}
-            _, err := service.Runs.Observe(context.Background(), ref, 0, 0, true)
+            ref := submitted.Ref
+            runs.Remote = confirmedObservation{status: tc.status, err: tc.err}
+            _, err = runs.Observe(context.Background(), ref, 0, 0, true)
             if (err != nil) != (tc.err != nil) {
                 t.Fatal(err)
             }
-            latest, err := service.Runs.Select(ref.ProjectID, "")
+            latest, err := runs.Select(ref.ProjectID, "")
             if err != nil || latest.Submission != tc.want || latest.ID != ref.ID {
                 t.Fatal(latest, err)
             }
@@ -227,7 +231,7 @@ type failedCleanupSave struct {
     calls int
 }
 
-func (s *failedCleanupSave) RecordCleanup(ctx context.Context, ref config.RunRef, cleanup *config.RunCleanup) error {
+func (s *failedCleanupSave) RecordCleanup(ctx context.Context, ref task.RunRef, cleanup *task.RunCleanup) error {
     s.calls++
     if s.calls == 2 {
         return errors.New("local storage unavailable")

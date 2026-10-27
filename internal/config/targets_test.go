@@ -9,15 +9,11 @@ import (
     "github.com/elebirds/loaf/internal/atomicfile"
 )
 
-func TestRemovePreservesProjectChoiceAndConcurrentChanges(t *testing.T) {
+func TestRemovePreservesConcurrentChanges(t *testing.T) {
     store := testStore(t)
     ctx := context.Background()
     target := Target{Destination: "old", RemoteBase: "~/projects"}
     if err := store.Add(ctx, "old", target, false); err != nil {
-        t.Fatal(err)
-    }
-    project, err := store.Select(ctx, t.TempDir(), "old")
-    if err != nil {
         t.Fatal(err)
     }
     var group sync.WaitGroup
@@ -38,13 +34,6 @@ func TestRemovePreservesProjectChoiceAndConcurrentChanges(t *testing.T) {
     cfg, err := store.Load()
     if err != nil || len(cfg.Targets) != 1 || cfg.Targets["new"].Destination != "old" {
         t.Fatal(cfg, err)
-    }
-    kept, err := store.Existing(project.Root)
-    if err != nil || kept != project {
-        t.Fatal(kept, err)
-    }
-    if _, _, err := Resolve("", kept, ProjectFile{Target: "new"}, cfg); err == nil {
-        t.Fatal("removed personal choice fell back to shared target")
     }
     if err := store.Remove(ctx, "old"); err == nil {
         t.Fatal("unknown alias removed")

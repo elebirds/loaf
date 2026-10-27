@@ -14,6 +14,7 @@ import (
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -64,7 +65,7 @@ func TestNativeResumableLogConnection(t *testing.T) {
     if _, err := client.Control(ctx, target, runner, req, true); err != nil {
         t.Fatal(err)
     }
-    ref := config.RunRef{ID: runID, ProjectID: projectID, Target: "fixture", Connection: target, RemoteDir: root, Runner: runner, Version: wire.Version, CreatedAt: time.Now(), Submission: "submitted"}
+    ref := task.RunRef{ID: runID, ProjectID: projectID, Target: "fixture", Connection: target, RemoteDir: root, Runner: runner, Version: wire.Version, CreatedAt: time.Now(), Submission: "submitted"}
     service := execution.Service{Remote: client, Runner: func(context.Context, config.Target, string, bool) (string, error) { return runner, nil }}
     var text strings.Builder
     ends := 0

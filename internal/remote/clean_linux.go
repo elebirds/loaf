@@ -2,54 +2,40 @@ package remote
 
 import (
     "context"
-    "encoding/json"
     "errors"
-    "io"
     "os"
     "path/filepath"
     "strings"
     "time"
 
-    "github.com/elebirds/loaf/internal/atomicfile"
+    remotestate "github.com/elebirds/loaf/internal/state/remote"
     "github.com/elebirds/loaf/internal/wire"
     "golang.org/x/sys/unix"
 )
 
-func cleanupFile(dir string) string {
-    return filepath.Join(filepath.Dir(dir), "."+filepath.Base(dir)+".cleaned.json")
-}
-
 func cleanupReceipt(req wire.Request, dir string) (*wire.CleanupReceipt, error) {
-    file, err := os.OpenFile(cleanupFile(dir), os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-    if errors.Is(err, os.ErrNotExist) {
-        return nil, nil
-    }
+    state, err := remotestate.Open(req.Root, false)
     if err != nil {
+        return nil, err
+    }
+    defer state.Close()
+    receipt, err := state.Cleanup(req.RunID)
+    if err != nil || receipt == nil {
+        return receipt, err
+    }
+    if receipt.Root != req.Root || receipt.ProjectID != req.ProjectID || receipt.RunID != filepath.Base(dir) {
         return nil, errors.New("BAD_FORMAT")
     }
-    defer file.Close()
-    var stat unix.Stat_t
-    if unix.Fstat(int(file.Fd()), &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG || stat.Uid != uint32(os.Geteuid()) {
-        return nil, errors.New("BAD_FORMAT")
-    }
-    var receipt wire.CleanupReceipt
-    decoder := json.NewDecoder(io.LimitReader(file, 64*1024))
-    decoder.DisallowUnknownFields()
-    if decoder.Decode(&receipt) != nil || decoder.Decode(new(any)) != io.EOF || receipt.FormatVersion != 1 || receipt.Root != req.Root || receipt.ProjectID != req.ProjectID || receipt.RunID != req.RunID || !receipt.Summary.Valid() || receipt.Inode == 0 {
-        return nil, errors.New("BAD_FORMAT")
-    }
-    if receipt.Version != wire.Version {
-        return nil, errors.New("VERSION_MISMATCH")
-    }
-    return &receipt, nil
+    return receipt, nil
 }
 
 func saveCleanup(dir string, receipt *wire.CleanupReceipt) error {
-    data, err := json.MarshalIndent(receipt, "", "    ")
-    if err != nil || atomicfile.Write(cleanupFile(dir), append(data, '\n')) != nil {
-        return errors.New("CLEAN_UNCONFIRMED")
+    state, err := remotestate.Open(filepath.Dir(filepath.Dir(dir)), true)
+    if err != nil {
+        return err
     }
-    return nil
+    defer state.Close()
+    return state.SaveCleanup(receipt)
 }
 
 // lockData protects the availability of a run directory, independently of its
@@ -125,7 +111,7 @@ func Clean(ctx context.Context, req wire.Request, dryRun bool) (*wire.CleanupRec
     if err != nil {
         return nil, err
     }
-    for _, name := range []string{req.Root, filepath.Dir(dir), filepath.Join(req.Root, ".loaf-project")} {
+    for _, name := range []string{req.Root, filepath.Dir(dir), remotestate.Path(req.Root)} {
         var stat unix.Stat_t
         if unix.Lstat(name, &stat) != nil || stat.Uid != uint32(os.Geteuid()) {
             return nil, errors.New("CLEAN_UNSAFE")
@@ -238,7 +224,7 @@ func Clean(ctx context.Context, req wire.Request, dryRun bool) (*wire.CleanupRec
     defer root.Close()
     // os.Root confines every operation; links are unlinked, never followed.
     // The receipt retains the terminal result if cancellation occurs after
-    // run.json is removed; retry still stays bound to this exact inode.
+    // payload files are removed; retry still stays bound to this exact inode.
     if err := removeRunTree(ctx, root, "."); err != nil {
         return receipt, errors.New("CLEAN_UNCONFIRMED")
     }
@@ -318,7 +304,7 @@ func cleanupRecord(req wire.Request, dir string) (*wire.RunRecord, error) {
         return nil, errors.New("BAD_FORMAT")
     }
     var stat unix.Stat_t
-    if unix.Lstat(filepath.Join(dir, "run.json"), &stat) != nil || stat.Uid != uint32(os.Geteuid()) {
+    if unix.Lstat(remotestate.Path(req.Root), &stat) != nil || stat.Uid != uint32(os.Geteuid()) {
         return nil, errors.New("CLEAN_UNSAFE")
     }
     if !wire.Summary(record).Valid() {

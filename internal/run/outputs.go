@@ -8,6 +8,7 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -32,7 +33,7 @@ type OutputListing struct {
 }
 
 // List does not prepare a helper unless explicitly authorized for this call.
-func (s OutputBrowser) List(ctx context.Context, ref config.RunRef, depth, limit int, prepare, batch bool) (result OutputListing, err error) {
+func (s OutputBrowser) List(ctx context.Context, ref task.RunRef, depth, limit int, prepare, batch bool) (result OutputListing, err error) {
     result = OutputListing{RunID: ref.ID, Target: ref.Target, Paths: append([]string(nil), ref.Outputs...)}
     if depth < 0 || depth > 20 || limit < 1 || limit > 1000 {
         return result, fault.New("BAD_CONFIG", "outputs_bounds", nil)

@@ -36,14 +36,13 @@ func TestDuplicateStartBeforePublication(t *testing.T) {
                 }
             }
             var original []byte
-            recordPath := filepath.Join(dir, "run.json")
             if tc.done {
                 code := 7
-                if err := save(dir, &wire.RunRecord{FormatVersion: wire.FormatVersion, Request: req, Status: "failed", ExitCode: &code}); err != nil {
+                if err := seedRecord(dir, &wire.RunRecord{FormatVersion: wire.FormatVersion, Request: req, Status: "failed", ExitCode: &code}); err != nil {
                     t.Fatal(err)
                 }
                 var err error
-                original, err = os.ReadFile(recordPath)
+                original, err = recordBytes(dir)
                 if err != nil {
                     t.Fatal(err)
                 }
@@ -94,11 +93,11 @@ func TestDuplicateStartBeforePublication(t *testing.T) {
                 }
             }
             if tc.done {
-                after, err := os.ReadFile(recordPath)
+                after, err := recordBytes(dir)
                 if err != nil || !bytes.Equal(after, original) {
                     t.Fatal("duplicate start changed the retained record", err)
                 }
-            } else if _, err := os.Lstat(recordPath); !errors.Is(err, os.ErrNotExist) {
+            } else if _, err := read(dir); err == nil {
                 t.Fatal("contended start published a run record", err)
             }
         })

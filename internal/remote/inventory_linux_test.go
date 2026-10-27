@@ -17,7 +17,7 @@ func TestInventoryIsBoundedReadOnlyAndRejectsEscapes(t *testing.T) {
     req.Limit = 3
     req.Outputs = append(req.Outputs, "missing")
     writeSource(t, work, "outputs/sub/deep/file", "deep")
-    before, _ := os.ReadFile(filepath.Join(filepath.Dir(work), "run.json"))
+    before, _ := recordBytes(filepath.Dir(work))
     inventory, err := Inventory(context.Background(), req)
     if err != nil || len(inventory.Entries) > 3 || inventory.Examined != len(inventory.Entries) || !inventory.Truncated {
         t.Fatal(inventory, err)
@@ -26,7 +26,7 @@ func TestInventoryIsBoundedReadOnlyAndRejectsEscapes(t *testing.T) {
     if strings.Contains(string(data), "must-not-leak") || strings.Contains(string(data), "metrics") {
         t.Fatal(string(data))
     }
-    after, _ := os.ReadFile(filepath.Join(filepath.Dir(work), "run.json"))
+    after, _ := recordBytes(filepath.Dir(work))
     if string(before) != string(after) {
         t.Fatal("changed record")
     }
@@ -36,7 +36,7 @@ func TestInventoryIsBoundedReadOnlyAndRejectsEscapes(t *testing.T) {
     if err != nil || inventory.Truncated || len(inventory.Missing) != 1 || inventory.RootsExamined != 3 {
         t.Fatal(inventory, err)
     }
-    if err := os.Symlink("../../run.json", filepath.Join(work, "outputs/escape")); err != nil {
+    if err := os.Symlink("../../outside", filepath.Join(work, "outputs/escape")); err != nil {
         t.Fatal(err)
     }
     _, err = Inventory(context.Background(), req)
@@ -75,13 +75,13 @@ func TestInventoryRejectsUnknownStoredRequestFormat(t *testing.T) {
         t.Fatal(err)
     }
     record.Request.FormatVersion = 99
-    if err := save(dir, record); err != nil {
+    if err := seedRecord(dir, record); err != nil {
         t.Fatal(err)
     }
-    before, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+    before, _ := recordBytes(dir)
     _, err = Inventory(context.Background(), req)
     expectCode(t, err, "BAD_FORMAT")
-    after, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+    after, _ := recordBytes(dir)
     if string(after) != string(before) {
         t.Fatal("unknown record changed")
     }

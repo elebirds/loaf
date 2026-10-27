@@ -20,7 +20,7 @@ func TestStopSettingsAndPublicOutput(t *testing.T) {
         t.Fatal(code, out, stderr)
     }
     id := remote.req.RunID
-    base, err := os.ReadFile(o.Store.ConfigFile)
+    base, err := os.ReadFile(o.Config.ConfigFile)
     if err != nil {
         t.Fatal(err)
     }
@@ -39,7 +39,7 @@ func TestStopSettingsAndPublicOutput(t *testing.T) {
         if tc.global != "" {
             data = append(data, []byte("\n[stop]\ngrace = '"+tc.global+"'\n")...)
         }
-        if err := os.WriteFile(o.Store.ConfigFile, data, 0600); err != nil {
+        if err := os.WriteFile(o.Config.ConfigFile, data, 0600); err != nil {
             t.Fatal(err)
         }
         text := ""

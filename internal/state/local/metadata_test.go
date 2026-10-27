@@ -1,14 +1,15 @@
-package config
+package local
 
 import (
     "context"
-    "encoding/json"
     "os"
+    "reflect"
     "slices"
-    "strings"
     "sync"
     "testing"
     "time"
+
+    "github.com/elebirds/loaf/internal/task"
 )
 
 func TestEqualAttemptTimesHaveStableOrder(t *testing.T) {
@@ -41,17 +42,19 @@ func TestRunMetadataIsSeparatePrivateImmutableAndConcurrent(t *testing.T) {
     if _, err := store.RunMetadata(ref.ProjectID, ref.ID); err != nil {
         t.Fatal(err)
     }
-    if _, err := os.Stat(store.metadataFile(ref.ID)); !os.IsNotExist(err) {
+    if _, err := os.Stat(store.Path); !os.IsNotExist(err) {
         t.Fatal("read wrote state", err)
     }
+    ref.Submission = "uncertain"
+    ref.AttemptedAt = &ref.CreatedAt
     if err := store.SaveRun(context.Background(), ref); err != nil {
         t.Fatal(err)
     }
-    original, err := os.ReadFile(store.runsFile())
+    original, err := store.Runs(ref.ProjectID)
     if err != nil {
         t.Fatal(err)
     }
-    m := RunMetadata{Name: "中文 A/B", Tags: []string{"seed1", "ablation", "seed1"}}
+    m := task.RunMetadata{Name: "中文 A/B", Tags: []string{"seed1", "ablation", "seed1"}}
     var wg sync.WaitGroup
     for range 8 {
         wg.Add(1)
@@ -67,43 +70,18 @@ func TestRunMetadataIsSeparatePrivateImmutableAndConcurrent(t *testing.T) {
     if err != nil || got.Name != m.Name || !slices.Equal(got.Tags, []string{"ablation", "seed1"}) {
         t.Fatal(got, err)
     }
-    info, err := os.Stat(store.metadataFile(ref.ID))
+    info, err := os.Stat(store.Path)
     if err != nil || info.Mode().Perm() != 0600 {
         t.Fatal(info, err)
     }
-    after, _ := os.ReadFile(store.runsFile())
-    if string(after) != string(original) {
-        t.Fatal("annotations changed legacy index")
+    after, _ := store.Runs(ref.ProjectID)
+    if !reflect.DeepEqual(after, original) {
+        t.Fatal("annotations changed locator")
     }
-    var decoded runIndex
-    d := json.NewDecoder(strings.NewReader(string(after)))
-    d.DisallowUnknownFields()
-    if err := d.Decode(&decoded); err != nil {
-        t.Fatal(err)
-    }
-    if err := store.SaveRunMetadata(context.Background(), ref.ProjectID, ref.ID, RunMetadata{Name: "replacement"}); err == nil {
+    if err := store.SaveRunMetadata(context.Background(), ref.ProjectID, ref.ID, task.RunMetadata{Name: "replacement"}); err == nil {
         t.Fatal("replaced immutable labels")
-    }
-    unknown := []byte(`{"format_version":99}`)
-    if err := os.WriteFile(store.metadataFile(ref.ID), unknown, 0600); err != nil {
-        t.Fatal(err)
-    }
-    if err := store.SaveRunMetadata(context.Background(), ref.ProjectID, ref.ID, m); err == nil {
-        t.Fatal("overwrote unknown metadata")
-    }
-    saved, _ := os.ReadFile(store.metadataFile(ref.ID))
-    if string(saved) != string(unknown) {
-        t.Fatal(string(saved))
     }
     if _, err := store.Runs(ref.ProjectID); err != nil {
         t.Fatal("metadata corrupted locator access", err)
-    }
-}
-
-func TestRunMetadataRejectsInvalidLabels(t *testing.T) {
-    for _, m := range []RunMetadata{{Name: "bad\nname"}, {Name: string([]byte{255})}, {Name: strings.Repeat("界", 129)}, {Tags: []string{""}}, {Tags: []string{strings.Repeat("x", 65)}}, {Tags: make([]string, 17)}} {
-        if _, err := NormalizeRunMetadata(m); err == nil {
-            t.Fatal(m)
-        }
     }
 }

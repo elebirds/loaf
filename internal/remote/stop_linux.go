@@ -1,15 +1,12 @@
 package remote
 
 import (
-    "bytes"
-    "encoding/json"
     "errors"
-    "io"
     "os"
     "path/filepath"
     "time"
 
-    "github.com/elebirds/loaf/internal/atomicfile"
+    remotestate "github.com/elebirds/loaf/internal/state/remote"
     "github.com/elebirds/loaf/internal/wire"
     "golang.org/x/sys/unix"
 )
@@ -48,33 +45,16 @@ func lockRun(dir string) (*os.File, error) {
 }
 
 func readStop(dir string) (*stopRequest, error) {
-    f, err := os.OpenFile(filepath.Join(dir, "stop.request"), os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-    if errors.Is(err, os.ErrNotExist) {
-        return nil, nil
-    }
+    state, err := remotestate.Open(filepath.Dir(filepath.Dir(dir)), false)
     if err != nil {
-        return nil, errors.New("BAD_FORMAT")
+        return nil, err
     }
-    defer f.Close()
-    info, err := f.Stat()
-    if err != nil || !info.Mode().IsRegular() {
-        return nil, errors.New("BAD_FORMAT")
+    defer state.Close()
+    grace, err := state.Stop(filepath.Base(dir))
+    if err != nil || grace == nil {
+        return nil, err
     }
-    data, err := io.ReadAll(io.LimitReader(f, 1025))
-    if err != nil || len(data) > 1024 {
-        return nil, errors.New("BAD_FORMAT")
-    }
-    // Retain the original internal stop marker's meaning.
-    if bytes.Equal(data, []byte("stop\n")) {
-        return &stopRequest{1, wire.DefaultStopGrace.Milliseconds()}, nil
-    }
-    var req stopRequest
-    decoder := json.NewDecoder(bytes.NewReader(data))
-    decoder.DisallowUnknownFields()
-    if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.FormatVersion != 1 || req.GraceMillis < 0 || req.GraceMillis > wire.MaxStopGrace.Milliseconds() {
-        return nil, errors.New("BAD_FORMAT")
-    }
-    return &req, nil
+    return &stopRequest{wire.FormatVersion, *grace}, nil
 }
 
 func stop(req wire.Request, dir string) (*wire.RunRecord, error) {
@@ -106,9 +86,14 @@ func stop(req wire.Request, dir string) (*wire.RunRecord, error) {
     }
     if existing == nil {
         existing = &stopRequest{1, grace.Milliseconds()}
-        data, err := json.Marshal(existing)
-        if err != nil || atomicfile.Write(filepath.Join(dir, "stop.request"), append(data, '\n')) != nil {
-            return r, errors.New("WRITE_FAILED")
+        state, err := remotestate.Open(req.Root, true)
+        if err != nil {
+            return r, err
+        }
+        err = state.AcceptStop(req.RunID, existing.GraceMillis)
+        state.Close()
+        if err != nil {
+            return r, err
         }
     }
     r.StopGraceMillis = &existing.GraceMillis

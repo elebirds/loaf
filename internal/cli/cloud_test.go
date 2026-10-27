@@ -13,6 +13,7 @@ import (
 
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/state/local"
 )
 
 type cloudProvider struct {
@@ -47,11 +48,11 @@ func (*cloudStock) Search(context.Context, cloud.Plan, int) (cloud.InventoryPage
     return cloud.InventoryPage{Offers: []cloud.Offer{}, Complete: true, ObservedAt: time.Now().UTC()}, nil
 }
 
-func cloudFixture(t *testing.T) (Options, *cloudProvider) {
+func cloudFixture(t *testing.T) (testOptions, *cloudProvider) {
     t.Helper()
     o := fixture(t)
     p := &cloudProvider{}
-    o.Cloud = DefaultCloudService(o.Store, func(context.Context, string, cloud.Account, string) (cloud.Provider, error) { return p, nil })
+    o.Cloud = testCloudService(o.Config, func(context.Context, string, cloud.Account, string) (cloud.Provider, error) { return p, nil })
     o.Operations = &fakeOperations{}
     for _, args := range [][]string{{"cloud", "account", "add", "demo", "--product", "pro", "--auth", "developer", "--token-env", "TEST_TOKEN", "--default", "--json"}, {"cloud", "account", "add", "ordinary", "--product", "standard", "--token-env", "TEST_WEB_TOKEN", "--json"}} {
         code, out, err := run(t, o, args...)
@@ -92,7 +93,7 @@ func TestCloudAcquireBindsOneResourceAndUsesFrozenIdentity(t *testing.T) {
     if err := json.Unmarshal([]byte(out), &e); err != nil {
         t.Fatal(err)
     }
-    cfg, err := o.Store.Load()
+    cfg, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
@@ -114,7 +115,7 @@ func TestCloudAcquireBindsOneResourceAndUsesFrozenIdentity(t *testing.T) {
     if code != 0 || p.observed.Product != "pro" || p.observed.ID != "pro-created" {
         t.Fatal(out, p.observed)
     }
-    data, _ := os.ReadFile(o.Store.ConfigFile)
+    data, _ := os.ReadFile(o.Config.ConfigFile)
     if strings.Contains(string(data), "fixture-ssh-secret") || strings.Contains(string(data), "password") {
         t.Fatal("persisted password")
     }
@@ -173,7 +174,7 @@ image = 'fixture-image'
     if r.GPUCount != 1 || r.MinMemoryGiB != 0 || e.Data.Plan.WaitTimeout != "0s" || !reflect.DeepEqual(r.GPUModels, []string{"other"}) || !reflect.DeepEqual(r.Regions, []string{"west"}) {
         t.Fatal(e)
     }
-    if _, err := os.Stat(o.Store.IndexFile); !errors.Is(err, os.ErrNotExist) {
+    if _, err := os.Stat(o.State.Path); !errors.Is(err, os.ErrNotExist) {
         t.Fatal("read-only search created project state", err)
     }
 }
@@ -226,7 +227,7 @@ func TestCloudHelpBothLanguagesAndFlagErrors(t *testing.T) {
 
 func TestProjectDefaultsOverrideUserNamedProfile(t *testing.T) {
     o, p := cloudFixture(t)
-    file, err := os.OpenFile(o.Store.ConfigFile, os.O_APPEND|os.O_WRONLY, 0600)
+    file, err := os.OpenFile(o.Config.ConfigFile, os.O_APPEND|os.O_WRONLY, 0600)
     if err != nil {
         t.Fatal(err)
     }
@@ -252,7 +253,7 @@ func TestProjectDefaultsOverrideUserNamedProfile(t *testing.T) {
 
 func TestCloudProductSelectionDoesNotReinterpretCredentials(t *testing.T) {
     o, p := cloudFixture(t)
-    initial, err := o.Store.Load()
+    initial, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
@@ -286,7 +287,7 @@ func TestCloudProductSelectionDoesNotReinterpretCredentials(t *testing.T) {
             t.Fatal("invalid explicit product reached provider", code, out, opened)
         }
     }
-    current, err := o.Store.Load()
+    current, err := o.Config.Load()
     if err != nil || !reflect.DeepEqual(initial.Cloud.Accounts, current.Cloud.Accounts) {
         t.Fatal("operation product changed saved account preferences", current, err)
     }
@@ -294,14 +295,14 @@ func TestCloudProductSelectionDoesNotReinterpretCredentials(t *testing.T) {
 
 func TestBoundProductWinsOverAccountDefaultAndRejectsRedirection(t *testing.T) {
     o, p := cloudFixture(t)
-    cfg, err := o.Store.Load()
+    cfg, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
     a := cfg.Cloud.Accounts["demo"]
     a.DefaultProduct = "standard"
     b := cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "pro", Account: "demo", ID: "pro-saved"}, Settings: a}
-    if err := o.Store.Add(context.Background(), "gpu", config.Target{Cloud: &b, RemoteBase: "~/projects"}, false); err != nil {
+    if err := o.Config.Add(context.Background(), "gpu", config.Target{Cloud: &b, RemoteBase: "~/projects"}, false); err != nil {
         t.Fatal(err)
     }
     selected := ""
@@ -320,4 +321,8 @@ func TestBoundProductWinsOverAccountDefaultAndRejectsRedirection(t *testing.T) {
             t.Fatal("explicit product redirected a bound resource", operation, code, out)
         }
     }
+}
+
+func testCloudService(store *config.Store, open cloud.OpenProvider) *cloud.Service {
+    return &cloud.Service{Open: open, Receipts: cloud.Receipts{Dir: filepath.Dir(local.New(store.StateDir).Path)}}
 }

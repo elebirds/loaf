@@ -340,11 +340,17 @@ other = "Query the saved run ID again after checking SSH access. A query failure
 [run_query_partial]
 other = "Some runs could not be queried; successful rows are included."
 
+[run_state_partial]
+other = "Run observations are included, but some local state updates failed. Check the state_error fields and local state permissions."
+
+[run_state_save_failed]
+other = "local state save failed: {{.Code}}"
+
 [run_bound_target]
 other = "Run operations use their saved machine and location; --target cannot redirect them."
 
 [run_not_found]
-other = "No matching submitted or submission-uncertain run exists in this project."
+other = "No matching saved run exists in this project."
 
 [run_ambiguous]
 other = "The latest run is ambiguous. Specify its run ID instead of selecting an older task."
@@ -1201,6 +1207,12 @@ other = "Failed stage: {{.Stage}}."
 [run_submission_confirmed]
 other = "submission confirmed; query this same ID"
 
+[run_submission_preparing]
+other = "preparation record; submission not accepted"
+
+[operation_stage_local_state]
+other = "local state persistence"
+
 [operation_stage_cloud_connection]
 other = "cloud connection lookup"
 
@@ -1377,6 +1389,12 @@ other = "Recovery budget must be between 0s and 24h."
 
 [log_checkpoint_invalid]
 other = "Cursor file is invalid, belongs to another stream, or would rewind acknowledged output."
+
+[log_checkpoint_failed]
+other = "Cannot save the consumed log cursor. Fix the checkpoint file and resume from its last saved cursor; the remote task continues."
+
+[log_consumer_failed]
+other = "The log consumer failed. Observation stopped without acknowledging this chunk; the remote task continues."
 
 [log_recovery_reconnecting]
 other = "Connection lost; reconnecting from the last delivered cursor…"
@@ -1623,3 +1641,9 @@ other = "local selection"
 
 [pull_not_examined]
 other = "Download was not attempted before cancellation; no completed transfer is claimed."
+
+[operation_canceled]
+other = "Operation canceled."
+
+[log_acknowledged]
+other = "Acknowledged logs for {{.ID}} through byte {{.Offset}}."

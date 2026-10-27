@@ -18,7 +18,7 @@ func TestPublicOutputInventoryAndBatchPull(t *testing.T) {
     project := stopProject(t, f)
     first := runCLI(t, project, "run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", "mkdir -p outputs/sub/deep; printf first >outputs/中文; printf nested >outputs/sub/deep/file")
     second := runCLI(t, project, "run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", "mkdir -p outputs; printf second >outputs/中文")
-    before := f.shell(`cat "$1/runs/$2/run.json"`, first.RemoteDir, first.ID)
+    before := f.remoteRecord(first.RemoteDir, first.ID)
     code, out := cli(t, project, "outputs", first.ID, "--depth", "1", "--limit", "200", "--json")
     var listing struct {
         Data execution.OutputListing `json:"data"`
@@ -36,7 +36,7 @@ func TestPublicOutputInventoryAndBatchPull(t *testing.T) {
     if code != 0 {
         t.Fatal(code, string(out))
     }
-    after := f.shell(`cat "$1/runs/$2/run.json"`, first.RemoteDir, first.ID)
+    after := f.remoteRecord(first.RemoteDir, first.ID)
     if string(before) != string(after) {
         t.Fatal("inventory changed record")
     }

@@ -7,9 +7,9 @@ import (
     "testing"
     "time"
 
-    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/task"
 )
 
 type fakeCleaner struct {
@@ -20,7 +20,7 @@ type fakeCleaner struct {
     unconfirmedID    string
 }
 
-func (f *fakeCleaner) Preview(_ context.Context, ref config.RunRef, _, _ bool) (execution.CleanResult, error) {
+func (f *fakeCleaner) Preview(_ context.Context, ref task.RunRef, _, _ bool) (execution.CleanResult, error) {
     f.previews++
     result := execution.CleanResult{Run: execution.View{ID: ref.ID, Target: ref.Target, Status: "failed", CreatedAt: ref.CreatedAt, CompletedAt: new(ref.CreatedAt.Add(time.Second)), ExitCode: new(7)}, Path: ref.RemoteDir + "/runs/" + ref.ID, Eligible: true, Ref: ref}
     if f.failPreview || ref.ID == f.blockedID {

@@ -1,12 +1,9 @@
 package run
 
 import (
-    "slices"
-    "strings"
-
     "github.com/elebirds/loaf/internal/config"
     sources "github.com/elebirds/loaf/internal/sync"
-    "github.com/elebirds/loaf/internal/wire"
+    "github.com/elebirds/loaf/internal/task"
 )
 
 // RunPreview explains a local plan, not a submission or frozen source snapshot.
@@ -26,24 +23,6 @@ type RunPreview struct {
     Outputs           []string            `json:"outputs"`
     Pull              config.PullPolicy   `json:"pull"`
     Source            sources.Plan        `json:"source"`
-    Metadata          config.RunMetadata  `json:"metadata"`
+    Metadata          task.RunMetadata    `json:"metadata"`
     Provenance        map[string][]string `json:"provenance"`
-}
-
-// PreviewCommand validates the same command/environment contract as submission,
-// but returns only the literal entry point and environment variable names.
-func PreviewCommand(file config.ProjectFile, args []string) ([]string, []string, error) {
-    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", Args: append([]string(nil), args...), Setup: file.Run.Setup, Env: file.Run.Env}
-    if len(req.Args) == 0 && strings.TrimSpace(file.Run.Command) != "" {
-        req.Args = []string{"/bin/sh", "-c", file.Run.Command}
-    }
-    if err := validateCommand(req); err != nil {
-        return nil, nil, err
-    }
-    keys := []string{}
-    for key := range file.Run.Env {
-        keys = append(keys, key)
-    }
-    slices.Sort(keys)
-    return req.Args, keys, nil
 }

@@ -11,7 +11,10 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/db"
+    "github.com/elebirds/loaf/internal/state/local"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -37,12 +40,16 @@ type localRemote struct {
     launches, queries int
     lost, unknown     bool
     request           wire.Request
+    reject            string
 }
 
 func (r *localRemote) Control(_ context.Context, _ config.Target, _ string, req wire.Request, _ bool) (*wire.RunRecord, error) {
     if req.Action == "launch" {
         r.launches++
         r.request = req
+        if r.reject != "" {
+            return nil, &ssh.RemoteError{Code: r.reject}
+        }
         if r.lost {
             return nil, errors.New("lost confirmation")
         }
@@ -63,7 +70,7 @@ func (r *localRemote) Follow(context.Context, config.Target, string, wire.Reques
 
 func executionFixture(t *testing.T) (Service, SubmitInput, *localSender, *localRemote) {
     t.Helper()
-    store := config.New(t.TempDir(), "", "")
+    store := local.New(t.TempDir())
     project, err := store.Select(context.Background(), t.TempDir(), "")
     if err != nil {
         t.Fatal(err)
@@ -95,7 +102,7 @@ func TestSubmissionRecoversSameIDWithoutReplayingAndHidesEnvironment(t *testing.
     syncFailure := fault.New("SYNC_FAILED", "sync_failed", nil)
     syncFailure.Hint = "sync_retry"
     sender.err = syncFailure
-    _, err = service.Submit(context.Background(), input, nil)
+    preparation, err := service.Submit(context.Background(), input, nil)
     after, _ := service.Select(input.Project.ID, "")
     if err == nil || after.ID != latest.ID || remote.launches != 1 {
         t.Fatal(after, err, remote)
@@ -103,6 +110,10 @@ func TestSubmissionRecoversSameIDWithoutReplayingAndHidesEnvironment(t *testing.
     var f *fault.Error
     if !errors.As(err, &f) || f.Hint != "run_sync_retry" || syncFailure.Hint != "sync_retry" {
         t.Fatal(err)
+    }
+    saved, err := service.Inspect(input.Project, preparation.ID)
+    if err != nil || preparation.ID == "" || saved.ID != preparation.ID || saved.Submission != "preparing" || saved.Status != "unknown" {
+        t.Fatal("lost preparation identity", preparation, saved, err)
     }
 }
 
@@ -125,12 +136,47 @@ func TestUncertainSubmissionRemainsLatestAndDoesNotSelectOlderRun(t *testing.T) 
     }
 }
 
+func TestConfirmedSubmissionRejectionDoesNotReplaceLatest(t *testing.T) {
+    service, input, _, remote := executionFixture(t)
+    accepted, err := service.Submit(context.Background(), input, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    remote.reject = "START_FAILED"
+    rejected, err := service.Submit(context.Background(), input, nil)
+    var failure *fault.Error
+    if !errors.As(err, &failure) || failure.Code != "START_FAILED" || rejected.ID == "" || rejected.ID == accepted.ID || remote.launches != 2 || remote.queries != 0 {
+        t.Fatal(rejected, err, remote)
+    }
+    // Reopen SQLite: a confirmed rejection must retire the persisted attempt,
+    // not merely return a preparation-shaped response to this caller.
+    store := local.New(service.Index.(*local.Store).Dir)
+    service.Index = store
+    latest, err := service.Select(input.Project.ID, "")
+    if err != nil || latest.ID != accepted.ID {
+        t.Fatal(latest, err)
+    }
+    database, err := db.Open(context.Background(), store.Path, false)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer database.Close()
+    var submission string
+    var attempted *string
+    if err := database.QueryRow("SELECT submission,attempted_at FROM runs WHERE id=?", rejected.ID).Scan(&submission, &attempted); err != nil {
+        t.Fatal(err)
+    }
+    if submission != "preparing" || attempted != nil {
+        t.Fatal(submission, attempted)
+    }
+}
+
 type failIndex struct {
     RunIndex
     saves, failAt int
 }
 
-func (i *failIndex) SaveRun(ctx context.Context, ref config.RunRef) error {
+func (i *failIndex) SaveRun(ctx context.Context, ref task.RunRef) error {
     i.saves++
     if i.saves == i.failAt {
         return fault.New("BAD_CONFIG", "run_state", nil)
@@ -142,12 +188,21 @@ func TestPersistenceFailureCannotStartAndCommandValidationIsLocal(t *testing.T) 
     for _, failAt := range []int{1, 2} {
         service, input, sender, remote := executionFixture(t)
         service.Index = &failIndex{RunIndex: service.Index, failAt: failAt}
-        _, err := service.Submit(context.Background(), input, nil)
+        result, err := service.Submit(context.Background(), input, nil)
         if err == nil || remote.launches != 0 || failAt == 1 && sender.calls != 0 {
             t.Fatal(failAt, err, sender, remote)
         }
         if _, err := service.Select(input.Project.ID, ""); err == nil {
             t.Fatal("promoted a preparation failure")
+        }
+        if failAt == 1 && result.ID != "" {
+            t.Fatal("reported an identity that was not saved", result)
+        }
+        if failAt == 2 {
+            saved, err := service.Select(input.Project.ID, result.ID)
+            if err != nil || result.ID == "" || result.Submission != "preparing" || result.StateError != "BAD_CONFIG" || saved.Submission != "preparing" {
+                t.Fatal("failed intent save hid the prepared identity", result, saved, err)
+            }
         }
     }
     service, input, sender, remote := executionFixture(t)

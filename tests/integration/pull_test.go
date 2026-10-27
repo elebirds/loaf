@@ -36,7 +36,7 @@ func TestNativeOutputTransfer(t *testing.T) {
         t.Fatal(err)
     }
     root := `/home/researcher/results 中文 'single' "double" $literal`
-    f.shell(`mkdir -p "$1/cache"; printf 'project\n' >"$1/.loaf-project"`, root)
+    f.managedRemote(root)
     req := wire.Request{FormatVersion: 1, Version: wire.Version, Action: "start", Root: root, ProjectID: "project", RunID: "run", Args: []string{"/bin/sh", "-c", `mkdir -p outputs checkpoints; printf metrics >'outputs/中文 space.json'; printf weights >checkpoints/model.bin; ln -s '中文 space.json' outputs/latest; echo ready >ready; while [ ! -f release ]; do sleep .02; done; exit 7`}}
     if _, err := f.client.Control(ctx, f.target, runner.Path, req, true); err != nil {
         t.Fatal(err)
@@ -114,7 +114,7 @@ func TestPublicPullWorkflow(t *testing.T) {
     if repeated.ChangedFiles == nil || *repeated.ChangedFiles != 0 {
         t.Fatal(repeated)
     }
-    before := f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID)
+    before := f.remoteRecord(started.RemoteDir, started.ID)
     for _, args := range [][]string{{"add", "other", "--ssh", "ssh -p 9 nobody@127.0.0.1", "--json"}, {"use", "other", "--json"}} {
         if code, out := cli(t, project, args...); code != 0 {
             t.Fatal(code, string(out))
@@ -190,7 +190,7 @@ func TestPublicPullWorkflow(t *testing.T) {
     if err != nil || len(entries) != 0 {
         t.Fatal("wrote outside local destination", entries, err)
     }
-    if after := f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID); after != before {
+    if after := f.remoteRecord(started.RemoteDir, started.ID); after != before {
         t.Fatal("pull changed execution record")
     }
     if data, err := os.ReadFile(filepath.Join(first.Destination, "notes.txt")); err != nil || string(data) != "keep local" {

@@ -12,11 +12,12 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/internal/task"
 )
 
 type fakePuller struct {
     calls       int
-    ref         config.RunRef
+    ref         task.RunRef
     destination string
     paths       []string
     policy      config.PullPolicy
@@ -24,7 +25,7 @@ type fakePuller struct {
     missing     bool
 }
 
-func (p *fakePuller) Pull(_ context.Context, ref config.RunRef, destination string, paths []string, policy config.PullPolicy, batch bool) (sources.PullResult, error) {
+func (p *fakePuller) Pull(_ context.Context, ref task.RunRef, destination string, paths []string, policy config.PullPolicy, batch bool) (sources.PullResult, error) {
     p.calls++
     p.ref, p.destination, p.paths, p.policy, p.batch = ref, destination, paths, policy, batch
     count := 1
@@ -47,11 +48,11 @@ func TestPublicPullSelectionPreferencesAndBothLanguages(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    base, err := os.ReadFile(o.Store.ConfigFile)
+    base, err := os.ReadFile(o.Config.ConfigFile)
     if err != nil {
         t.Fatal(err)
     }
-    if err := os.WriteFile(o.Store.ConfigFile, append(base, []byte("\n[pull]\nbase_dir='retrieved'\nchecksum=true\n")...), 0600); err != nil {
+    if err := os.WriteFile(o.Config.ConfigFile, append(base, []byte("\n[pull]\nbase_dir='retrieved'\nchecksum=true\n")...), 0600); err != nil {
         t.Fatal(err)
     }
     // New project output settings do not replace the submitted selection.
@@ -94,9 +95,13 @@ func TestPublicPullSelectionPreferencesAndBothLanguages(t *testing.T) {
 
 func TestPullStringArgumentsDoNotBecomeGlobalOptions(t *testing.T) {
     for _, args := range [][]string{{"pull", "--path", "--json"}, {"pull", "--to", "--lang=fr"}} {
-        jsonMode, language, err := earlyOptions(args)
-        if err != nil || jsonMode || language != "" {
-            t.Fatal(args, jsonMode, language, err)
+        parser, err := newParser(&grammar{})
+        if err != nil {
+            t.Fatal(err)
+        }
+        early := bootstrap(parser.Model, args)
+        if early.json || early.languageSet {
+            t.Fatal(args, early)
         }
     }
 }

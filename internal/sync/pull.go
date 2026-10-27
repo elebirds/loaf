@@ -13,6 +13,7 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
     "golang.org/x/sys/unix"
 )
@@ -69,7 +70,7 @@ func OutputPaths(paths []string) ([]string, error) {
 
 // Pull downloads available selected outputs and reports missing selections as a
 // partial failure. It never waits for training or mutates its records/locator.
-func (s PullService) Pull(ctx context.Context, ref config.RunRef, destination string, paths []string, policy config.PullPolicy, batch bool) (result PullResult, err error) {
+func (s PullService) Pull(ctx context.Context, ref task.RunRef, destination string, paths []string, policy config.PullPolicy, batch bool) (result PullResult, err error) {
     result = PullResult{RunID: ref.ID, Target: ref.Target, Destination: destination, Paths: []string{}, DownloadedPaths: []string{}, MissingPaths: []string{}, Policy: policy}
     if ref.Version != wire.Version {
         f := fault.New("VERSION_MISMATCH", "runner_version_mismatch", map[string]any{"Expected": wire.Version, "Actual": ref.Version})

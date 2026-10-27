@@ -9,12 +9,54 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
 type acceptedObservationFailure struct {
     runRemote
     launches int
+}
+
+type unavailableObservationState struct{ execution.ObservationStore }
+
+func (unavailableObservationState) SaveRunObservation(context.Context, string, string, task.RunObservation) error {
+    return fault.New("BAD_CONFIG", "run_state", nil)
+}
+
+func TestObservedResultSeparatesLocalStateFailureInBothLanguages(t *testing.T) {
+    for _, lang := range []string{"en", "zh-Hans"} {
+        for _, jsonMode := range []bool{true, false} {
+            o, _ := runFixture(t)
+            o.Runs.Observations = unavailableObservationState{}
+            args := []string{"--lang", lang, "run", "--wait", "1s"}
+            if jsonMode {
+                args = append(args, "--json")
+            }
+            args = append(args, "--", "fixture-command")
+            code, out, stderr := run(t, o, args...)
+            if code != 2 {
+                t.Fatal(code, out, stderr)
+            }
+            if jsonMode {
+                var result struct {
+                    Data  execution.View
+                    Error errorView
+                }
+                if json.Unmarshal([]byte(out), &result) != nil || stderr != "" || result.Data.Status != "failed" || result.Data.Submission != "submitted" || result.Data.StateError != "BAD_CONFIG" || result.Data.QueryError != "" || result.Error.Stage != "local_state" {
+                    t.Fatal(out, stderr)
+                }
+            } else {
+                label, stage := "local state save failed", "local state persistence"
+                if lang == "zh-Hans" {
+                    label, stage = "本地状态保存失败", "保存本地状态"
+                }
+                if !strings.Contains(out, label) || !strings.Contains(stderr, stage) {
+                    t.Fatal(out, stderr)
+                }
+            }
+        }
+    }
 }
 
 func (r *acceptedObservationFailure) Control(_ context.Context, _ config.Target, _ string, req wire.Request, _ bool) (*wire.RunRecord, error) {
@@ -71,7 +113,7 @@ func TestAcceptedSubmissionSurvivesObservationFailure(t *testing.T) {
             if err != nil {
                 t.Fatal(err)
             }
-            project, err := o.Store.Existing(root)
+            project, err := o.State.Existing(root)
             if err != nil {
                 t.Fatal(err)
             }

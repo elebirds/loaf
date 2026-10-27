@@ -60,12 +60,12 @@ func (f *fakeOperations) Forward(_ context.Context, target config.Target, local,
     return f.err
 }
 
-func operationFixture(t *testing.T) (Options, *fakeOperations) {
+func operationFixture(t *testing.T) (testOptions, *fakeOperations) {
     t.Helper()
     o := fixture(t)
     f := &fakeOperations{}
     o.Operations = f
-    if err := o.Store.Add(context.Background(), "demo", config.Target{Destination: "gpu", RemoteBase: "~/projects"}, false); err != nil {
+    if err := o.Config.Add(context.Background(), "demo", config.Target{Destination: "gpu", RemoteBase: "~/projects"}, false); err != nil {
         t.Fatal(err)
     }
     return o, f
@@ -78,7 +78,7 @@ func TestExecUsesMachineWithoutProjectStateOrSync(t *testing.T) {
     if code != 0 || out != "live output\n" || diagnostic != "program diagnostic\n" || f.input.CWD != "" || !f.input.Batch || f.target.Destination != "gpu" || !reflect.DeepEqual(f.input.Args, argv) {
         t.Fatal(code, out, diagnostic, f)
     }
-    if _, err := os.Stat(o.Store.IndexFile); !errors.Is(err, os.ErrNotExist) {
+    if _, err := os.Stat(o.State.Path); !errors.Is(err, os.ErrNotExist) {
         t.Fatal("exec created project state", err)
     }
     if err := os.WriteFile(filepath.Join(o.CWD, "loaf.toml"), []byte("target = 'demo'\n[exec]\ncwd = 'project folder'\n"), 0600); err != nil {

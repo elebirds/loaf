@@ -24,7 +24,7 @@ func outputFixture(t *testing.T) (wire.Request, string) {
     writeSource(t, work, "checkpoints/model.bin", "weights")
     record := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "unknown"}
     record.Request.Env = map[string]string{"SECRET": "must-not-leak"}
-    if err := save(dir, record); err != nil {
+    if err := seedRecord(dir, record); err != nil {
         t.Fatal(err)
     }
     return req, work
@@ -41,8 +41,7 @@ func TestOutputsAreReadOnlyAndDoNotNeedLiveSupervisorOrProjectLock(t *testing.T)
         t.Fatal(err)
     }
     defer lock.Close()
-    recordPath := filepath.Join(filepath.Dir(work), "run.json")
-    before, err := os.ReadFile(recordPath)
+    before, err := recordBytes(filepath.Dir(work))
     if err != nil {
         t.Fatal(err)
     }
@@ -56,7 +55,7 @@ func TestOutputsAreReadOnlyAndDoNotNeedLiveSupervisorOrProjectLock(t *testing.T)
     if code := Serve(bytes.NewReader(input), &out); code != 0 || strings.Contains(out.String(), "must-not-leak") || strings.Contains(out.String(), "record") {
         t.Fatal(code, out.String())
     }
-    after, err := os.ReadFile(recordPath)
+    after, err := recordBytes(filepath.Dir(work))
     if err != nil || !bytes.Equal(before, after) {
         t.Fatal("read rewrote run record", err)
     }
@@ -112,16 +111,14 @@ func TestOutputsRejectUnsafeSelectionsAndLinksBeforeTransfer(t *testing.T) {
 
 func TestOutputFormatsAndIdentityAreNotRewritten(t *testing.T) {
     req, work := outputFixture(t)
-    record := filepath.Join(filepath.Dir(work), "run.json")
     mismatch, _ := json.Marshal(wire.RunRecord{FormatVersion: 1, Request: wire.Request{FormatVersion: 1, Version: wire.Version, ProjectID: "other"}})
     for _, text := range []string{`{"format_version":99}`, string(mismatch)} {
-        if err := os.WriteFile(record, []byte(text), 0600); err != nil {
-            t.Fatal(err)
-        }
+        testUnknownRecord(t, req.Root, req.RunID, text)
+        before, _ := recordBytes(filepath.Dir(work))
         _, err := Outputs(context.Background(), req)
         expectCode(t, err, "BAD_FORMAT")
-        data, _ := os.ReadFile(record)
-        if string(data) != text {
+        data, _ := recordBytes(filepath.Dir(work))
+        if !bytes.Equal(data, before) {
             t.Fatal("rewrote incompatible record")
         }
     }
@@ -157,7 +154,7 @@ func TestOutputsRejectMismatchedRecordVersionWithoutMutation(t *testing.T) {
         t.Fatal(err)
     }
     record.Request.Version = "mismatched-version"
-    if err := save(filepath.Dir(work), record); err != nil {
+    if err := seedRecord(filepath.Dir(work), record); err != nil {
         t.Fatal(err)
     }
     before := treeContents(t, req.Root)

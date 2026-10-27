@@ -49,7 +49,7 @@ func TestSyncDryRunDoesNotConnectOrCreateState(t *testing.T) {
     if json.Unmarshal([]byte(out), &response) != nil || !response.OK || !response.Data.DryRun || response.Data.SelectedFiles != 1 || response.Data.ChangedFiles != nil || len(response.Data.Files) != 1 || response.Data.Files[0].Path != "train.py" {
         t.Fatal(out)
     }
-    if _, err := os.Stat(filepath.Dir(o.Store.IndexFile)); !errors.Is(err, os.ErrNotExist) {
+    if _, err := os.Stat(filepath.Dir(o.State.Path)); !errors.Is(err, os.ErrNotExist) {
         t.Fatal("preview wrote state", err)
     }
     for _, lang := range []string{"en", "zh-Hans"} {
@@ -70,7 +70,7 @@ func TestCanceledPreviewReportsCancellationRatherThanSourceFailure(t *testing.T)
         cancel()
         var out, diagnostic strings.Builder
         o.Out, o.Err = &out, &diagnostic
-        code := Execute(ctx, []string{"--lang", lang, "sync", "--dry-run", "--json"}, o)
+        code := execute(ctx, []string{"--lang", lang, "sync", "--dry-run", "--json"}, o)
         if code != 1 || diagnostic.Len() != 0 || !strings.Contains(out.String(), `"code":"SYNC_CANCELED"`) {
             t.Fatal(code, out.String(), diagnostic.String())
         }
@@ -125,7 +125,7 @@ func TestSyncTargetPrecedenceAndStableProjectIdentity(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    project, err := o.Store.Existing(root)
+    project, err := o.State.Existing(root)
     if err != nil || project.Target != "personal" {
         t.Fatal(project, err)
     }
@@ -161,11 +161,11 @@ func TestSyncErrorsDoNotRenderSuccess(t *testing.T) {
 
 func TestSyncPolicyPrecedenceAndAppendOnlyExclusions(t *testing.T) {
     o := fixture(t)
-    if err := os.MkdirAll(filepath.Dir(o.Store.ConfigFile), 0700); err != nil {
+    if err := os.MkdirAll(filepath.Dir(o.Config.ConfigFile), 0700); err != nil {
         t.Fatal(err)
     }
     global := "format_version = 1\n[sync]\nmode = 'update'\nrespect_gitignore = false\nexclude = ['global.py']\n"
-    if err := os.WriteFile(o.Store.ConfigFile, []byte(global), 0600); err != nil {
+    if err := os.WriteFile(o.Config.ConfigFile, []byte(global), 0600); err != nil {
         t.Fatal(err)
     }
     project := "[sync]\nmode = 'mirror'\nexclude = ['project.py']\n"

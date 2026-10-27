@@ -11,6 +11,7 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -53,7 +54,7 @@ func TestPullUsesSavedLocationAndKeepsPartialResult(t *testing.T) {
         }
         return "/current-helper", nil
     }}
-    ref := config.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Runner: "/saved-runner", Version: wire.Version}
+    ref := task.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Runner: "/saved-runner", Version: wire.Version}
     destination := canonicalTemp(t)
     result, err := svc.Pull(context.Background(), ref, destination, []string{"outputs/", "checkpoints"}, config.PullPolicy{Checksum: true}, true)
     var f *fault.Error
@@ -89,7 +90,7 @@ func TestRecoveredPullDoesNotClaimALastAttemptChangeCount(t *testing.T) {
     remote := &outputRemote{selection: wire.OutputSelection{Available: []string{"outputs"}}}
     downloader := &outputDownloader{retried: true}
     svc := PullService{Remote: remote, Receive: downloader, Runner: func(context.Context, config.Target, string, bool) (string, error) { return "/helper", nil }}
-    ref := config.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Version: wire.Version}
+    ref := task.RunRef{ID: "run", ProjectID: "project", RemoteDir: "/saved-location", Connection: config.Target{Destination: "saved-host"}, Version: wire.Version}
     result, err := svc.Pull(context.Background(), ref, canonicalTemp(t), []string{"outputs"}, config.PullPolicy{}, true)
     if err != nil || result.ChangedFiles != nil || !reflect.DeepEqual(result.DownloadedPaths, []string{"outputs"}) {
         t.Fatal("reported only the last attempt as a complete change count", result, err)
@@ -97,7 +98,7 @@ func TestRecoveredPullDoesNotClaimALastAttemptChangeCount(t *testing.T) {
 }
 
 func TestPullRejectsAnotherVersionBeforeConnecting(t *testing.T) {
-    result, err := (PullService{}).Pull(context.Background(), config.RunRef{ID: "run", Version: "another-version"}, t.TempDir(), []string{"outputs"}, config.PullPolicy{}, true)
+    result, err := (PullService{}).Pull(context.Background(), task.RunRef{ID: "run", Version: "another-version"}, t.TempDir(), []string{"outputs"}, config.PullPolicy{}, true)
     var f *fault.Error
     if !errors.As(err, &f) || f.Code != "VERSION_MISMATCH" || result.RunID != "run" || result.ChangedFiles != nil {
         t.Fatal(result, err)

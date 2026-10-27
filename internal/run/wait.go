@@ -5,8 +5,8 @@ import (
     "slices"
     "time"
 
-    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -20,22 +20,23 @@ type WaitResult struct {
     Pending     int    `json:"pending"`
     Interrupted int    `json:"interrupted"`
     QueryErrors int    `json:"query_errors"`
+    StateErrors int    `json:"state_errors"`
     TimedOut    bool   `json:"timed_out"`
 }
 
 // Freeze selects explicit IDs or all exact tags once, without remote access.
-func (s Service) Freeze(projectID string, ids, tags []string) ([]config.RunRef, error) {
+func (s Service) Freeze(projectID string, ids, tags []string) ([]task.RunRef, error) {
     if (len(ids) == 0) == (len(tags) == 0) || len(ids) > 1000 {
         return nil, fault.New("BAD_CONFIG", "wait_selection", nil)
     }
-    if _, err := config.NormalizeRunMetadata(config.RunMetadata{Tags: tags}); err != nil {
+    if _, err := task.NormalizeRunMetadata(task.RunMetadata{Tags: tags}); err != nil {
         return nil, err
     }
     refs, err := s.Index.Runs(projectID)
     if err != nil {
         return nil, err
     }
-    selected := []config.RunRef{}
+    selected := []task.RunRef{}
     seen := map[string]bool{}
     if len(ids) > 0 {
         for _, id := range ids {
@@ -87,7 +88,7 @@ func (s Service) Freeze(projectID string, ids, tags []string) ([]config.RunRef, 
 
 // Wait is foreground observation only. Query failures remain pending, and
 // cancellation never sends a stop. Every poll shares the bounded history pool.
-func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Duration, batch bool, changed func(View)) (WaitResult, error) {
+func (s Service) Wait(ctx context.Context, refs []task.RunRef, timeout time.Duration, batch bool, changed func(View)) (WaitResult, error) {
     result := WaitResult{Runs: []View{}, Selected: len(refs)}
     if len(refs) == 0 || len(refs) > 1000 || timeout <= 0 || timeout > 24*time.Hour {
         return result, fault.New("BAD_CONFIG", "wait_timeout", nil)
@@ -100,7 +101,7 @@ func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Du
     defer cancel()
     rotation := 0
     for {
-        pending, indices := []config.RunRef{}, []int{}
+        pending, indices := []task.RunRef{}, []int{}
         for i, v := range result.Runs {
             if !wire.Terminal(v.Status) || v.QueryError != "" {
                 pending = append(pending, refs[i])
@@ -131,16 +132,16 @@ func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Du
             seen[i] = true
             next := item.view
             next.QueryInterrupted = item.interrupted
-            if item.err != nil && next.QueryError == "" {
+            if item.err != nil && next.QueryError == "" && next.StateError == "" {
                 next.QueryError = errorCode(item.err)
             }
             old := result.Runs[i]
-            if changed != nil && (old.Status != next.Status || old.Phase != next.Phase || old.QueryError != next.QueryError) {
+            if changed != nil && (old.Status != next.Status || old.Phase != next.Phase || old.QueryError != next.QueryError || old.StateError != next.StateError) {
                 changed(next)
             }
             result.Runs[i] = next
         }
-        result.Completed, result.Examined, result.QueryErrors, result.Interrupted = 0, 0, 0, 0
+        result.Completed, result.Examined, result.QueryErrors, result.StateErrors, result.Interrupted = 0, 0, 0, 0, 0
         for i, v := range result.Runs {
             if v.QueryInterrupted {
                 result.Interrupted++
@@ -154,10 +155,16 @@ func (s Service) Wait(ctx context.Context, refs []config.RunRef, timeout time.Du
             if v.QueryError != "" {
                 result.QueryErrors++
             }
+            if v.StateError != "" {
+                result.StateErrors++
+            }
         }
         result.Pending = result.Selected - result.Completed
         result.Unexamined = result.Selected - result.Examined
         if result.Pending == 0 {
+            if result.StateErrors > 0 {
+                return result, fault.New("STATE_PARTIAL", "run_state_partial", nil)
+            }
             return result, nil
         }
         if waiting.Err() != nil {

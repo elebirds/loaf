@@ -10,6 +10,7 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/state/local"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -55,15 +56,23 @@ func TestCursorFileRequiresConsumerAcknowledgementOutsideTerminal(t *testing.T) 
             if code != 0 || stderr != "" || !strings.Contains(out, `"acknowledged":true`) {
                 t.Fatal(code, out, stderr)
             }
-            if token, err := config.ReadLogCheckpoint(p); err != nil || token != remote.token {
+            if token, err := local.ReadLogCheckpoint(p); err != nil || token != remote.token {
                 t.Fatal(token, err)
+            }
+            if mode == "pipe" {
+                for _, language := range []string{"en", "zh-Hans"} {
+                    code, out, stderr = run(t, o, "logs", r.Data.ID, "--resume-file", p, "--ack-cursor", remote.token, "--lang", language)
+                    if code != 0 || stderr != "" || !strings.Contains(out, r.Data.ID) || !strings.Contains(out, "4") || strings.Contains(out, "<nil>") {
+                        t.Fatal(code, out, stderr)
+                    }
+                }
             }
         })
     }
 }
 func TestWaitCLIAndOfflineObservations(t *testing.T) {
     o, remote, refs := psFixture(t)
-    o.Runs.Observations = o.Store
+    o.Runs.Observations = o.State
     remote.failID = refs[0].ID
     code, out, stderr := run(t, o, "wait", refs[0].ID, refs[1].ID, "--timeout", "20ms", "--json")
     if code != 1 || stderr != "" || !strings.Contains(out, `"completed":1`) || !strings.Contains(out, `"query_errors":1`) {
@@ -79,5 +88,52 @@ func TestWaitCLIAndOfflineObservations(t *testing.T) {
         if code != 0 || stderr != "" || out == "" {
             t.Fatal(code, out, stderr)
         }
+    }
+}
+
+func TestOfflineAcknowledgementFailureKeepsIdentityAndStableExits(t *testing.T) {
+    for _, mode := range []string{"io", "rewind"} {
+        t.Run(mode, func(t *testing.T) {
+            o, remote := runFixture(t)
+            if code, out, stderr := run(t, o, "run", "--json", "--", "true"); code != 0 {
+                t.Fatal(code, out, stderr)
+            }
+            req := remote.req
+            token := func(offset int64) string {
+                cursor, err := wire.EncodeLogCursor(wire.LogCursor{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, FileID: "1:2", Offset: offset, Boundary: strings.Repeat("a", 64)})
+                if err != nil {
+                    t.Fatal(err)
+                }
+                return cursor
+            }
+            p := filepath.Join(t.TempDir(), "cursor.json")
+            previous := token(4)
+            if err := local.SaveLogCheckpoint(context.Background(), p, previous); err != nil {
+                t.Fatal(err)
+            }
+            next, wantCode, wantExit := token(8), "LOG_CHECKPOINT_FAILED", 1
+            if mode == "rewind" {
+                next, wantCode, wantExit = token(0), "BAD_CONFIG", 2
+            } else {
+                if err := os.Remove(p + ".lock"); err != nil {
+                    t.Fatal(err)
+                }
+                if err := os.Mkdir(p+".lock", 0700); err != nil {
+                    t.Fatal(err)
+                }
+            }
+            o.Runs = nil
+            code, out, stderr := run(t, o, "logs", req.RunID, "--resume-file", p, "--ack-cursor", next, "--json")
+            var result struct {
+                Data  logAcknowledgement
+                Error errorView
+            }
+            if code != wantExit || stderr != "" || json.Unmarshal([]byte(out), &result) != nil || result.Error.Code != wantCode || result.Data.RunID != req.RunID || result.Data.Acknowledged || result.Data.StateError != wantCode {
+                t.Fatal(code, out, stderr)
+            }
+            if after, err := local.ReadLogCheckpoint(p); err != nil || after != previous {
+                t.Fatal(after, err)
+            }
+        })
     }
 }

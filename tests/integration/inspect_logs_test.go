@@ -12,6 +12,8 @@ import (
 
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/db"
+    "github.com/elebirds/loaf/internal/state/local"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -79,8 +81,15 @@ func TestPublicInspectionNamesTraceAndCursor(t *testing.T) {
     if code, out := cli(t, project, "inspect", accepted.Data.ID, "--json"); code != 0 || !bytes.Contains(out, []byte(`"source":"local"`)) {
         t.Fatal(code, string(out))
     }
-    state, err := os.ReadFile(filepath.Join(project, "state", "loaf", "runs.json"))
-    if err != nil || strings.Contains(string(state), "seed A 中文") {
-        t.Fatal(string(state), err)
+    state := local.New(filepath.Join(project, "state", "loaf"))
+    database, err := db.Open(ctx, state.Path, false)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer database.Close()
+    var locator []byte
+    err = database.QueryRow("SELECT data FROM runs WHERE id=?", accepted.Data.ID).Scan(&locator)
+    if err != nil || strings.Contains(string(locator), "seed A 中文") {
+        t.Fatal(string(locator), err)
     }
 }

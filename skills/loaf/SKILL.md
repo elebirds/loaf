@@ -7,6 +7,10 @@ description: Use Loaf to inspect SSH machines, explicitly acquire or connect Aut
 
 Work from the project directory and use an authorized existing machine. Register or select it with `loaf add` / `loaf use` when needed; do not change an existing selection without the user's intent.
 
+## State boundary in v0.5
+
+v0.5 uses a new SQLite namespace (`$XDG_STATE_HOME/loaf/state-v1/state.db`, with the standard home fallback). It does not import old JSON history or cloud receipts. Re-select a target with `loaf use` for a new project identity; an explicit remote directory must be fresh. Use the matching older CLI for prior tasks and resolve its uncertain cloud requests before new acquisitions. Never infer that an empty new database means an old paid request did not happen.
+
 ## Acquire compute only when authorized
 
 Use existing SSH targets without cloud configuration. When the user authorizes cloud operations, choose the configured account and product explicitly. The adapters support a verified main/sub session for ordinary AutoDL and Pro, plus a separate developer-token Pro adapter; unsupported combinations do not switch control planes. An account's default product is only a preference. `--product` overrides profile `product`, then that default, but cannot redirect an already bound alias. A human can use `cloud login <name>` with hidden input, choosing `--credential-store keyring` or explicit unencrypted `file`; new-login defaults belong in user `[cloud] credential_store`, not project TOML. Login remembers a replayable password digest unless disabled. Treat it as a password; never request it in chat. Use configured references, not browser-token extraction, credential files, printed tokens or training environments. `cloud login <name>` explicitly reauthenticates with a saved digest; do not automatically repeat password failures or bypass verification. Logout deletes only the selected credential entry.
@@ -61,9 +65,10 @@ Use `exec` for an authorized foreground machine operation, not as a faster submi
 
 ## Keep the ID; inspect the result
 
-- Save `data.run_id`. IDs are project-scoped and stay bound to their submitted machine and location.
+- Save any returned `data.run_id`, including preparation failures. IDs are project-scoped and stay bound to their original machine and location. A saved `submission: "preparing"` record is available through `inspect <run-id>` or `ps <run-id> --local`, although history lists and latest selection exclude it. Live `ps <run-id>` observes the same binding without starting or resuming execution.
 - `data.submission: "submitted"` preserves confirmed acceptance even if later observation fails with `status: "unknown"`. `"uncertain"` requires querying the same ID; neither observation failure nor a nonzero CLI exit authorizes another submission.
 - `ok` describes the CLI operation. Inspect `data.status` and `data.exit_code` for the experiment result; CLI exit 0 does not mean training succeeded.
+- `state_error` reports a local state/checkpoint write failure, not a remote query failure. Preserve any verified status and exit result even when this field or an output-consumer error makes the operation fail; do not start a replacement. History and `wait` count local persistence failures separately as `state_errors`.
 - `--wait 10s` is an observation budget, not a runtime limit. If still running, query the same ID later. Use `--wait 0s` for immediate return after acceptance.
 
 ```bash
@@ -83,7 +88,7 @@ For a foreground frozen group use `wait r_A r_B --timeout 30m --json`, or exact 
 
 Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigation. Names/tags are local, immutable and not identities; keep the run ID. `ps --name` matches exactly, repeated `--tag` requires all tags, and filters run before bounded remote observation.
 
-`ps --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Dated `last_observation` and separate `last_query_failure` sidecars preserve public status/phase/exit summaries and failure stages, not log text/environments. Never treat their status as live. Local lists reject live status filters/nonzero wait. Preserve and explicitly use matching older CLIs for old tasks; do not edit locators or migrate records.
+`ps --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Dated `last_observation` and separate `last_query_failure` fields preserve public status/phase/exit summaries and failure stages, not log text/environments. Never treat their status as live. Local lists reject live status filters/nonzero wait. Preserve and explicitly use matching older CLIs for old tasks; do not edit locators or migrate records.
 
 ## Handle uncertainty without duplicate experiments
 
@@ -134,7 +139,7 @@ loaf clean <run-id> --dry-run --json
 loaf clean <run-id> --yes --json
 ```
 
-Cleanup requires explicit IDs and authority to remove their remote working files, logs, and outputs. Finishing an experiment does not itself authorize deletion. Use the read-only preview to choose scope when needed; `--yes` supplies the noninteractive confirmation once deletion is authorized. A preview does not reserve eligibility: actual deletion rechecks the run.
+Cleanup requires explicit IDs and authority to remove their remote working files, logs, and outputs. Finishing an experiment does not itself authorize deletion. Use the read-only preview to choose scope when needed; `--yes` supplies the noninteractive confirmation once deletion is authorized. A preview does not reserve eligibility: actual deletion rechecks the run. Only confirmed submissions with a freshly verified terminal result are eligible; `clean` cannot reclaim unsubmitted preparation data (`submission: "preparing"`).
 
 Local downloads, other tasks, source caches and shared environments remain. Small terminal/ID records are retained to prevent duplicate execution. `ps` preserves the original result with cleanup metadata; `RUN_CLEANED` from `logs`, `pull` or `stop` is expected, not a reason to select an older run or repeat training. For a partial or unconfirmed cleanup, inspect per-ID results and retry only those same explicitly authorized IDs. Do not stop active tasks implicitly to make them eligible.
 

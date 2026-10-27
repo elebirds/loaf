@@ -93,8 +93,18 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     }
     sourceFile(t, project, "loaf.toml", "remote_dir = '/home/researcher/foreign'\n")
     f.shell(`mkdir -p /home/researcher/foreign; echo keep >/home/researcher/foreign/data`)
-    if code, out := cli(t, project, "run", "--json", "--", "/bin/true"); code != 1 {
-        t.Fatal(code, string(out))
+    code, failedOutput := cli(t, project, "run", "--json", "--", "/bin/true")
+    var preparation struct {
+        Data execution.View `json:"data"`
+    }
+    if code != 1 || json.Unmarshal(failedOutput, &preparation) != nil || preparation.Data.ID == "" || preparation.Data.Submission != "preparing" {
+        t.Fatal(code, string(failedOutput))
+    }
+    for _, args := range [][]string{{"inspect", preparation.Data.ID, "--json"}, {"ps", preparation.Data.ID, "--local", "--json"}} {
+        saved := runCLI(t, project, args...)
+        if saved.ID != preparation.Data.ID || saved.Submission != "preparing" || saved.Status != "unknown" || saved.Target != "other" {
+            t.Fatalf("preparation identity was not retained: %+v", saved)
+        }
     }
     latest := runCLI(t, project, "logs", "--json")
     if latest.ID != long.ID || latest.Target != "lab" {

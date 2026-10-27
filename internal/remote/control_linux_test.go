@@ -14,10 +14,10 @@ import (
 func managedRoot(t *testing.T) string {
     t.Helper()
     root := t.TempDir()
-    if err := os.Mkdir(filepath.Join(root, "runs"), 0700); err != nil {
+    if _, err := initProject(root, "project"); err != nil {
         t.Fatal(err)
     }
-    if err := os.WriteFile(filepath.Join(root, ".loaf-project"), []byte("project"), 0600); err != nil {
+    if err := os.Mkdir(filepath.Join(root, "runs"), 0700); err != nil {
         t.Fatal(err)
     }
     return root
@@ -34,7 +34,7 @@ func TestOwnershipAndLostSupervisor(t *testing.T) {
         t.Fatal(err)
     }
     r := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "running", CreatedAt: time.Now(), SupervisorPID: os.Getpid(), SupervisorStart: "wrong", BootID: "wrong"}
-    if err := save(dir, r); err != nil {
+    if err := seedRecord(dir, r); err != nil {
         t.Fatal(err)
     }
     r, err = Handle(req)
@@ -46,7 +46,7 @@ func TestOwnershipAndLostSupervisor(t *testing.T) {
     if err == nil || err.Error() != "STOP_UNCONFIRMED" || r.Status != "unknown" {
         t.Fatal(r, err)
     }
-    if _, err := os.Stat(filepath.Join(dir, "stop.request")); !os.IsNotExist(err) {
+    if request, err := readStop(dir); err != nil || request != nil {
         t.Fatal("blind stop requested")
     }
     req.Root = "/"
@@ -64,7 +64,7 @@ func TestTerminalAndProtocol(t *testing.T) {
     }
     zero := 0
     r := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "succeeded", ExitCode: &zero}
-    if err := save(dir, r); err != nil {
+    if err := seedRecord(dir, r); err != nil {
         t.Fatal(err)
     }
     req.Action = "stop"

@@ -1,7 +1,6 @@
 package remote
 
 import (
-    "bytes"
     "context"
     "encoding/json"
     "errors"
@@ -13,7 +12,6 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/wire"
-    "golang.org/x/sys/unix"
 )
 
 func cleanFixture(t *testing.T) (wire.Request, string) {
@@ -27,7 +25,7 @@ func cleanFixture(t *testing.T) (wire.Request, string) {
     record.CreatedAt = time.Now().UTC().Add(-time.Minute)
     completed := time.Now().UTC()
     record.CompletedAt, record.ExitCode = &completed, new(7)
-    if err := save(filepath.Dir(work), record); err != nil {
+    if err := seedRecord(filepath.Dir(work), record); err != nil {
         t.Fatal(err)
     }
     return req, filepath.Dir(work)
@@ -41,6 +39,10 @@ func treeContents(t *testing.T, root string) map[string]string {
             return err
         }
         rel, _ := filepath.Rel(root, name)
+        // SQLite reader slots are volatile shared memory, not control state.
+        if strings.HasSuffix(name, "state.sqlite3-shm") {
+            return nil
+        }
         if entry.Type().IsRegular() {
             data, err := os.ReadFile(name)
             if err != nil {
@@ -119,7 +121,7 @@ func TestCleanRefusesUnknownFormatsActiveAndHeldLifetimes(t *testing.T) {
             req, dir := cleanFixture(t)
             r, _ := read(dir)
             r.Status = outcome
-            save(dir, r)
+            seedRecord(dir, r)
             _, err := Clean(context.Background(), req, false)
             expectCode(t, err, "CLEAN_NOT_TERMINAL")
             if _, err := os.Stat(filepath.Join(dir, "work")); err != nil {
@@ -137,14 +139,13 @@ func TestCleanRefusesUnknownFormatsActiveAndHeldLifetimes(t *testing.T) {
     owner.Close()
     mismatch, _ := json.Marshal(wire.RunRecord{FormatVersion: 1, Request: wire.Request{FormatVersion: 1, Version: wire.Version, ProjectID: "other"}})
     for _, text := range []string{`{"format_version":99}`, string(mismatch)} {
-        req, dir := cleanFixture(t)
-        os.WriteFile(filepath.Join(dir, "run.json"), []byte(text), 0600)
+        req, _ := cleanFixture(t)
+        testUnknownRecord(t, req.Root, req.RunID, text)
         before := treeContents(t, req.Root)
         _, err := Clean(context.Background(), req, false)
         expectCode(t, err, "BAD_FORMAT")
-        data, _ := os.ReadFile(filepath.Join(dir, "run.json"))
-        if string(data) != text || !reflect.DeepEqual(before, treeContents(t, req.Root)) {
-            t.Fatal("changed unknown record or created metadata", string(data))
+        if !reflect.DeepEqual(before, treeContents(t, req.Root)) {
+            t.Fatal("changed unknown record or created metadata")
         }
     }
 }
@@ -220,17 +221,10 @@ func TestCleanCancellationLeavesRetryableReceiptAndProtectedID(t *testing.T) {
 
 func TestCleanReceiptFormatAndReplacedDirectoryStayUntouched(t *testing.T) {
     req, dir := cleanFixture(t)
-    original := []byte(`{"format_version":99}`)
-    if err := os.WriteFile(cleanupFile(dir), original, 0600); err != nil {
-        t.Fatal(err)
-    }
+    testSQL(t, req.Root, "INSERT INTO cleanup_receipts VALUES(?,?,?,?,?,?,?,?)", req.RunID, wire.Version, req.Root, req.ProjectID, "invalid summary", nil, "1", "1")
     _, err := Clean(context.Background(), req, false)
     expectCode(t, err, "BAD_FORMAT")
-    after, _ := os.ReadFile(cleanupFile(dir))
-    if !bytes.Equal(original, after) {
-        t.Fatal(string(after))
-    }
-    os.Remove(cleanupFile(dir))
+    testSQL(t, req.Root, "DELETE FROM cleanup_receipts WHERE run_id=?", req.RunID)
     receipt, err := Clean(context.Background(), req, true)
     if err != nil {
         t.Fatal(err)
@@ -244,9 +238,6 @@ func TestCleanReceiptFormatAndReplacedDirectoryStayUntouched(t *testing.T) {
     if _, err := os.Stat(filepath.Join(dir, "work")); err != nil {
         t.Fatal(err)
     }
-    if err := unix.Unlink(cleanupFile(dir)); err != nil {
-        t.Fatal(err)
-    }
 }
 
 func TestCurrentVersionGateRejectsMismatchedRecordsWithoutMutation(t *testing.T) {
@@ -256,7 +247,7 @@ func TestCurrentVersionGateRejectsMismatchedRecordsWithoutMutation(t *testing.T)
         t.Fatal(err)
     }
     record.Request.Version = "different-version"
-    if err := save(dir, record); err != nil {
+    if err := seedRecord(dir, record); err != nil {
         t.Fatal(err)
     }
     before := treeContents(t, req.Root)

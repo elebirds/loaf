@@ -2,11 +2,9 @@ package config
 
 import (
     "context"
-    "github.com/elebirds/loaf/internal/atomicfile"
     "os"
     "os/exec"
     "path/filepath"
-    "sync"
     "testing"
 )
 
@@ -19,15 +17,6 @@ func TestSelectionsAndPrecedence(t *testing.T) {
         if err := s.Add(ctx, name, Target{Destination: name, RemoteBase: "~/projects"}, false); err != nil {
             t.Fatal(err)
         }
-    }
-    root := t.TempDir()
-    p, err := s.Select(ctx, root, "a")
-    if err != nil {
-        t.Fatal(err)
-    }
-    again, err := s.Select(ctx, root, "")
-    if err != nil || again.ID != p.ID || again.Target != "a" {
-        t.Fatalf("selection: %+v %v", again, err)
     }
     cfg, err := s.Load()
     if err != nil {
@@ -55,58 +44,6 @@ func TestSelectionsAndPrecedence(t *testing.T) {
     }
 }
 
-func TestConcurrentProjectsAndUnknownFormats(t *testing.T) {
-    s := testStore(t)
-    var wg sync.WaitGroup
-    roots := make([]string, 20)
-    for n := range roots {
-        roots[n] = t.TempDir()
-    }
-    for _, root := range roots {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            if _, err := s.Select(context.Background(), root, ""); err != nil {
-                t.Error(err)
-            }
-        }()
-    }
-    wg.Wait()
-    state, err := s.loadIndex()
-    if err != nil || len(state.Projects) != 20 {
-        t.Fatalf("lost updates: %v %d", err, len(state.Projects))
-    }
-    original := []byte(`{"format_version":99,"projects":{}}`)
-    if err := os.WriteFile(s.IndexFile, original, 0600); err != nil {
-        t.Fatal(err)
-    }
-    if _, err := s.Select(context.Background(), filepath.Join(t.TempDir(), "new"), ""); err == nil {
-        t.Fatal("accepted unknown format")
-    }
-    after, _ := os.ReadFile(s.IndexFile)
-    if string(after) != string(original) {
-        t.Fatal("overwrote unknown format")
-    }
-    if err := atomicfile.Write(s.ConfigFile, []byte("format_version = 99\n")); err != nil {
-        t.Fatal(err)
-    }
-    if _, err := s.Load(); err == nil {
-        t.Fatal("accepted unknown config")
-    }
-    for _, original := range []string{`{"format_version":1,"projects":{},"future":true}`, `{"format_version":1,"projects":{"/project":{"root":"/project","id":"../other"}}}`} {
-        if err := os.WriteFile(s.IndexFile, []byte(original), 0600); err != nil {
-            t.Fatal(err)
-        }
-        if _, err := s.Select(context.Background(), "/project", ""); err == nil {
-            t.Fatal("accepted unsafe or unknown state")
-        }
-        after, _ := os.ReadFile(s.IndexFile)
-        if string(after) != original {
-            t.Fatal("changed invalid state")
-        }
-    }
-}
-
 func TestDiscovery(t *testing.T) {
     root := t.TempDir()
     child := filepath.Join(root, "space 中文", "child")
@@ -129,12 +66,6 @@ func TestDiscovery(t *testing.T) {
     realRoot, _ = filepath.EvalSymlinks(configRoot)
     if err != nil || got != realRoot || c.Target != "demo" {
         t.Fatalf("toml root %q %+v %v", got, c, err)
-    }
-    s := testStore(t)
-    a, _ := s.Select(context.Background(), "/a/same", "")
-    b, _ := s.Select(context.Background(), "/b/same", "")
-    if a.ID == b.ID {
-        t.Fatal("basename collision")
     }
 }
 

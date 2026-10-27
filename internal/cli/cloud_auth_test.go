@@ -12,7 +12,7 @@ import (
     "github.com/elebirds/loaf/internal/credentials"
 )
 
-func authFixture(t *testing.T) (Options, *int) {
+func authFixture(t *testing.T) (testOptions, *int) {
     t.Helper()
     o, _ := cloudFixture(t)
     calls := new(int)
@@ -38,7 +38,7 @@ func TestCloudLoginStoreSelectionRememberedReloginAndLogout(t *testing.T) {
     if code != 0 || stderr != "" || !strings.Contains(out, `"credential_store":"file"`) {
         t.Fatal(code, out, stderr)
     }
-    cfg, err := o.Store.Load()
+    cfg, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
@@ -46,7 +46,7 @@ func TestCloudLoginStoreSelectionRememberedReloginAndLogout(t *testing.T) {
     if saved.Credential.Store != "file" || saved.Credential.Identity.ID != "verified-sub" || cfg.Cloud.DefaultAccount != "lab" {
         t.Fatal(cfg)
     }
-    settings, _ := os.ReadFile(o.Store.ConfigFile)
+    settings, _ := os.ReadFile(o.Config.ConfigFile)
     for _, secret := range []string{" raw password ", "login-token-private", strings.Repeat("a", 40), "device-private"} {
         if strings.Contains(string(settings)+out+stderr, secret) {
             t.Fatal("credentials escaped into public files/output")
@@ -57,7 +57,7 @@ func TestCloudLoginStoreSelectionRememberedReloginAndLogout(t *testing.T) {
     if code != 0 || stderr != "" || *calls != 2 {
         t.Fatal(code, out, stderr, *calls)
     }
-    cfg, _ = o.Store.Load()
+    cfg, _ = o.Config.Load()
     if cfg.Cloud.Accounts["lab"].Credential != saved.Credential {
         t.Fatal("re-login changed the bound identity")
     }
@@ -76,7 +76,7 @@ func TestCloudLoginStoreSelectionRememberedReloginAndLogout(t *testing.T) {
     if _, err := o.Auth.Read(context.Background(), saved.Credential); err == nil {
         t.Fatal("logout retained selected secret")
     }
-    cfg, _ = o.Store.Load()
+    cfg, _ = o.Config.Load()
     if cfg.Cloud.Accounts["lab"] != saved {
         t.Fatal("logout removed the reference needed by saved runs")
     }
@@ -86,9 +86,9 @@ func TestCloudLoginDefaultGlobalAndExplicitStores(t *testing.T) {
     for _, choice := range []string{"keyring", "file"} {
         t.Run(choice, func(t *testing.T) {
             o, _ := authFixture(t)
-            body, _ := os.ReadFile(o.Store.ConfigFile)
+            body, _ := os.ReadFile(o.Config.ConfigFile)
             body = []byte(strings.Replace(string(body), "[cloud]", "[cloud]\ncredential_store = '"+choice+"'", 1))
-            if err := os.WriteFile(o.Store.ConfigFile, body, 0600); err != nil {
+            if err := os.WriteFile(o.Config.ConfigFile, body, 0600); err != nil {
                 t.Fatal(err)
             }
             o.In = strings.NewReader(" raw password \n")
@@ -123,7 +123,7 @@ func TestCloudLoginAfterLogoutRequestsFreshCredentials(t *testing.T) {
             if code, out, stderr := run(t, o, args...); code != 0 {
                 t.Fatal(code, out, stderr)
             }
-            cfg, _ := o.Store.Load()
+            cfg, _ := o.Config.Load()
             original := cfg.Cloud.Accounts["lab"].Credential
             if code, out, stderr := run(t, o, "cloud", "logout", "lab", "--json"); code != 0 {
                 t.Fatal(code, out, stderr)
@@ -146,7 +146,7 @@ func TestCloudLoginAfterLogoutRequestsFreshCredentials(t *testing.T) {
                     t.Fatal("JSON must require explicit password input", code, out, stderr, *calls)
                 }
             } else {
-                cfg, _ = o.Store.Load()
+                cfg, _ = o.Config.Load()
                 if code != 0 || *calls != 2 || cfg.Cloud.Accounts["lab"].Credential != original {
                     t.Fatal("cannot log in again after logout", code, out, stderr, *calls)
                 }
@@ -219,6 +219,67 @@ func TestLoginDiagnosticIsVisibleInBothLanguagesAndStructuredOutput(t *testing.T
             if !structured && lang == "zh-Hans" && !strings.Contains(stderr, "身份及权限核验") {
                 t.Fatal(stderr)
             }
+        }
+    }
+}
+
+func TestCloudLoginInvalidInputNeverAuthenticates(t *testing.T) {
+    for _, input := range []string{"\n", strings.Repeat("x", 4097) + "\n"} {
+        for _, structured := range []bool{false, true} {
+            o, calls := authFixture(t)
+            o.In = strings.NewReader(input)
+            o.ReadPassword = func(context.Context) ([]byte, error) { t.Fatal("stdin password prompted"); return nil, nil }
+            args := []string{"cloud", "login", "lab", "--username", "student@master", "--password-stdin"}
+            if structured {
+                args = append(args, "--json")
+            }
+            code, out, stderr := run(t, o, args...)
+            if code != 2 || *calls != 0 || !structured && out != "" || structured && (stderr != "" || !strings.Contains(out, `"code":"BAD_CONFIG"`) || strings.Contains(out, `"account":""`)) {
+                t.Fatal("invalid stdin credentials did not fail before authentication", code, out, stderr, *calls)
+            }
+        }
+    }
+    o, calls := authFixture(t)
+    o.Interactive = true
+    o.ReadPassword = func(context.Context) ([]byte, error) { return []byte{}, nil }
+    code, out, stderr := run(t, o, "cloud", "login", "lab", "--username", "student@master")
+    if code != 2 || *calls != 0 || out != "" {
+        t.Fatal("empty terminal password was not a parameter error", code, out, stderr)
+    }
+
+    o, calls = authFixture(t)
+    o.Interactive = true
+    o.In = strings.NewReader("")
+    o.ReadPassword = func(context.Context) ([]byte, error) {
+        t.Fatal("missing username prompted for a password")
+        return nil, nil
+    }
+    code, out, stderr = run(t, o, "cloud", "login", "lab")
+    if code != 2 || *calls != 0 || out != "" {
+        t.Fatal("missing username was not a parameter error", code, out, stderr)
+    }
+}
+
+func TestCloudLoginBatchDoesNotPromptAndFailedSecretIsCleared(t *testing.T) {
+    o, calls := authFixture(t)
+    o.ReadPassword = func(context.Context) ([]byte, error) { t.Fatal("batch login prompted"); return nil, nil }
+    input := strings.NewReader("do not consume\n")
+    o.In = input
+    code, out, stderr := run(t, o, "cloud", "login", "lab", "--username", "student@master")
+    if code != 2 || *calls != 0 || input.Len() != len("do not consume\n") {
+        t.Fatal(code, out, stderr, *calls)
+    }
+
+    o.Interactive = true
+    password := []byte(" private failed input ")
+    o.ReadPassword = func(context.Context) ([]byte, error) { return password, context.Canceled }
+    code, out, stderr = run(t, o, "cloud", "login", "lab", "--username", "student@master")
+    if code != 1 || *calls != 0 || out != "" || strings.Contains(out+stderr, "private failed input") {
+        t.Fatal(code, out, stderr, *calls)
+    }
+    for _, b := range password {
+        if b != 0 {
+            t.Fatal("failed password buffer retained")
         }
     }
 }

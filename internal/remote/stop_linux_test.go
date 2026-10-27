@@ -38,7 +38,7 @@ func ownedRun(t *testing.T) (wire.Request, string) {
     }
     req := wire.Request{FormatVersion: 1, Version: wire.Version, Action: "stop", Root: root, ProjectID: "project", RunID: "owned"}
     r := &wire.RunRecord{FormatVersion: 1, Request: req, Status: "running", Phase: "setup", CreatedAt: time.Now(), SupervisorPID: os.Getpid(), SupervisorStart: identity.start, BootID: strings.TrimSpace(string(boot))}
-    if err := save(dir, r); err != nil {
+    if err := seedRecord(dir, r); err != nil {
         t.Fatal(err)
     }
     return req, dir
@@ -46,14 +46,14 @@ func ownedRun(t *testing.T) (wire.Request, string) {
 
 func TestStopKeepsFirstGraceAndRunRecord(t *testing.T) {
     req, dir := ownedRun(t)
-    before, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+    before, _ := recordBytes(dir)
     first := int64(750)
     req.GraceMillis = &first
     r, err := Handle(req)
     if err != nil || r.Status != "running" || r.StopGraceMillis == nil || *r.StopGraceMillis != first {
         t.Fatal(r, err)
     }
-    accepted, err := os.ReadFile(filepath.Join(dir, "stop.request"))
+    accepted, err := stopBytes(dir)
     if err != nil {
         t.Fatal(err)
     }
@@ -71,8 +71,8 @@ func TestStopKeepsFirstGraceAndRunRecord(t *testing.T) {
         }()
     }
     wg.Wait()
-    after, _ := os.ReadFile(filepath.Join(dir, "stop.request"))
-    record, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+    after, _ := stopBytes(dir)
+    record, _ := recordBytes(dir)
     if !bytes.Equal(accepted, after) || !bytes.Equal(before, record) {
         t.Fatal("stop rewrote its first policy or the execution owner's record")
     }
@@ -121,10 +121,10 @@ func TestStopPreservesTerminalAndUnknownResults(t *testing.T) {
                 }
                 r.ExitCode = &code
             }
-            if err := save(dir, r); err != nil {
+            if err := seedRecord(dir, r); err != nil {
                 t.Fatal(err)
             }
-            before, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+            before, _ := recordBytes(dir)
             got, err := Handle(req)
             if state == "unknown" {
                 if err == nil || err.Error() != "STOP_UNCONFIRMED" {
@@ -133,11 +133,11 @@ func TestStopPreservesTerminalAndUnknownResults(t *testing.T) {
             } else if err != nil {
                 t.Fatal(err)
             }
-            after, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+            after, _ := recordBytes(dir)
             if got.Status != state || got.Reason != "retained" || !bytes.Equal(before, after) {
                 t.Fatal("retained result changed", got)
             }
-            if _, err := os.Stat(filepath.Join(dir, "stop.request")); !os.IsNotExist(err) {
+            if request, err := readStop(dir); err != nil || request != nil {
                 t.Fatal("unnecessary or blind stop request")
             }
         })
@@ -152,15 +152,12 @@ func TestStopPolicyValidation(t *testing.T) {
             t.Fatal("accepted invalid grace", value, err)
         }
     }
-    for _, data := range []string{`{"format_version":99,"grace_millis":0}`, `{"format_version":1,"grace_millis":-1}`, `{"format_version":1,"grace_millis":0,"extra":true}`, ""} {
-        dir := t.TempDir()
-        if err := os.WriteFile(filepath.Join(dir, "stop.request"), []byte(data), 0600); err != nil {
-            t.Fatal(err)
-        }
-        if _, err := readStop(dir); err == nil {
-            t.Fatal("accepted invalid stop request", data)
-        }
+    req, dir := ownedRun(t)
+    testSQL(t, req.Root, "PRAGMA ignore_check_constraints=ON; INSERT INTO stop_requests VALUES('owned', -1)")
+    if _, err := readStop(dir); err == nil {
+        t.Fatal("accepted invalid stored stop policy")
     }
+
 }
 
 func TestStopRefusesInvalidSupervisorIdentities(t *testing.T) {
@@ -183,19 +180,19 @@ func TestStopRefusesInvalidSupervisorIdentities(t *testing.T) {
             case "not_yet_owned":
                 r.SupervisorPID = 0
             }
-            if err := save(dir, r); err != nil {
+            if err := seedRecord(dir, r); err != nil {
                 t.Fatal(err)
             }
-            before, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+            before, _ := recordBytes(dir)
             r, err = Handle(req)
             if err == nil || err.Error() != "STOP_UNCONFIRMED" || r.ExitCode != nil {
                 t.Fatal(r, err)
             }
-            after, _ := os.ReadFile(filepath.Join(dir, "run.json"))
+            after, _ := recordBytes(dir)
             if !bytes.Equal(before, after) {
                 t.Fatal("stop rewrote an unowned run")
             }
-            if _, err := os.Stat(filepath.Join(dir, "stop.request")); !os.IsNotExist(err) {
+            if request, err := readStop(dir); err != nil || request != nil {
                 t.Fatal("stop accepted without a valid owner")
             }
         })

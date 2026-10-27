@@ -21,6 +21,7 @@ import (
 
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
 )
 
 func operationCLI(t *testing.T, project string, args ...string) *exec.Cmd {
@@ -160,7 +161,7 @@ func TestForegroundExecWorkflow(t *testing.T) {
         t.Fatal("exec was replayed", count)
     }
     f.shell(`test ! -e "$HOME/.local/share/loaf"`)
-    if _, err := os.Stat(filepath.Join(project, "state", "loaf", "index.json")); !errors.Is(err, os.ErrNotExist) {
+    if _, err := os.Stat(local.New(filepath.Join(project, "state", "loaf")).Path); !errors.Is(err, os.ErrNotExist) {
         t.Fatal("machine operations created run/project state", err)
     }
 }

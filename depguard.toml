@@ -1,0 +1,44 @@
+# Guard only responsibility boundaries. Concrete dependencies within a boundary
+# are intentional; tests may assemble layers to exercise complete workflows.
+[use_cases]
+listMode = "Lax"
+files = ["**/internal/{client,run,cloud,sync}/**", "!$test"]
+[use_cases.deny]
+"github.com/elebirds/loaf/internal/cli" = "Keep input and rendering in CLI adapters."
+"github.com/elebirds/loaf/internal/i18n" = "Return stable codes and values; localize in the CLI."
+"github.com/alecthomas/kong" = "Keep argument parsing in the CLI."
+"charm.land/huh" = "Keep interactive prompts in the CLI."
+
+[remote]
+listMode = "Lax"
+files = ["**/internal/remote/**", "!$test"]
+[remote.deny]
+"github.com/elebirds/loaf/internal/cli" = "The runner must not depend on the local CLI."
+"github.com/elebirds/loaf/internal/client" = "The runner receives wire requests, not local workflows."
+"github.com/elebirds/loaf/internal/config" = "Freeze local settings into wire requests."
+"github.com/elebirds/loaf/internal/ssh" = "The runner does not own the client's connection."
+"github.com/elebirds/loaf/internal/sync" = "Keep client-side source selection and transport out of the runner."
+"github.com/elebirds/loaf/internal/cloud" = "Cloud resource management belongs to the local client."
+"github.com/elebirds/loaf/internal/autodl" = "Cloud APIs belong to the local client."
+"github.com/elebirds/loaf/internal/credentials" = "The runner must not access local credentials."
+"github.com/elebirds/loaf/internal/bundle" = "The runner is embedded by the client, not vice versa."
+"github.com/elebirds/loaf/internal/i18n" = "Return stable codes and values; localize in the CLI."
+"github.com/alecthomas/kong" = "Keep argument parsing in entry points."
+"charm.land/huh" = "The runner is noninteractive."
+
+[cli_adapters]
+listMode = "Lax"
+files = ["**/internal/cli/**", "!$test"]
+[cli_adapters.deny]
+"database/sql$" = "Invoke application workflows instead of writing state in command handlers."
+"modernc.org/sqlite" = "Keep SQLite behind the state stores."
+"github.com/elebirds/loaf/internal/state" = "Compose state stores at the entry point, not inside the CLI."
+"github.com/elebirds/loaf/internal/autodl" = "Invoke Resources instead of platform APIs."
+"net/http$" = "Keep platform requests in their adapters."
+
+[infrastructure]
+listMode = "Lax"
+files = ["**/internal/{ssh,autodl,credentials,state}/**", "!$test"]
+[infrastructure.deny]
+"github.com/elebirds/loaf/internal/client" = "Infrastructure must not call back into application workflows."
+"github.com/elebirds/loaf/internal/cli" = "Infrastructure must not depend on input or rendering."

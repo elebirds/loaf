@@ -22,7 +22,7 @@ func TestBoundedLogTailsAndFinalStream(t *testing.T) {
     }
     os.Mkdir(dir, 0700)
     code := 7
-    if err := save(dir, &wire.RunRecord{FormatVersion: 1, Request: req, Status: "failed", ExitCode: &code}); err != nil {
+    if err := seedRecord(dir, &wire.RunRecord{FormatVersion: 1, Request: req, Status: "failed", ExitCode: &code}); err != nil {
         t.Fatal(err)
     }
     writeSource(t, dir, "output.log", "one\n中文\nfinal\n")
@@ -90,13 +90,17 @@ func TestQueryDoesNotCreateDirectoriesOrRewriteUnknownRecords(t *testing.T) {
     }
     os.Mkdir(dir, 0700)
     original := `{"format_version":99,"status":"running"}`
-    writeSource(t, dir, "run.json", original)
+    if err := seedRecord(dir, &wire.RunRecord{FormatVersion: 1, Request: req, Status: "starting"}); err != nil {
+        t.Fatal(err)
+    }
+    testUnknownRecord(t, root, req.RunID, original)
+    before, _ := recordBytes(dir)
     req.Args = []string{"/bin/true"}
     if _, err := Handle(req); err == nil || err.Error() != "BAD_FORMAT" {
         t.Fatal(err)
     }
-    data, _ := os.ReadFile(filepath.Join(dir, "run.json"))
-    if string(data) != original {
+    data, _ := recordBytes(dir)
+    if !bytes.Equal(data, before) {
         t.Fatal("rewrote unknown run format")
     }
 }

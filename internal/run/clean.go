@@ -8,13 +8,14 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
 // CleanupIndex changes only one saved locator's availability metadata.
 type CleanupIndex interface {
     RunIndex
-    RecordCleanup(context.Context, config.RunRef, *config.RunCleanup) error
+    RecordCleanup(context.Context, task.RunRef, *task.RunCleanup) error
 }
 
 // CleanupRemote is the current-helper boundary, independent of live supervisors.
@@ -34,21 +35,21 @@ type CleanupService struct {
 // CleanResult names the entire destructive scope. Eligible is only a preview;
 // authoritative locks and ownership checks are reacquired during deletion.
 type CleanResult struct {
-    Run       View          `json:"run"`
-    Path      string        `json:"path"`
-    Eligible  bool          `json:"eligible"`
-    Cleaned   bool          `json:"cleaned"`
-    ErrorCode string        `json:"error_code,omitempty"`
-    Ref       config.RunRef `json:"-"`
+    Run       View        `json:"run"`
+    Path      string      `json:"path"`
+    Eligible  bool        `json:"eligible"`
+    Cleaned   bool        `json:"cleaned"`
+    ErrorCode string      `json:"error_code,omitempty"`
+    Ref       task.RunRef `json:"-"`
 }
 
-func cleanResult(ref config.RunRef) CleanResult {
+func cleanResult(ref task.RunRef) CleanResult {
     return CleanResult{Run: view(ref, nil), Path: path.Join(ref.RemoteDir, "runs", ref.ID), Cleaned: ref.Cleanup != nil && ref.Cleanup.CleanedAt != nil, Ref: ref}
 }
 
 // Preview reads a terminal outcome without granting deletion permission. Repair
 // is explicit for real cleanup; dry-run never deploys or changes local state.
-func (s CleanupService) Preview(ctx context.Context, ref config.RunRef, batch, repair bool) (CleanResult, error) {
+func (s CleanupService) Preview(ctx context.Context, ref task.RunRef, batch, repair bool) (CleanResult, error) {
     result := cleanResult(ref)
     if err := currentVersion(ref); err != nil {
         return result, err
@@ -118,7 +119,7 @@ func (s CleanupService) Clean(ctx context.Context, preview CleanResult, batch bo
     hadPending := ref.Cleanup != nil
     cleanup := ref.Cleanup
     if cleanup == nil {
-        cleanup = &config.RunCleanup{RequestedAt: time.Now().UTC(), Summary: summaryView(preview.Run)}
+        cleanup = &task.RunCleanup{RequestedAt: time.Now().UTC(), Summary: summaryView(preview.Run)}
     }
     if err := s.Index.RecordCleanup(ctx, ref, cleanup); err != nil {
         return preview, err
@@ -146,7 +147,7 @@ func (s CleanupService) Clean(ctx context.Context, preview CleanResult, batch bo
     if receipt == nil || receipt.CleanedAt == nil || err != nil {
         return result, cleanupFault("CLEAN_UNCONFIRMED", err)
     }
-    cleanup = &config.RunCleanup{RequestedAt: cleanup.RequestedAt, CleanedAt: receipt.CleanedAt, Summary: receipt.Summary}
+    cleanup = &task.RunCleanup{RequestedAt: cleanup.RequestedAt, CleanedAt: receipt.CleanedAt, Summary: receipt.Summary}
     saved, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
     saveErr := s.Index.RecordCleanup(saved, ref, cleanup)
     cancelSave()
@@ -163,7 +164,7 @@ func summaryView(v View) wire.RunSummary {
     return wire.RunSummary{Status: v.Status, Phase: v.Phase, CreatedAt: v.CreatedAt, CompletedAt: v.CompletedAt, ExitCode: v.ExitCode, Signal: v.Signal, Reason: v.Reason, StopGraceMillis: v.StopGraceMillis}
 }
 
-func validCleanup(ref config.RunRef, receipt *wire.CleanupReceipt) bool {
+func validCleanup(ref task.RunRef, receipt *wire.CleanupReceipt) bool {
     return receipt.FormatVersion == 1 && receipt.Version == wire.Version && receipt.Root == ref.RemoteDir && receipt.ProjectID == ref.ProjectID && receipt.RunID == ref.ID && receipt.Summary.Valid() && (receipt.CleanedAt == nil || !receipt.CleanedAt.IsZero())
 }
 
@@ -219,7 +220,7 @@ func cleanupFault(code string, cause error) *fault.Error {
 
 // AvailabilityError rejects a locator whose cleanup metadata says its logs and
 // outputs are removed or not confirmed available.
-func AvailabilityError(ref config.RunRef) error {
+func AvailabilityError(ref task.RunRef) error {
     if err := currentVersion(ref); err != nil {
         return err
     }

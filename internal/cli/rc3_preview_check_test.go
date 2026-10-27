@@ -20,8 +20,8 @@ func TestRunPreviewIsFullyOfflineRedactedAndPreservesExplicitZero(t *testing.T) 
     if code != 0 {
         t.Fatal(out, stderr)
     }
-    global, _ := os.ReadFile(o.Store.ConfigFile)
-    _ = os.WriteFile(o.Store.ConfigFile, append(global, []byte("\n[run]\nwait='30s'\n[sync]\nmode='update'\nrespect_gitignore=false\n[pull]\nchecksum=true\n")...), 0600)
+    global, _ := os.ReadFile(o.Config.ConfigFile)
+    _ = os.WriteFile(o.Config.ConfigFile, append(global, []byte("\n[run]\nwait='30s'\n[sync]\nmode='update'\nrespect_gitignore=false\n[pull]\nchecksum=true\n")...), 0600)
     _ = os.WriteFile(filepath.Join(o.CWD, "loaf.toml"), []byte("target='lab'\n[run]\ncommand='printf done'\nsetup='true'\n[run.env]\nPRIVATE='must-not-print-value'\n[outputs]\npaths=['custom']\n[pull]\nchecksum=false\n"), 0600)
     _ = os.WriteFile(filepath.Join(o.CWD, "actual.py"), []byte("print('x')"), 0600)
     _ = os.WriteFile(filepath.Join(o.CWD, ".env"), []byte("credential-secret"), 0600)
@@ -39,7 +39,7 @@ func TestRunPreviewIsFullyOfflineRedactedAndPreservesExplicitZero(t *testing.T) 
             t.Fatal("preview leaked", secret, out)
         }
     }
-    if _, err := os.Stat(o.Store.IndexFile); !os.IsNotExist(err) {
+    if _, err := os.Stat(o.State.Path); !os.IsNotExist(err) {
         t.Fatal("preview created state", err)
     }
     for _, lang := range []string{"en", "zh-Hans"} {
@@ -66,7 +66,7 @@ func (diagnosticChecker) Check(_ context.Context, t config.Target, _ string, _ b
 func TestMultiTargetCheckExportsAllowlistAndKeepsPartialResults(t *testing.T) {
     o := fixture(t)
     o.Checker = diagnosticChecker{}
-    o.Trace = &ssh.Trace{}
+    o.Options.Trace = &ssh.Trace{}
     for _, name := range []string{"ok", "bad"} {
         dest := "good"
         if name == "bad" {

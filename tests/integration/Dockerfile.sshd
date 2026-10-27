@@ -1,5 +1,5 @@
 FROM alpine:3.23
-RUN apk add --no-cache openssh rsync coreutils procps \
+RUN apk add --no-cache openssh rsync coreutils procps sqlite \
     && adduser -D researcher \
     && passwd -u researcher \
     && mkdir -p /home/researcher/.ssh \

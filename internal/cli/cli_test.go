@@ -9,8 +9,12 @@ import (
     "strings"
     "testing"
 
+    "github.com/elebirds/loaf/internal/cli/interaction"
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/i18n"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
 )
 
 type fakeChecker struct {
@@ -26,16 +30,33 @@ func (f *fakeChecker) Check(_ context.Context, t config.Target, dir string, batc
     return ssh.Report{OS: "Linux", Arch: "aarch64", RemoteDir: dir, Writable: true, Issues: []string{}}, nil
 }
 
-func fixture(t *testing.T) Options {
-    t.Helper()
-    return Options{Store: config.New(t.TempDir(), "", ""), Checker: &fakeChecker{}, CWD: t.TempDir(), Env: map[string]string{"LANG": "C"}, In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}}
+type testOptions struct {
+    client.Dependencies
+    Options
 }
-func run(t *testing.T, o Options, args ...string) (int, string, string) {
+
+func fixture(t *testing.T) testOptions {
+    t.Helper()
+    store := config.New(t.TempDir(), "", "")
+    return testOptions{
+        Dependencies: client.Dependencies{Config: store, State: local.New(store.StateDir), Checker: &fakeChecker{}, CWD: t.TempDir()},
+        Options:      Options{Env: map[string]string{"LANG": "C"}, In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}},
+    }
+}
+func execute(ctx context.Context, args []string, o testOptions) int {
+    settings, err := o.Config.Load()
+    o.Options.Language, o.InitError = settings.Language, err
+    o.Dependencies.Trace = o.Options.Trace
+    o.App = client.New(o.Dependencies, settings)
+    return Execute(ctx, args, o.Options)
+}
+
+func run(t *testing.T, o testOptions, args ...string) (int, string, string) {
     t.Helper()
     out, errout := &bytes.Buffer{}, &bytes.Buffer{}
     o.Out = out
     o.Err = errout
-    code := Execute(context.Background(), args, o)
+    code := execute(context.Background(), args, o)
     return code, out.String(), errout.String()
 }
 
@@ -122,10 +143,10 @@ func TestLanguagePrecedenceAndJSONStability(t *testing.T) {
 
 func TestGlobalLanguageAndFlagAlignment(t *testing.T) {
     o := fixture(t)
-    if err := os.MkdirAll(filepath.Dir(o.Store.ConfigFile), 0700); err != nil {
+    if err := os.MkdirAll(filepath.Dir(o.Config.ConfigFile), 0700); err != nil {
         t.Fatal(err)
     }
-    if err := os.WriteFile(o.Store.ConfigFile, []byte("format_version = 1\nlanguage = 'zh-Hans'\n"), 0600); err != nil {
+    if err := os.WriteFile(o.Config.ConfigFile, []byte("format_version = 1\nlanguage = 'zh-Hans'\n"), 0600); err != nil {
         t.Fatal(err)
     }
     _, out, _ := run(t, o, "--help")
@@ -139,5 +160,21 @@ func TestGlobalLanguageAndFlagAlignment(t *testing.T) {
     }
     if padFlag("--lang <值>", 22) != "--lang <值>"+strings.Repeat(" ", 11) {
         t.Fatalf("CJK flag width: %q", padFlag("--lang <值>", 22))
+    }
+}
+
+func TestPromptCancellationIsNotAFileFailure(t *testing.T) {
+    for _, language := range []string{"en", "zh-Hans"} {
+        locale, err := i18n.New(language, nil)
+        if err != nil {
+            t.Fatal(err)
+        }
+        output := presenter{locale: locale}
+        for _, cause := range []error{interaction.ErrCanceled, context.Canceled} {
+            view := output.error(cause)
+            if view.Code != "OPERATION_CANCELED" || view.Message != locale.Text("operation_canceled") {
+                t.Fatalf("%s: %+v", language, view)
+            }
+        }
     }
 }

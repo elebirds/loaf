@@ -7,11 +7,11 @@ import (
 
 func TestVersionBuildProvenanceRetainsUnknownState(t *testing.T) {
     data := versionData(nil)
-    if data["revision"] != "unknown" || data["modified"].(*bool) != nil {
+    if data.Revision != "unknown" || data.Modified != nil {
         t.Fatal(data)
     }
     data = versionData(&debug.BuildInfo{Settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "source-commit"}, {Key: "vcs.modified", Value: "true"}}})
-    if data["revision"] != "source-commit" || !*data["modified"].(*bool) || data["go_version"] == "" {
+    if data.Revision != "source-commit" || !*data.Modified || data.GoVersion == "" {
         t.Fatal(data)
     }
 }

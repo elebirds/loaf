@@ -5,14 +5,14 @@ import (
     "errors"
     "time"
 
-    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
 // Stop sends one stop request to the bound runner, then observes that same run.
 // Neither lost confirmation nor cancellation replays or withdraws the request.
-func (s Service) Stop(ctx context.Context, ref config.RunRef, grace *time.Duration, batch bool) (View, error) {
+func (s Service) Stop(ctx context.Context, ref task.RunRef, grace *time.Duration, batch bool) (View, error) {
     result := view(ref, nil)
     if err := AvailabilityError(ref); err != nil {
         return result, err
@@ -73,12 +73,16 @@ func (s Service) Stop(ctx context.Context, ref config.RunRef, grace *time.Durati
     if observed.StopGraceMillis == nil {
         observed.StopGraceMillis = result.StopGraceMillis
     }
-    if observeErr == nil && wire.Terminal(observed.Status) {
-        return observed, nil
+    if !observed.ObservedAt.IsZero() && observed.QueryError == "" && wire.Terminal(observed.Status) {
+        return observed, observeErr
     }
     if observeErr != nil {
-        result.QueryError = errorCode(observeErr)
+        if observed.StateError != "" && observed.QueryError == "" {
+            return observed, unconfirmedStop(observeErr)
+        }
         if observed.Status == "unknown" && observed.Reason == "" {
+            result.QueryError = observed.QueryError
+            result.StateError = observed.StateError
             return result, unconfirmedStop(observeErr)
         }
     }

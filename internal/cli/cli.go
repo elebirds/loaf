@@ -2,59 +2,34 @@
 package cli
 
 import (
-    "bufio"
     "bytes"
     "context"
     "encoding/json"
     "errors"
     "fmt"
     "io"
-    "runtime/debug"
     "strings"
 
-    "github.com/elebirds/loaf/internal/cloud"
-    "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/cli/interaction"
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
     sources "github.com/elebirds/loaf/internal/sync"
-    "github.com/spf13/cobra"
-    "github.com/spf13/pflag"
-    "golang.org/x/text/width"
 )
-
-// Checker is the environment capability consumed by the check command.
-type Checker interface {
-    Check(context.Context, config.Target, string, bool) (ssh.Report, error)
-}
-
-// RunnerVerifier is the optional, explicit runner deployment check.
-type RunnerVerifier interface {
-    Verify(context.Context, config.Target, string, bool) (execution.RunnerInfo, error)
-}
 
 // Options are assembled by the executable, not looked up inside command handlers.
 type Options struct {
-    Store          *config.Store
-    Checker        Checker
-    Runner         RunnerVerifier
-    Syncer         Synchronizer
-    Cleaner        RunCleaner
-    Outputs        OutputBrowser
-    Puller         OutputPuller
-    Runs           *execution.Service
-    Operations     MachineOperations
-    Cloud          *cloud.Service
-    Auth           *cloud.Authentication
-    ReadPassword   func(context.Context) ([]byte, error)
-    CWD            string
-    Env            map[string]string
-    In             io.Reader
-    Out, Err       io.Writer
-    TerminalOutput bool
-    Interactive    bool
-    Trace          *ssh.Trace
+    App                                        *client.App
+    Language                                   string
+    InitError                                  error
+    ReadPassword                               func(context.Context) ([]byte, error)
+    Env                                        map[string]string
+    In                                         io.Reader
+    Out, Err                                   io.Writer
+    TerminalOutput, TerminalError, Interactive bool
+    Trace                                      *ssh.Trace
 }
 
 type errorView struct {
@@ -77,16 +52,210 @@ type envelope struct {
     Error         *errorView       `json:"error,omitempty"`
     Trace         *ssh.TraceReport `json:"trace,omitempty"`
 }
-type addResult struct {
-    Target      string `json:"target"`
-    Destination string `json:"destination"`
-    RemoteBase  string `json:"remote_base"`
+
+// Execute parses one invocation and returns its public operation exit code.
+func Execute(ctx context.Context, args []string, o Options) int {
+    if o.Trace == nil {
+        o.Trace = &ssh.Trace{}
+    }
+    o.Trace.Reset()
+    model := &grammar{}
+    parser, err := newParser(model)
+    if err != nil {
+        fmt.Fprintln(o.Err, err)
+        return 1
+    }
+    early := bootstrap(parser.Model, args)
+    preferred := early.language
+    if !early.languageSet {
+        preferred = o.Env["LOAF_LANG"]
+        if preferred == "" {
+            preferred = o.Language
+        }
+        if preferred == "" {
+            preferred = "auto"
+        }
+    }
+    l, langErr := i18n.New(preferred, o.Env)
+    p := &presenter{json: early.json, out: o.Out, err: o.Err, locale: l, trace: o.Trace}
+    if early.languageSet && preferred == "" {
+        langErr = fault.New("BAD_CONFIG", "language_invalid", map[string]any{"Languages": strings.Join(i18n.Supported(), ", ")})
+    }
+    if langErr != nil {
+        return p.finish(nil, langErr)
+    }
+    if o.InitError != nil {
+        return p.finish(nil, o.InitError)
+    }
+    parsed, err := parse(parser, model, args, early)
+    if err != nil {
+        return p.finish(nil, err)
+    }
+    if parsed.help {
+        var out bytes.Buffer
+        printHelp(&out, parsed.node, l)
+        if p.json {
+            return p.finish(map[string]string{"help": out.String()}, nil)
+        }
+        if _, err := io.Copy(o.Out, &out); err != nil {
+            return 1
+        }
+        return 0
+    }
+    if model.Target != nil && targetForbidden(parsed.path) {
+        return p.finish(nil, parseFailure())
+    }
+    if model.Trace {
+        if model.Logs.Follow || parsed.path == "exec" || parsed.path == "ssh" || parsed.path == "forward" || parsed.path == "cloud watch" {
+            return p.finish(nil, fault.New("BAD_CONFIG", "trace_finite_only", nil))
+        }
+        o.Trace.Enable()
+    }
+    input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: o.TerminalError && o.Env["TERM"] != "dumb", ReadPassword: o.ReadPassword})
+    call := invocation{app: o.App, options: o, grammar: model, output: p, input: input, policy: client.CallPolicy{Batch: p.json || !o.Interactive}}
+    result, err := call.dispatch(ctx, parsed.path)
+    if p.json && (parsed.path == "exec" || parsed.path == "cloud watch" || parsed.path == "logs" && model.Logs.Follow) {
+        return p.finishStream(result, err)
+    }
+    return p.finish(result, err)
 }
-type useResult struct {
-    Target    string `json:"target"`
-    ProjectID string `json:"project_id"`
-    Root      string `json:"root"`
+
+type presenter struct {
+    json     bool
+    out, err io.Writer
+    locale   *i18n.Localizer
+    trace    *ssh.Trace
+    writeErr error
 }
+
+func (p *presenter) stream(data any) error {
+    if p.writeErr == nil {
+        p.writeErr = json.NewEncoder(p.out).Encode(envelope{SchemaVersion: 1, OK: true, Data: data})
+    }
+    return p.writeErr
+}
+func (p *presenter) error(err error) *errorView {
+    if err == nil {
+        return nil
+    }
+    var f *fault.Error
+    if !errors.As(err, &f) {
+        if errors.Is(err, interaction.ErrCanceled) || errors.Is(err, context.Canceled) {
+            f = fault.Wrap("OPERATION_CANCELED", "operation_canceled", err)
+        } else {
+            f = fault.Wrap("OPERATION_FAILED", "internal_error", err)
+        }
+    }
+    view := &errorView{FailureKind: ssh.FailureKind(err), Code: f.Code, Message: p.locale.Text(f.Message, f.Params), Stage: fault.Stage(err)}
+    view.ProviderCode, _ = f.Params["ProviderCode"].(string)
+    view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
+    view.AuthStage, _ = f.Params["AuthStage"].(string)
+    if f.Code == "VERSION_MISMATCH" {
+        view.ExpectedVersion, _ = f.Params["Expected"].(string)
+        view.ActualVersion, _ = f.Params["Actual"].(string)
+    }
+    if f.Hint != "" {
+        parameters := f.Params
+        if view.AuthStage != "" {
+            parameters = map[string]any{}
+            for key, value := range f.Params {
+                parameters[key] = value
+            }
+            parameters["Stage"] = p.locale.Text("cloud_auth_stage_" + view.AuthStage)
+            if view.HTTPStatus == 0 {
+                parameters["HTTPStatus"] = p.locale.Text("cloud_http_status_unavailable")
+            }
+        }
+        view.Hint = p.locale.Text(f.Hint, parameters)
+    }
+    view.Detail, _ = f.Params["Detail"].(string)
+    return view
+}
+func exitCode(view *errorView) int {
+    code := 0
+    if view != nil {
+        code = 1
+        if view.Code == "BAD_CONFIG" {
+            code = 2
+        }
+        switch view.Code {
+        case "SUBMISSION_UNKNOWN", "STOP_UNCONFIRMED", "EXEC_UNCONFIRMED", "CLEAN_UNCONFIRMED", "CLOUD_UNCONFIRMED":
+            code = 3
+        }
+    }
+    return code
+}
+
+// finishStream emits an explicit final event, or only an error if the producer
+// already emitted its end event. A failed consumer is never written to again.
+func (p *presenter) finishStream(data any, err error) int {
+    if p.writeErr != nil {
+        return 1
+    }
+    if data == nil && err == nil {
+        return 0
+    }
+    if data == nil {
+        data = struct {
+            Type string `json:"type"`
+        }{Type: "error"}
+    }
+    view := p.error(err)
+    if err := json.NewEncoder(p.out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: data, Error: view}); err != nil {
+        return 1
+    }
+    return exitCode(view)
+}
+
+// finish presents one finite result; native streams have no result to repeat.
+func (p *presenter) finish(data any, err error) int {
+    view := p.error(err)
+    if p.json {
+        if err := json.NewEncoder(p.out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: data, Error: view, Trace: p.trace.Snapshot()}); err != nil {
+            return 1
+        }
+        return exitCode(view)
+    }
+    if trace := p.trace.Snapshot(); trace != nil {
+        printTrace(p.err, *trace, p.locale)
+    }
+    if data != nil {
+        if renderErr := printResult(p.out, data, p.locale, view == nil); renderErr != nil && view == nil {
+            view = p.error(renderErr)
+        }
+    }
+    if view != nil {
+        fmt.Fprintln(p.err, view.Message)
+        if view.Stage != "" {
+            fmt.Fprintln(p.err, p.locale.Text("operation_stage", map[string]any{"Stage": p.locale.Text("operation_stage_" + view.Stage)}))
+        }
+        if view.Detail != "" {
+            fmt.Fprintln(p.err, view.Detail)
+        }
+        if view.Hint != "" {
+            fmt.Fprintln(p.err, view.Hint)
+        }
+    }
+    return exitCode(view)
+}
+
+type addResult = client.AddResult
+type useResult = client.UseResult
+type targetEntry = client.TargetEntry
+type choice = client.TargetChoice
+type targetsResult = client.TargetsResult
+type removeResult = client.RemoveResult
+type syncResult = client.SyncResult
+type cleanBatch = client.CleanBatch
+type runList = execution.History
+type cloudAccounts = client.CloudAccounts
+type cloudReceipts = client.CloudReceipts
+type cloudBinding = client.CloudBinding
+type cloudAcquisition = client.CloudAcquisition
+type cloudCredentials = client.CloudCredentials
+type loginResult = client.LoginResult
+type logoutResult = client.LogoutResult
+
 type checkResult struct {
     Target        string                `json:"target"`
     ProjectID     string                `json:"project_id"`
@@ -96,456 +265,39 @@ type checkResult struct {
     ElapsedMillis int64                 `json:"elapsed_millis"`
     Error         *errorView            `json:"error,omitempty"`
 }
-
-// Execute runs one command and returns the public operation exit code.
-func Execute(ctx context.Context, args []string, o Options) int {
-    o.Trace.Reset()
-    jsonMode, preferred, earlyErr := earlyOptions(args)
-    cfg, cfgErr := o.Store.Load()
-    if preferred == "" {
-        preferred = o.Env["LOAF_LANG"]
-    }
-    if preferred == "" {
-        preferred = cfg.Language
-    }
-    if preferred == "" {
-        preferred = "auto"
-    }
-    l, langErr := i18n.New(preferred, o.Env)
-    var result any
-    streamed := false
-    var target string
-    root := &cobra.Command{Use: "loaf", Short: l.Text("root_short"), SilenceErrors: true, SilenceUsage: true, DisableAutoGenTag: true}
-    root.CompletionOptions.DisableDefaultCmd = true
-    root.SetIn(o.In)
-    root.SetOut(o.Out)
-    root.SetErr(o.Err)
-    root.SetArgs(args)
-    root.PersistentFlags().String("lang", "auto", l.Text("flag_lang"))
-    root.PersistentFlags().Bool("json", false, l.Text("flag_json"))
-    root.PersistentFlags().Bool("trace", false, l.Text("flag_trace"))
-    root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
-        enabled, _ := cmd.Flags().GetBool("trace")
-        if !enabled {
-            return nil
-        }
-        follow, _ := cmd.Flags().GetBool("follow")
-        if follow || cmd.Name() == "exec" || cmd.Name() == "ssh" || cmd.Name() == "forward" || cmd.Name() == "watch" {
-            return fault.New("BAD_CONFIG", "trace_finite_only", nil)
-        }
-        if o.Trace == nil {
-            o.Trace = &ssh.Trace{}
-        }
-        o.Trace.Enable()
-        return nil
-    }
-    root.PersistentFlags().StringVar(&target, "target", "", l.Text("flag_target"))
-    root.PersistentFlags().BoolP("help", "h", false, l.Text("flag_help"))
-    root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error {
-        f := fault.New("BAD_CONFIG", "invalid_flags", nil)
-        f.Hint = "help_hint"
-        return f
-    })
-    root.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
-        var b bytes.Buffer
-        printHelp(&b, cmd, l)
-        if jsonMode {
-            result = map[string]string{"help": b.String()}
-        } else {
-            fmt.Fprint(o.Out, b.String())
-        }
-    })
-    root.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
-    root.Args = arguments(0, 0)
-    add := &cobra.Command{Use: "add " + l.Text("name_arg"), Short: l.Text("add_short"), Args: arguments(1, 1)}
-    var connection, remoteBase string
-    var replace bool
-    add.Flags().StringVar(&connection, "ssh", "", l.Text("flag_ssh"))
-    add.Flags().StringVar(&remoteBase, "remote-dir", "~/.local/share/loaf/projects", l.Text("flag_remote"))
-    add.Flags().BoolVar(&replace, "replace", false, l.Text("flag_replace"))
-    add.RunE = func(cmd *cobra.Command, args []string) error {
-        if connection == "" {
-            if jsonMode || !o.Interactive {
-                return fault.New("BAD_CONFIG", "ssh_required", nil)
-            }
-            fmt.Fprint(o.Err, l.Text("ssh_prompt"))
-            line, err := bufio.NewReader(o.In).ReadString('\n')
-            if err != nil && !errors.Is(err, io.EOF) {
-                return err
-            }
-            connection = strings.TrimSpace(line)
-        }
-        t, err := ssh.ParseConnection(connection)
-        if err != nil {
-            return err
-        }
-        t.RemoteBase = remoteBase
-        if err := o.Store.Add(cmd.Context(), args[0], t, replace); err != nil {
-            return err
-        }
-        result = addResult{args[0], t.Destination, t.RemoteBase}
-        return nil
-    }
-    use := &cobra.Command{Use: "use " + l.Text("name_arg"), Short: l.Text("use_short"), Args: arguments(1, 1)}
-    use.RunE = func(cmd *cobra.Command, args []string) error {
-        if _, ok := cfg.Targets[args[0]]; !ok {
-            return fault.New("BAD_CONFIG", "target_unknown", map[string]any{"Target": args[0]})
-        }
-        root, _, err := config.Discover(cmd.Context(), o.CWD)
-        if err != nil {
-            return err
-        }
-        p, err := o.Store.Select(cmd.Context(), root, args[0])
-        if err != nil {
-            return err
-        }
-        result = useResult{args[0], p.ID, p.Root}
-        return nil
-    }
-    check := newCheckCommand(o, cfg, &target, l, func(value any) { result = value })
-    version := &cobra.Command{Use: "version", Short: l.Text("version_short"), Args: arguments(0, 0), RunE: func(_ *cobra.Command, _ []string) error {
-        info, _ := debug.ReadBuildInfo()
-        result = versionData(info)
-        return nil
-    }}
-    help := &cobra.Command{Use: "help " + l.Text("command_arg"), Short: l.Text("help_short"), Args: arguments(0, 4), RunE: func(_ *cobra.Command, args []string) error {
-        c, _, err := root.Find(args)
-        if err != nil {
-            return fault.New("BAD_CONFIG", "invalid_command", nil)
-        }
-        return c.Help()
-    }}
-    root.SetHelpCommand(help)
-    root.AddCommand(add, use, check, version, newSyncCommand(o, cfg, &target, l, func(value any) { result = value }))
-    root.AddCommand(newTargetCommands(o, cfg, l, func(value any) { result = value })...)
-    root.AddCommand(newRunCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
-    root.AddCommand(newOutputsCommand(o, &target, l, func(value any) { result = value }))
-    root.AddCommand(newWaitCommand(o, l, func(value any) { result = value }))
-    root.AddCommand(newPullCommand(o, cfg, &target, l, func(value any) { result = value }))
-    root.AddCommand(newMachineCommands(o, cfg, &target, l, func(value any) { result = value }, &streamed)...)
-    root.AddCommand(newCleanCommand(o, &target, l, func(value any) { result = value }))
-    root.AddCommand(newCloudCommand(o, cfg, l, func(value any) { result = value }, &streamed, root.PersistentPreRunE))
-    err := earlyErr
-    if err == nil {
-        err = langErr
-    }
-    if err == nil {
-        err = cfgErr
-    }
-    if err == nil {
-        if _, _, findErr := root.Find(args); findErr != nil {
-            f := fault.New("BAD_CONFIG", "invalid_command", nil)
-            f.Hint = "help_hint"
-            err = f
-        } else {
-            _, err = root.ExecuteContextC(ctx)
-        }
-    }
-    var view *errorView
-    code := 0
-    if err != nil {
-        var f *fault.Error
-        if !errors.As(err, &f) {
-            f = fault.Wrap("OPERATION_FAILED", "internal_error", err)
-        }
-        view = &errorView{FailureKind: ssh.FailureKind(err), Code: f.Code, Message: l.Text(f.Message, f.Params), Stage: fault.Stage(err)}
-        view.ProviderCode, _ = f.Params["ProviderCode"].(string)
-        view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
-        view.AuthStage, _ = f.Params["AuthStage"].(string)
-        if f.Code == "VERSION_MISMATCH" {
-            view.ExpectedVersion, _ = f.Params["Expected"].(string)
-            view.ActualVersion, _ = f.Params["Actual"].(string)
-        }
-        if f.Hint != "" {
-            parameters := f.Params
-            if view.AuthStage != "" {
-                parameters = map[string]any{}
-                for key, value := range f.Params {
-                    parameters[key] = value
-                }
-                parameters["Stage"] = l.Text("cloud_auth_stage_" + view.AuthStage)
-                if view.HTTPStatus == 0 {
-                    parameters["HTTPStatus"] = l.Text("cloud_http_status_unavailable")
-                }
-            }
-            view.Hint = l.Text(f.Hint, parameters)
-        }
-        if detail, ok := f.Params["Detail"].(string); ok {
-            view.Detail = detail
-        }
-        code = 1
-        if f.Code == "BAD_CONFIG" {
-            code = 2
-        }
-        if f.Code == "SUBMISSION_UNKNOWN" || f.Code == "STOP_UNCONFIRMED" || f.Code == "EXEC_UNCONFIRMED" || f.Code == "CLEAN_UNCONFIRMED" || f.Code == "CLOUD_UNCONFIRMED" {
-            code = 3
-        }
-    }
-    if jsonMode && (!streamed || view != nil) {
-        if streamed && result == nil {
-            result = map[string]string{"type": "error"}
-        }
-        if err := json.NewEncoder(o.Out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: result, Error: view, Trace: o.Trace.Snapshot()}); err != nil {
-            return 1
-        }
-    } else if !jsonMode {
-        if trace := o.Trace.Snapshot(); trace != nil {
-            printTrace(o.Err, *trace, l)
-        }
-        if result != nil {
-            printResult(o.Out, result, l, view == nil)
-        }
-        if view != nil {
-            fmt.Fprintln(o.Err, view.Message)
-            if view.Stage != "" {
-                fmt.Fprintln(o.Err, l.Text("operation_stage", map[string]any{"Stage": l.Text("operation_stage_" + view.Stage)}))
-            }
-            if view.Detail != "" {
-                fmt.Fprintln(o.Err, view.Detail)
-            }
-            if view.Hint != "" {
-                fmt.Fprintln(o.Err, view.Hint)
-            }
-        }
-    }
-    return code
+type checkBatch struct {
+    Checks     []checkResult `json:"checks"`
+    Selected   int           `json:"selected"`
+    Completed  int           `json:"completed"`
+    Failed     int           `json:"failed"`
+    Unexamined int           `json:"unexamined"`
+}
+type pullRow struct {
+    Result sources.PullResult `json:"result"`
+    Error  *errorView         `json:"error,omitempty"`
+}
+type pullBatch struct {
+    Runs       []pullRow `json:"runs"`
+    Selected   int       `json:"selected"`
+    Completed  int       `json:"completed"`
+    Failed     int       `json:"failed"`
+    Unexamined int       `json:"unexamined"`
 }
 
-func earlyOptions(args []string) (bool, string, error) {
-    jsonMode := false
-    lang := ""
-    var parseErr error
-    for i := 0; i < len(args); i++ {
-        a := args[i]
-        if a == "--" {
-            break
-        }
-        if cloudValueFlags[strings.SplitN(a, "=", 2)[0]] && !strings.Contains(a, "=") {
-            i++
-            continue
-        }
-        if a == "--ssh" || a == "--remote-dir" || a == "--target" || a == "--timeout" || a == "--wait" || a == "--tail" || a == "--limit" || a == "--exclude" || a == "--mode" || a == "--grace" || a == "--path" || a == "--to" || a == "--status" || a == "--since" || a == "--until" || a == "--cwd" || a == "--local-port" || a == "--name" || a == "--tag" || a == "--resume" || a == "--targets" || a == "--report" || a == "--depth" || a == "--into" || a == "--concurrency" || a == "--resume-file" || a == "--ack-cursor" || a == "--recovery-budget" {
-            i++
-            continue
-        }
-        if a == "--json" || a == "--json=true" {
-            jsonMode = true
-        }
-        if a == "--json=false" {
-            jsonMode = false
-        }
-        if strings.HasPrefix(a, "--lang=") {
-            lang = strings.TrimPrefix(a, "--lang=")
-            if lang == "" {
-                parseErr = fault.New("BAD_CONFIG", "language_invalid", map[string]any{"Languages": strings.Join(i18n.Supported(), ", ")})
-            }
-        }
-        if a == "--lang" {
-            if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-                parseErr = fault.New("BAD_CONFIG", "invalid_flags", nil)
-                continue
-            }
-            i++
-            lang = args[i]
-        }
-    }
-    return jsonMode, lang, parseErr
+func (p *presenter) check(r client.CheckResult) checkResult {
+    return checkResult{r.Target, r.ProjectID, r.Report, r.Runner, r.Steps, r.ElapsedMillis, p.error(r.Error)}
 }
-
-func arguments(min, max int) cobra.PositionalArgs {
-    return func(cmd *cobra.Command, args []string) error {
-        if len(args) < min || len(args) > max {
-            f := fault.New("BAD_CONFIG", "argument_count", map[string]any{"Command": cmd.CommandPath()})
-            f.Hint = "help_hint"
-            return f
-        }
-        return nil
+func (p *presenter) checks(r client.CheckBatch) checkBatch {
+    out := checkBatch{Checks: []checkResult{}, Selected: r.Selected, Completed: r.Completed, Failed: r.Failed, Unexamined: r.Unexamined}
+    for _, row := range r.Checks {
+        out.Checks = append(out.Checks, p.check(row))
     }
+    return out
 }
-
-func printHelp(out io.Writer, c *cobra.Command, l *i18n.Localizer) {
-    use := c.CommandPath()
-    if parts := strings.SplitN(c.Use, " ", 2); len(parts) == 2 {
-        use += " " + parts[1]
+func (p *presenter) pulls(r client.PullBatch) pullBatch {
+    out := pullBatch{Runs: []pullRow{}, Selected: r.Selected, Completed: r.Completed, Failed: r.Failed, Unexamined: r.Unexamined}
+    for _, row := range r.Runs {
+        out.Runs = append(out.Runs, pullRow{row.Result, p.error(row.Error)})
     }
-    usage := use + " " + l.Text("options_arg")
-    if c.Name() == "exec" || c.Name() == "run" {
-        usage = c.CommandPath() + " " + l.Text("options_arg") + " " + strings.SplitN(c.Use, " ", 2)[1]
-    }
-    fmt.Fprintf(out, "%s\n\n%s\n  %s\n", c.Short, l.Text("usage"), usage)
-    if c.HasAvailableSubCommands() {
-        fmt.Fprintf(out, "\n%s\n", l.Text("commands"))
-        commandWidth := 10
-        for _, sub := range c.Commands() {
-            if !sub.Hidden {
-                commandWidth = max(commandWidth, len(sub.Name()))
-            }
-        }
-        for _, sub := range c.Commands() {
-            if !sub.Hidden {
-                fmt.Fprintf(out, "  %-*s %s\n", commandWidth, sub.Name(), sub.Short)
-            }
-        }
-    }
-    fmt.Fprintf(out, "\n%s\n", l.Text("flags"))
-    flags := pflag.NewFlagSet("help", pflag.ContinueOnError)
-    flags.AddFlagSet(c.InheritedFlags())
-    flags.AddFlagSet(c.LocalFlags())
-    flags.VisitAll(func(f *pflag.Flag) {
-        if f.Name == "target" && strings.HasPrefix(c.CommandPath(), "loaf cloud") {
-            return
-        }
-        if f.Name == "target" && (c.Name() == "logs" || c.Name() == "stop" || c.Name() == "pull" || c.Name() == "targets" || c.Name() == "remove" || c.Name() == "clean" || c.Name() == "inspect" || c.Name() == "outputs" || c.Name() == "wait") {
-            return
-        }
-        name := "--" + f.Name
-        if f.Shorthand != "" {
-            name = "-" + f.Shorthand + ", " + name
-        }
-        if f.Value.Type() != "bool" {
-            name += " <" + l.Text("value") + ">"
-        }
-        desc := f.Usage
-        if f.Name == "json" && c.Name() == "ssh" {
-            desc = l.Text("interactive_json")
-        }
-        if f.Name == "json" && c.Name() == "forward" {
-            desc = l.Text("forward_json")
-        }
-        if f.DefValue != "" && f.DefValue != "false" {
-            desc += " (" + l.Text("default_value", map[string]any{"Value": f.DefValue}) + ")"
-        }
-        fmt.Fprintf(out, "  %s %s\n", padFlag(name, 22), desc)
-    })
-}
-
-// Flag labels contain ASCII option names and localized CJK value placeholders.
-func padFlag(s string, cells int) string {
-    n := 0
-    for _, r := range s {
-        n++
-        kind := width.LookupRune(r).Kind()
-        if kind == width.EastAsianWide || kind == width.EastAsianFullwidth {
-            n++
-        }
-    }
-    return s + strings.Repeat(" ", max(0, cells-n))
-}
-
-func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) {
-    if printCloud(out, data, l) {
-        return
-    }
-    switch r := data.(type) {
-    case addResult:
-        fmt.Fprintln(out, l.Text("added", map[string]any{"Target": r.Target, "Destination": r.Destination}))
-    case targetsResult:
-        printTargets(out, r, l)
-    case removeResult:
-        fmt.Fprintln(out, l.Text("remove_done", map[string]any{"Target": r.Target}))
-        if r.Selected {
-            fmt.Fprintln(out, l.Text("remove_reselect"))
-        }
-    case useResult:
-        fmt.Fprintln(out, l.Text("selected", map[string]any{"Root": r.Root, "Target": r.Target}))
-    case syncResult:
-        printSync(out, r, l)
-    case pullBatch:
-        for _, row := range r.Runs {
-            printPull(out, row.Result, l, row.Error == nil)
-            if row.Error != nil {
-                fmt.Fprintln(out, row.Error.Code+": "+row.Error.Message)
-            }
-        }
-        fmt.Fprintln(out, l.Text("pull_batch_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.Failed, "Matched": r.Unexamined}))
-    case execution.RunPreview:
-        printPreview(out, r, l)
-    case execution.OutputListing:
-        printOutputs(out, r, l)
-    case sources.PullResult:
-        printPull(out, r, l, ok)
-    case cleanBatch:
-        printClean(out, r, l)
-    case execution.LocalDetails:
-        printLocalDetails(out, r, l)
-    case execution.View:
-        printRun(out, r, l)
-    case execution.WaitResult:
-        for _, v := range r.Runs {
-            printRun(out, v, l)
-        }
-        fmt.Fprintln(out, l.Text("wait_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.QueryErrors, "Matched": r.Examined, "Bytes": r.Interrupted}))
-    case runList:
-        if r.Source == "local" {
-            fmt.Fprintln(out, l.Text("inspect_local"))
-        }
-        for _, run := range r.Runs {
-            printRun(out, run, l)
-        }
-        if len(r.Runs) == 0 {
-            if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Name != "" || len(r.Filters.Tags) > 0 || r.Filters.Since != nil || r.Filters.Until != nil {
-                fmt.Fprintln(out, l.Text("ps_no_matches"))
-            } else {
-                fmt.Fprintln(out, l.Text("runs_empty"))
-            }
-        }
-        if len(r.Filters.Statuses) > 0 || r.Filters.Target != "" || r.Filters.Name != "" || len(r.Filters.Tags) > 0 || r.Filters.Since != nil || r.Filters.Until != nil || r.Truncated {
-            fmt.Fprintln(out, l.Text("ps_scan_summary", map[string]any{"Count": r.Examined, "Total": r.Eligible, "Matched": r.Matched}))
-        }
-        if r.Unresolved > 0 {
-            fmt.Fprintln(out, l.Text("ps_unresolved"))
-        }
-        if r.Truncated {
-            fmt.Fprintln(out, l.Text("runs_truncated"))
-        }
-    case checkBatch:
-        printCheckBatch(out, r, l)
-    case checkResult:
-        fmt.Fprintln(out, l.Text("check_heading", map[string]any{"Target": r.Target}))
-        if r.Report.OS == "" {
-            return
-        }
-        fmt.Fprintf(out, "%s: %s / %s\n%s: %s\n", l.Text("platform"), r.Report.OS, r.Report.Arch, l.Text("remote_directory"), r.Report.RemoteDir)
-        w := "no"
-        if r.Report.Writable {
-            w = "yes"
-        }
-        fmt.Fprintf(out, "%s: %s\n%s: %.2f GiB\n", l.Text("writable"), l.Text(w), l.Text("disk"), float64(r.Report.DiskAvailableBytes)/(1<<30))
-        for _, group := range []struct {
-            id    string
-            tools map[string]ssh.Tool
-        }{{"local_tools", r.Report.Local}, {"remote_tools", r.Report.Remote}} {
-            fmt.Fprintln(out, l.Text(group.id)+":")
-            for _, name := range []string{"ssh", "rsync", "python", "uv", "nvidia-smi", "nvcc"} {
-                tool, exists := group.tools[name]
-                if !exists {
-                    continue
-                }
-                value := tool.Path
-                if value == "" {
-                    value = l.Text("missing")
-                }
-                fmt.Fprintf(out, "  %s: %s\n", name, value)
-                if tool.Version != "" {
-                    fmt.Fprintf(out, "    %s\n", strings.ReplaceAll(tool.Version, "\n", "\n    "))
-                }
-            }
-        }
-        if r.Report.GPU != "" {
-            fmt.Fprintf(out, "%s: %s\n", l.Text("gpu"), r.Report.GPU)
-        }
-        if r.Runner != nil {
-            fmt.Fprintln(out, l.Text("runner_verified", map[string]any{"Version": r.Runner.Version, "Path": r.Runner.Path}))
-        }
-        for _, issue := range r.Report.Issues {
-            fmt.Fprintln(out, "- "+l.Text(issue))
-        }
-        if ok {
-            fmt.Fprintln(out, l.Text("check_ok"))
-        }
-    default:
-        if r, ok := data.(map[string]any); ok {
-            fmt.Fprintf(out, "loaf %v (%v/%v)\n", r["version"], r["os"], r["arch"])
-        }
-    }
+    return out
 }

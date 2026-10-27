@@ -2,7 +2,6 @@ package remote
 
 import (
     "context"
-    "encoding/json"
     "errors"
     "fmt"
     "io"
@@ -15,7 +14,7 @@ import (
     "strings"
     "syscall"
 
-    "github.com/elebirds/loaf/internal/atomicfile"
+    remotestate "github.com/elebirds/loaf/internal/state/remote"
     "github.com/elebirds/loaf/internal/wire"
     "golang.org/x/sys/unix"
 )
@@ -168,38 +167,8 @@ func initProject(root, project string) (string, error) {
     if err := os.MkdirAll(root, 0700); err != nil {
         return "", errors.New("WRITE_FAILED")
     }
-    marker := filepath.Join(root, ".loaf-project")
-    if _, err := os.Lstat(marker); errors.Is(err, fs.ErrNotExist) {
-        entries, err := os.ReadDir(root)
-        if err != nil {
-            return "", errors.New("WRITE_FAILED")
-        }
-        if len(entries) != 0 {
-            return "", errors.New("PROJECT_UNOWNED")
-        }
-        f, err := os.OpenFile(marker, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-        if err != nil {
-            return "", errors.New("PROJECT_BUSY")
-        }
-        _, writeErr := f.WriteString(project + "\n")
-        syncErr := f.Sync()
-        closeErr := f.Close()
-        if writeErr != nil || syncErr != nil || closeErr != nil {
-            return "", errors.New("WRITE_FAILED")
-        }
-    }
-    f, err := os.OpenFile(marker, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-    if err != nil {
-        return "", errors.New("PROJECT_MISMATCH")
-    }
-    defer f.Close()
-    info, err := f.Stat()
-    if err != nil || !info.Mode().IsRegular() {
-        return "", errors.New("PROJECT_MISMATCH")
-    }
-    data, err := io.ReadAll(io.LimitReader(f, 1024))
-    if err != nil || strings.TrimSpace(string(data)) != project {
-        return "", errors.New("PROJECT_MISMATCH")
+    if err := remotestate.Initialize(root, project); err != nil {
+        return "", err
     }
     return root, nil
 }
@@ -225,36 +194,23 @@ func lockProject(root string) (*os.File, error) {
 }
 
 func loadCacheState(root string) (*cacheState, error) {
-    f, err := os.OpenFile(filepath.Join(root, ".loaf-cache.json"), os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-    // Pre-sync runner users already have owned caches. The new write marker is
-    // required for new transfers, not for querying or starting their old caches.
-    if errors.Is(err, fs.ErrNotExist) {
-        return nil, nil
-    }
+    state, err := remotestate.Open(root, false)
     if err != nil {
-        return nil, errors.New("BAD_FORMAT")
+        return nil, err
     }
-    defer f.Close()
-    info, err := f.Stat()
-    if err != nil || !info.Mode().IsRegular() {
-        return nil, errors.New("BAD_FORMAT")
+    defer state.Close()
+    complete, err := state.Sync()
+    if err != nil || complete == nil {
+        return nil, err
     }
-    var state cacheState
-    decoder := json.NewDecoder(io.LimitReader(f, 4096))
-    decoder.DisallowUnknownFields()
-    if decoder.Decode(&state) != nil || decoder.Decode(new(any)) != io.EOF || state.FormatVersion != wire.FormatVersion {
-        return nil, errors.New("BAD_FORMAT")
-    }
-    return &state, nil
+    return &cacheState{wire.FormatVersion, *complete}, nil
 }
 
 func writeCacheState(root string, complete bool) error {
-    data, err := json.Marshal(cacheState{wire.FormatVersion, complete})
+    state, err := remotestate.Open(root, true)
     if err != nil {
-        return errors.New("WRITE_FAILED")
+        return err
     }
-    if err := atomicfile.Write(filepath.Join(root, ".loaf-cache.json"), append(data, '\n')); err != nil {
-        return errors.New("WRITE_FAILED")
-    }
-    return nil
+    defer state.Close()
+    return state.SetSync(complete)
 }

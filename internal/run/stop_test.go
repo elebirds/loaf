@@ -156,3 +156,22 @@ func TestStopBadRequestAndRetainedNaturalExit(t *testing.T) {
         t.Fatal("natural terminal result changed", got, err, remote)
     }
 }
+
+func TestStopFallbackRetainsQueryAndStateFailures(t *testing.T) {
+    service, input, _, _ := executionFixture(t)
+    started, err := service.Submit(context.Background(), input, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    grace := int64(1000)
+    remote := &stopRemote{
+        accepted:   &wire.RunRecord{FormatVersion: 1, Request: request(started.Ref, 0, 0), Status: "running", SupervisorPID: 123, StopGraceMillis: &grace},
+        observeErr: fault.New("SSH_FAILED", "ssh_failed", nil),
+    }
+    service.Remote = remote
+    service.Observations = failingObservations{}
+    got, err := service.Stop(context.Background(), started.Ref, nil, true)
+    if errorCode(err) != "STOP_UNCONFIRMED" || got.Status != "running" || got.ID != started.ID || got.QueryError != "SSH_FAILED" || got.StateError != "BAD_CONFIG" || got.StopGraceMillis == nil || *got.StopGraceMillis != grace || remote.controls != 1 || remote.observations != 1 {
+        t.Fatal("stop fallback lost an independent failure", got, err, remote)
+    }
+}

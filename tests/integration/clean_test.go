@@ -40,7 +40,8 @@ func TestCleanRemoteRetryAndTransferLock(t *testing.T) {
         t.Fatal(err)
     }
     root := `/home/researcher/clean 中文 'quoted' $literal`
-    f.shell(`mkdir -p "$1/cache"; printf 'project\n' >"$1/.loaf-project"; printf shared >"$1/shared"`, root)
+    f.managedRemote(root)
+    f.shell(`printf shared >"$1/shared"`, root)
     req := wire.Request{FormatVersion: 1, Version: wire.Version, Action: "start", Root: root, ProjectID: "project", RunID: "run", Args: []string{"/bin/sh", "-c", "mkdir outputs; printf weights >outputs/model.bin; exit 7"}}
     if _, err := f.client.Control(ctx, f.target, helper.Path, req, true); err != nil {
         t.Fatal(err)

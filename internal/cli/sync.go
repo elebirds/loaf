@@ -1,127 +1,13 @@
 package cli
 
 import (
-    "context"
     "fmt"
     "io"
     "path"
-    "path/filepath"
     "strconv"
 
-    "github.com/elebirds/loaf/internal/config"
-    "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/i18n"
-    sources "github.com/elebirds/loaf/internal/sync"
-    "github.com/spf13/cobra"
 )
-
-// Synchronizer is the source-update side effect consumed by the sync command.
-type Synchronizer interface {
-    Sync(context.Context, config.Target, string, string, sources.Plan, bool) (sources.Result, error)
-}
-
-type syncResult struct {
-    DryRun          bool                `json:"dry_run"`
-    Root            string              `json:"root"`
-    Target          string              `json:"target,omitempty"`
-    ProjectID       string              `json:"project_id,omitempty"`
-    RemoteDir       string              `json:"remote_dir,omitempty"`
-    Policy          config.SyncPolicy   `json:"policy"`
-    SelectionSource string              `json:"selection_source"`
-    SelectedFiles   int                 `json:"selected_files"`
-    SelectedBytes   int64               `json:"selected_bytes"`
-    ChangedFiles    *int                `json:"changed_files,omitempty"`
-    Files           []sources.File      `json:"files,omitempty"`
-    Excluded        []sources.Exclusion `json:"excluded"`
-}
-
-func newSyncCommand(o Options, cfg config.Global, target *string, l *i18n.Localizer, result func(any)) *cobra.Command {
-    var preview bool
-    var mode string
-    var respect bool
-    var excluded []string
-    cmd := &cobra.Command{Use: "sync", Short: l.Text("sync_short"), Args: arguments(0, 0)}
-    cmd.Flags().BoolVar(&preview, "dry-run", false, l.Text("flag_dry_run"))
-    cmd.Flags().StringVar(&mode, "mode", "mirror", l.Text("flag_sync_mode"))
-    cmd.Flags().BoolVar(&respect, "respect-gitignore", true, l.Text("flag_respect_gitignore"))
-    cmd.Flags().StringArrayVar(&excluded, "exclude", nil, l.Text("flag_sync_exclude"))
-    cmd.RunE = func(cmd *cobra.Command, _ []string) (err error) {
-        defer func() {
-            if err != nil && cmd.Context().Err() != nil {
-                canceled := fault.Wrap("SYNC_CANCELED", "sync_canceled", cmd.Context().Err())
-                if !preview {
-                    canceled.Hint = "sync_retry"
-                }
-                err = canceled
-            }
-        }()
-        root, file, err := config.Discover(cmd.Context(), o.CWD)
-        if err != nil {
-            return err
-        }
-        explicit := config.SyncSettings{Exclude: excluded}
-        if cmd.Flags().Changed("mode") {
-            explicit.Mode = mode
-        }
-        if cmd.Flags().Changed("respect-gitignore") {
-            explicit.RespectGitignore = &respect
-        }
-        policy, err := config.ResolveSync(cfg.Sync, file.Sync, explicit)
-        if err != nil {
-            return err
-        }
-        pullPolicy, err := config.ResolvePull(cfg.Pull, file.Pull)
-        if err != nil {
-            return err
-        }
-        resultsDir, err := config.PullBase(root, pullPolicy)
-        if err != nil {
-            return err
-        }
-        plan, err := sources.Select(cmd.Context(), root, sources.SelectOptions{Mode: policy.Mode, RespectGitignore: &policy.RespectGitignore, Exclude: policy.Exclude, Outputs: file.Outputs.Paths, ResultsDir: resultsDir, PrivatePaths: []string{filepath.Dir(o.Store.ConfigFile), filepath.Dir(o.Store.IndexFile)}})
-        if err != nil {
-            return err
-        }
-        view := syncResult{DryRun: preview, Root: plan.Root, Policy: plan.Policy, SelectionSource: plan.Source, SelectedFiles: len(plan.Files), SelectedBytes: plan.Bytes, Excluded: plan.Excluded}
-        if preview {
-            view.Files = plan.Files
-            result(view)
-            return nil
-        }
-        personal, err := o.Store.Existing(plan.Root)
-        if err != nil {
-            return err
-        }
-        name, machine, err := config.Resolve(*target, personal, file, cfg)
-        if err != nil {
-            return err
-        }
-        if o.Syncer == nil {
-            return fault.New("SSH_FAILED", "ssh_missing", nil)
-        }
-        personal, err = o.Store.Select(cmd.Context(), plan.Root, "")
-        if err != nil {
-            return err
-        }
-        remoteDir := file.RemoteDir
-        if remoteDir == "" {
-            remoteDir = path.Join(machine.RemoteBase, personal.ID)
-        }
-        jsonMode, _ := cmd.Flags().GetBool("json")
-        if !jsonMode {
-            fmt.Fprintln(o.Err, l.Text("sync_start", map[string]any{"Count": view.SelectedFiles, "Target": name}))
-        }
-        synced, err := o.Syncer.Sync(cmd.Context(), machine, personal.ID, remoteDir, plan, jsonMode || !o.Interactive)
-        if err != nil {
-            return err
-        }
-        view.Target, view.ProjectID, view.RemoteDir = name, personal.ID, synced.RemoteDir
-        view.ChangedFiles = &synced.ChangedFiles
-        result(view)
-        return nil
-    }
-    return cmd
-}
 
 func printSync(out io.Writer, r syncResult, l *i18n.Localizer) {
     if r.DryRun {

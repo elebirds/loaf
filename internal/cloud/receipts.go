@@ -6,7 +6,6 @@ import (
     "crypto/rand"
     "encoding/hex"
     "encoding/json"
-    "errors"
     "io"
     "os"
     "path/filepath"
@@ -14,8 +13,8 @@ import (
     "sort"
     "time"
 
-    "github.com/elebirds/loaf/internal/atomicfile"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/state/receipts"
     "golang.org/x/sys/unix"
 )
 
@@ -39,18 +38,15 @@ type Receipt struct {
     Offer         *Offer    `json:"offer,omitempty"`
 }
 
-// Receipts is concrete private local JSON storage, not a database abstraction.
+// Receipts validates cloud intents backed by the shared local SQLite database.
 type Receipts struct{ Dir string }
 
 var receiptID = regexp.MustCompile(`^c_[0-9a-f]{24}$`)
 var localName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 var lockScope = regexp.MustCompile(`^[A-Za-z0-9_-]{1,240}$`)
 
-func (s Receipts) path(id string) (string, error) {
-    if !receiptID.MatchString(id) {
-        return "", invalid()
-    }
-    return filepath.Join(s.Dir, id+".json"), nil
+func (s Receipts) store() receipts.Store {
+    return receipts.Store{Path: filepath.Join(s.Dir, "state.db")}
 }
 
 func (r Receipt) validate() error {
@@ -91,61 +87,57 @@ func (s Receipts) New(r Receipt) (Receipt, error) {
     return r, nil
 }
 
-// Save uses durable, private atomic replacement. Callers serialize the relevant
-// allocation, instance power operation, or receipt update.
+// Save durably records an intent or outcome before releasing its operation lock.
 func (s Receipts) Save(r Receipt) error {
     if err := r.validate(); err != nil {
         return err
     }
-    name, err := s.path(r.ID)
+    data, err := json.Marshal(r)
     if err != nil {
         return err
     }
-    data, err := json.MarshalIndent(r, "", "    ")
-    if err != nil {
-        return err
-    }
-    return atomicfile.Write(name, append(data, '\n'))
+    return s.store().Save(context.Background(), r.ID, r.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z"), data)
 }
 
-// Load rejects unknown fields/formats without changing the original receipt.
-func (s Receipts) Load(id string) (Receipt, error) {
+func decodeReceipt(data []byte) (Receipt, error) {
     var r Receipt
-    name, err := s.path(id)
-    if err != nil {
-        return r, err
-    }
-    data, err := os.ReadFile(name)
-    if err != nil {
-        return r, fault.Wrap("BAD_CONFIG", "cloud_receipt", err)
-    }
     decoder := json.NewDecoder(bytes.NewReader(data))
     decoder.DisallowUnknownFields()
-    if decoder.Decode(&r) != nil || decoder.Decode(new(any)) != io.EOF || r.ID != id || r.validate() != nil {
+    if decoder.Decode(&r) != nil || decoder.Decode(new(any)) != io.EOF || r.validate() != nil {
         return r, fault.New("BAD_CONFIG", "cloud_receipt", nil)
     }
     return r, nil
 }
 
-// List reads a bounded local inventory; malformed receipts must not be skipped
-// when deciding whether another allocation could duplicate an uncertain one.
-func (s Receipts) List() ([]Receipt, error) {
-    rows := []Receipt{}
-    entries, err := os.ReadDir(s.Dir)
-    if errors.Is(err, os.ErrNotExist) {
-        return rows, nil
+// Load rejects unknown receipt formats without modifying state.
+func (s Receipts) Load(id string) (Receipt, error) {
+    if !receiptID.MatchString(id) {
+        return Receipt{}, invalid()
     }
+    data, err := s.store().Load(context.Background(), id)
+    if err != nil {
+        return Receipt{}, fault.Wrap("BAD_CONFIG", "cloud_receipt", err)
+    }
+    r, err := decodeReceipt(data)
+    if err == nil && r.ID != id {
+        err = fault.New("BAD_CONFIG", "cloud_receipt", nil)
+    }
+    return r, err
+}
+
+// List retains malformed-row failures: an unreadable intent cannot authorize
+// another paid operation that might duplicate it.
+func (s Receipts) List() ([]Receipt, error) {
+    data, err := s.store().List(context.Background())
     if err != nil {
         return nil, err
     }
-    if len(entries) > 10000 {
+    if len(data) > 10000 {
         return nil, fault.New("BAD_CONFIG", "cloud_receipt", nil)
     }
-    for _, entry := range entries {
-        if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-            continue
-        }
-        r, err := s.Load(entry.Name()[:len(entry.Name())-5])
+    rows := make([]Receipt, 0, len(data))
+    for _, raw := range data {
+        r, err := decodeReceipt(raw)
         if err != nil {
             return rows, err
         }

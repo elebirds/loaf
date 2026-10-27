@@ -6,7 +6,7 @@
 
 Loaf 将当前工作代码同步到已有 SSH 机器，运行断线后仍能继续的实验，并保存任务 ID、日志和退出结果。继续使用已有的 SSH 配置、密钥和跳板机，无须向另一套服务托管凭据。
 
-> 当前源码目标版本为 v0.4.0-rc.3 候选版，提供离线任务查看、名称／标签、SSH 诊断及显式日志游标续接，并保留命令级云 SSH 复用。已发布的 [v0.1.0-rc.2 压缩包](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) 提供核心实验闭环；使用新命令请从当前源码构建。
+> 当前源码目标版本为 **v0.5.0-rc.1**：保留现有工作流，切换为 Kong 命令声明、命令级 Huh 交互、按职责分组的应用服务及 SQLite 控制状态。此次重构请从源码构建；下载的发行包以其自身标签版本为准。
 
 ## 安装
 
@@ -22,7 +22,7 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 
 按需将该目录加入 PATH。使用压缩包只需要本地 OpenSSH 和 rsync，不需要 Go。远端需要 Linux、rsync；实验的 Python 环境应单独准备。
 
-构建目标为 macOS/Linux 的 amd64、arm64。macOS arm64、Linux arm64 客户端已在本地运行完整 SSH 工作流，Linux amd64 客户端由 GitHub CI 实际验证；macOS amd64 客户端仅经过交叉构建。Linux amd64 封装已执行真实 GPU 训练，Linux arm64 封装由 CPU fixture 验证。交叉构建不等于运行验证。
+构建目标为 macOS/Linux amd64、arm64 客户端及 Linux amd64、arm64 runner。本次重构已用 macOS arm64 客户端和 Linux arm64 CPU／SSH fixture 验证，Linux amd64 runner 也已交叉编译通过。交叉构建不等于运行验证。
 
 `BUILD.json` 保存源码提交、工作树修改状态、Go 版本、目标平台和依赖声明清单；`loaf version --json` 提供对应的构建标识，缺少来源信息时如实显示未知，不伪装成干净构建。将 `archive` 设为压缩包的准确文件名、`version` 设为文件名中的软件版本，再在包含压缩包和校验文件的目录中执行：
 
@@ -109,6 +109,8 @@ loaf logs <任务ID> -f
 
 `ps` 默认查询当前项目最近 20 个已提交或提交未确认任务，可用 `--limit` 或 `[ps].limit` 调整数量上限；指定 ID 时只查询该任务。部分查询失败会保留其他成功结果，不会把训练标成失败。`logs` 省略 ID 时选择最近一次已提交或提交未确认任务，不会退回更旧任务；明确的检查、同步失败不替换最近任务。已有任务保留提交时的连接及远端位置，不随项目默认值改变，指定 ID 的查询不能用 `--target` 改向。
 
+任务 ID 保存到本地后若准备失败，错误结果仍保留该 ID 和原绑定。已保存的 `submission: "preparing"` 记录可通过 `inspect <任务ID>` 或 `ps <任务ID> --local` 精确查看，但不进入历史列表或最近任务选择。实时 `ps <任务ID>` 查询同一绑定，不会启动或续启执行。准备完成不等于确认提交。
+
 需要 runner 的操作必须与本地 CLI 同版本。Loaf 自动部署并验证内置封装，缺失或版本不符时会修复；不下载任意版本，也不热替换正在运行的监督进程。其他版本创建的任务返回 `VERSION_MISMATCH`；升级时请并存保留对应 CLI，并显式使用它操作原有任务。未知记录格式会直接拒绝，不改写数据。
 
 ### 提交前完全离线预览
@@ -132,7 +134,7 @@ loaf inspect <任务ID> --json
 
 名称和标签在提交时保存于本地，之后不可替换。名称不必唯一，任务操作仍以 ID 为身份。名称／标签按精确值在有界查询前筛选，重复标签要求全部匹配；不改变命令、远端环境、路径或最近任务选择。
 
-`ps --local`（含指定 ID）与 `inspect <任务ID>` 只读取本地资料，不启动 SSH、不查询云平台、不访问凭据或部署封装，也可查看旧版本任务和已删除别名。JSON 标记 `source: "local"`；除已有清理收据保留的终态外，执行状态为 `unknown`。本地模式拒绝实时 `--status` 筛选及非零 `--wait`。
+`ps --local`（含指定 ID）与 `inspect <任务ID>` 只读取本地资料，不启动 SSH、不查询云平台、不访问凭据或部署封装，也可查看当前 SQLite 格式内记录的旧软件版本任务和已删除别名；不导入 v0.5 之前的 JSON 历史。JSON 标记 `source: "local"`；除已有清理收据保留的终态外，执行状态为 `unknown`。本地模式拒绝实时 `--status` 筛选及非零 `--wait`。
 
 `inspect` 包含保存的 `version`、当前 `client_version`、`compatible`、冻结的机器／实例身份、提交确认、位置和输出路径，不暴露 SSH 参数、凭据引用或私有执行环境。保存任务的版本错误还提供 `error.expected_version`、`error.actual_version`。旧可执行文件可按版本命名保留，例如 `loaf-v0.4.0-rc.1`，不要覆盖管理运行中任务所需的唯一 CLI。这些命令不下载 CLI，也不迁移任务。
 
@@ -188,7 +190,9 @@ loaf wait --tag ablation --timeout 1h
 
 未显式指定 `--recovery-budget` 时，启用恢复仍只重试一次。正预算允许在累计断线等待时间内连续恢复（最多 24h），正常日志流不消耗预算；恢复提示写入 stderr。默认 `logs -f` 不变。输出接收失败、取消、认证或信任失败、结束事件及 `LOG_CHANGED` 均不会重启流。
 
-成功观察以独立文件保存公开的 `last_observation`，包含观察时间、阶段和退出结果；`last_query_failure` 只记录最近失败查询的时间、错误码和阶段。离线 `ps --local` 和 `inspect` 展示这些带时间的事实，不将其作为实时状态；不缓存日志正文或执行环境。
+成功观察在 SQLite 中保存公开的 `last_observation`，包含观察时间、阶段和退出结果；`last_query_failure` 只记录最近失败查询的时间、错误码和阶段。离线 `ps --local` 和 `inspect` 展示这些带时间的事实，不将其作为实时状态；不缓存日志正文或执行环境。
+
+本地状态或游标 checkpoint 写入失败单独通过 `state_error` 返回稳定错误码，历史列表和 `wait` 用 `state_errors` 计数，不计为查询失败。本地保存或输出消费失败可以使本次操作失败，但不抹掉已验证的远端状态或退出结果，也不写成 `last_query_failure`。消费失败的日志块不会被确认处理。
 
 `wait` 在开始时冻结明确 ID 或精确标签匹配的本地集合（1–1000 个任务），轮询各自保存的连接，并返回全部任务、已完成／待完成／查询失败及已观察／未观察覆盖数。不可达任务不会妨碍其他任务的观察。人类输出只报告变化，JSON 为单个有限结果。总预算打断后续查询时，保留该行此前完成的观察及 `observed_at`，并用 `query_interrupted` 和 `interrupted` 数量标明，不将本地取消误报为目标故障。超时或取消不会停止任务；这不是作业调度器。
 
@@ -310,7 +314,7 @@ loaf clean <run-id> --yes --json
 
 清理必须提供明确 ID，不隐式选择最新或全部任务。预览显示原绑定机器及将删除的数据，不部署新封装或删除文件。实际清理时会重新检查归属、终态和锁，预览不等于已经保留了删除许可。普通模式询问一次确认，JSON 或非交互删除需要 `--yes`。
 
-清理会删除所选任务的远端工作文件、日志和输出；需要保留的内容请先取回。本地已下载结果不受影响，但删除的远端数据无法撤销。运行中、提交未确认、归属不明或结果未确认的任务会被拒绝，不隐式先停止。其他任务、源码缓存、共享数据和环境不在清理范围。
+清理会删除所选任务的远端工作文件、日志和输出；需要保留的内容请先取回。本地已下载结果不受影响，但删除的远端数据无法撤销。只有已确认提交、且本次复查确认终态的任务可以清理。运行中、提交未确认、归属不明或结果未确认的任务会被拒绝，不隐式先停止。`clean` 目前不支持回收未提交的准备数据（`submission: "preparing"`）。其他任务、源码缓存、共享数据和环境不在清理范围。
 
 保留少量删除回执与 ID 声明，防止延迟到达的请求再次执行相同任务。`ps` 保留原执行结果并标记清理信息；`logs`、`pull` 和 `stop` 返回 `RUN_CLEANED`。清理最新任务不会让默认命令悄悄退回旧任务。部分失败或确认丢失时，查看报告的 ID，仅对这些明确的原 ID 重试。
 
@@ -357,11 +361,13 @@ paths = ["outputs", "checkpoints"]
 
 目标选择顺序为 `--target`、当前项目的 `loaf use` 设置、TOML 中的 `target`。个人选择不会改写项目 TOML。未设置 `remote_dir` 时，各项目使用稳定 ID，在目标的远端基目录下拥有独立路径。可以通过 `loaf add ... --remote-dir '~/projects'` 设置基目录。
 
-用户配置保存在 `~/.config/loaf/config.toml`，项目标识和个人选择保存在 `~/.local/state/loaf/index.json`，私有任务位置索引保存在同目录的 `runs.json`；执行记录和日志仍保存在绑定的远端机器上。`XDG_CONFIG_HOME` 和 `XDG_STATE_HOME` 可以覆盖这些位置。
+用户配置位于 `~/.config/loaf/config.toml`。项目标识、个人选择、任务位置、标签、观察、清理摘要及云操作收据统一保存在 `~/.local/state/loaf/state-v1/state.db`。`XDG_CONFIG_HOME`、`XDG_STATE_HOME` 分别覆盖配置和状态根目录。凭据仍保存在选定的 keyring 或独立私有 `credentials/` 目录。
 
-当前任务索引使用格式 2。名称／标签另存于 `run-metadata/` 下的私有格式 1 文件，不改变定位器结构，对应旧 CLI 仍可读取其任务。更早的索引格式会被拒绝，不自动迁移或覆盖；不同索引格式的客户端应使用独立 `XDG_STATE_HOME`。
+**v0.5 启用新的状态命名空间，不导入旧 JSON 索引和收据。** 每个项目需重新执行 `loaf use <target>`；这会分配新的项目标识，默认远端目录策略也因此使用新的受管项目目录。显式配置的 `remote_dir` 应指向适合新格式的空目录。旧任务继续使用匹配的旧 CLI；已有未确认云请求应先用旧 CLI 核对，再发起新租用，因为新数据库无法执行只存在于旧收据里的防重复保护。客户端不自动转换已有远端项目。
 
-个人同步默认值放在已有用户配置的 `[sync]` 中，保留原来的 `format_version` 和机器条目：
+每个新远端项目在 `<远端项目>/.loaf-control-v1/state.sqlite3` 保存 schema 1 控制库；源码、逐任务工作副本、日志和产物仍是普通文件。两端数据库使用私有权限、WAL、FULL 同步和有界锁等待，未知 schema 明确失败。软件、CLI schema、wire record 和数据库 schema 分别管理版本。
+
+在用户配置中增加 `[sync]` 可设置个人同步默认值，保留已有 `format_version` 和机器配置：
 
 ```toml
 [sync]
@@ -567,7 +573,7 @@ loaf cloud start gpu-a --wait 2m --yes
 loaf cloud stop gpu-a --wait 2m --yes
 ```
 
-操作凭据以私有 JSON 保存在任务索引旁的 `cloud/` 中。创建中的网络中断、取消、无效响应或结果不明的服务器错误返回 `CLOUD_UNCONFIRMED`（退出码 3），保留请求 ID 及已知实例 ID；不重放该请求、不自动租用替代实例。未确认的分配意图会阻止此账号继续租用；只有明确映射的无库存拒绝，才会在原授权时间范围内进行下一次串行尝试。
+操作收据保存在本地 SQLite 的私有记录中，先提交意图，再发送付费或电源请求。创建中的网络中断、取消、无效响应或结果不明的服务器错误返回 `CLOUD_UNCONFIRMED`（退出码 3），保留请求 ID 及已知实例 ID；不重放该请求、不自动租用替代实例。未确认的分配意图会阻止此账号继续租用；只有明确映射的无库存拒绝，才会在原授权时间范围内进行下一次串行尝试。
 
 创建结果不明时，先核对平台控制台，再关联已知实例 ID。如果人类已确认**没有创建实例**，可用 `cloud reconcile <请求ID> --no-instance --yes` 解除保护，不能从一次有界列表自动推断未创建。开关机操作凭据通过查询原实例核对，reconcile 不重复发送开关机请求。
 
@@ -603,15 +609,52 @@ loaf pull <任务ID> --trace --json
 
 源码缺失时，用 `loaf sync --dry-run` 检查 Git 和 Loaf 的排除规则；项目位于上级仓库的忽略目录中时，仍受该规则约束。命令失败时先查看 `loaf logs`：接管成功后仍可能因解释器、依赖或输入缺失而失败。提交或停止未确认时，应查询原 ID，而非另开替代任务。
 
+## 架构
+
+Loaf 是拥有两个可执行文件的模块化单体，基础使用不依赖常驻服务或 API Server：
+
+```text
+loaf：Kong 命令声明 → 输入／确认／呈现
+                   → client.Projects / Machines / Resources
+                   → run / cloud / 文件选择
+                   → OpenSSH / rsync / AutoDL / state / credentials
+                                   │
+loaf-runner：短时控制请求 ← SSH / rsync
+           → 受管项目 + 每 Run 独立 Supervisor
+           → 项目 SQLite 控制库 + 普通 payload 文件
+```
+
+### 模块职责与依赖方向
+
+- `cmd/loaf` 装配具体依赖和进程取消上下文。`internal/cli` 将声明式参数转成类型化请求，分别呈现有限结果、NDJSON 与原生流。Huh 负责普通输入和默认否确认；登录的用户名、密码、验证码由同一个有界原生输入会话负责。表单与进度使用 stderr，JSON 不进入提示流程。
+- `internal/client` 负责完整本地用例。**Projects** 组织项目计划、提交、观察、传输和清理；**Machines** 负责别名、检查及前台机器操作；**Resources** 负责资源计划、授权、获取、绑定和认证。调用者提供明确认证策略及进度接收函数，不传 parser、localizer 或输出模式。`App` 只负责聚合三个服务。
+- `internal/run` 拥有运行语义及恢复；纯函数 `ResolveExecution` 为预览和提交统一归一化、校验命令、setup、环境和输出选择，预览只展示环境变量名。`internal/cloud` 拥有资源条件、生命周期意图及小型 provider 能力；`internal/sync` 拥有文件选择与传输规则。接口由真正使用副作用的模块定义，不设置通用 Repository、后端注册中心或 DI 容器。
+- `internal/ssh`、`internal/autodl`、`internal/credentials` 负责外部适配。SSH 命令构造与引用集中在传输边界，继续复用系统 OpenSSH 和 rsync 协议。
+- `internal/task` 保存冻结任务位置、导航标签和公开观察等值类型。`internal/config` 读取 TOML、发现项目、合并偏好及校验值。`internal/state/local`、`internal/state/receipts`、`internal/state/remote` 通过 `database/sql` 和 `modernc.org/sqlite` 执行明确 SQL，不使用 ORM。本地保存意图与位置，远端保存执行事实。
+- `internal/remote` 负责受管目录、进程身份、进程组终止、回收和终态发布，只依赖 wire 类型及系统能力，不依赖 CLI、本地配置或云账户。`cmd/loaf-runner` 派发短时控制请求，或启动逐任务 Supervisor。
+
+### 提交、异常恢复与清理
+
+应用层生成计划、检查先决条件，先将任务身份和冻结绑定保存为 `preparing`。随后同步工作文件，Runner 排他认领该 ID 并准备独立工作副本。客户端在尝试一次启动前保存 `uncertain`，确认接管后再记录 `submitted`。响应丢失后观察**同一个 ID**，不会另生成 ID 重复提交。提交确认、执行状态、本次观察失败和本地保存失败分别保留；取消等待不等于停止已接管任务。
+
+数据库事务只覆盖短时元数据更新，不跨 SSH、HTTP、文件复制或任务运行。原有 OS 锁继续管理源码接收／复制、阶段准入、进程存活及 payload 访问。清理仅删除选定终态任务的 payload 和私有执行数据，持久保留 claim 与公开删除摘要，防止延迟启动重新执行；本地清理可用性与执行终态独立。
+
+### 后续 PRD 的扩展位置
+
+未来 Coordinator 可独立拥有调度／准入并调用现有 runner 入口，Supervisor 继续负责逐任务生命周期。终态事件可与远端结果同事务写入，由独立 Bridge 负责交付。SDK 可调用同一组应用服务或机器接口；新资源 Provider 实现现有小型能力接口。本轮不增加这些服务、队列、事件表或公开 SDK API。
+
 ## 开发
 
 ```bash
 go run ./scripts/format.go    # Go 代码使用四空格格式化
-bash scripts/check.sh        # 单元、静态、竞态、格式及漏洞检查
+go tool depguard ./...       # 包依赖边界检查
+bash scripts/check.sh        # 格式、依赖、单元、静态、竞态及漏洞检查
 bash scripts/integration.sh  # SSH、Linux 进程与凭据测试，需要 Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 bash scripts/integration.sh -run TestLinuxCloudCredentialStores
 ```
+
+共享检查脚本在格式检查后运行固定版本的独立 depguard 工具，用少量禁止依赖规则保护 CLI、用例和远端边界，不为所有包维护依赖白名单。
 
 集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、镜像边界、中断同步恢复、并发启动、同版本封装部署、跳板连接、断线执行、退出结果、进程组停止、有界等待、日志取消和增量下载。前台操作覆盖即时输出、字面 argv、PTY 登录、独立隧道和取消；历史及清理覆盖原目标绑定、明确删除范围、传输锁、重试和终态保留，不接触科研服务器。构建目标为 macOS/Linux 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。
 

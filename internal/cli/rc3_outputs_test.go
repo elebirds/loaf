@@ -3,15 +3,17 @@ package cli
 import (
     "context"
     "encoding/json"
-    "github.com/elebirds/loaf/internal/i18n"
+    "errors"
     "path/filepath"
     "strings"
     "sync"
     "testing"
 
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/internal/task"
 )
 
 type batchPuller struct {
@@ -20,7 +22,7 @@ type batchPuller struct {
     fail         string
 }
 
-func (p *batchPuller) Pull(_ context.Context, ref config.RunRef, destination string, paths []string, policy config.PullPolicy, _ bool) (sources.PullResult, error) {
+func (p *batchPuller) Pull(_ context.Context, ref task.RunRef, destination string, paths []string, policy config.PullPolicy, _ bool) (sources.PullResult, error) {
     p.mu.Lock()
     p.destinations[ref.ID] = destination
     p.mu.Unlock()
@@ -32,12 +34,6 @@ func (p *batchPuller) Pull(_ context.Context, ref config.RunRef, destination str
 }
 func TestBatchPullIsolatesDestinationsAndRetainsPartialResults(t *testing.T) {
     o, _, refs := psFixture(t)
-    for i := range refs {
-        refs[i].Outputs = []string{"outputs"}
-        if err := o.Store.SaveRun(context.Background(), refs[i]); err != nil {
-            t.Fatal(err)
-        }
-    }
     p := &batchPuller{destinations: map[string]string{}, fail: refs[0].ID}
     o.Puller = p
     code, out, stderr := run(t, o, "pull", refs[0].ID, refs[1].ID, "--into", "comparison", "--concurrency", "2", "--json")
@@ -59,25 +55,22 @@ func TestBatchPullIsolatesDestinationsAndRetainsPartialResults(t *testing.T) {
 
 func TestCanceledBatchPullDoesNotClaimUnexaminedRowsSucceeded(t *testing.T) {
     o, _, refs := psFixture(t)
-    for i := range refs {
-        refs[i].Outputs = []string{"outputs"}
-    }
     puller := &batchPuller{destinations: map[string]string{}}
     o.Puller = puller
-    project, err := o.Store.Existing(o.CWD)
-    if err != nil {
-        t.Fatal(err)
-    }
-    project.Root = o.CWD
     ctx, cancel := context.WithCancel(context.Background())
     cancel()
-    l, _ := i18n.New("en", nil)
-    result, err := batchPull(ctx, o, project, refs[:2], "comparison", nil, false, config.PullPolicy{}, 1, true, l)
+    app := client.New(client.Dependencies{Config: o.Config, State: o.State, Runs: o.Runs, Puller: puller, CWD: o.CWD}, config.Global{})
+    into := "comparison"
+    call, err := app.Projects.Pull(ctx, client.PullInput{IDs: []string{refs[0].ID, refs[1].ID}, Into: &into, Policy: client.CallPolicy{Batch: true}}, nil)
+    result := call.Batch
+    if result == nil {
+        t.Fatal(err)
+    }
     if err == nil || result.Unexamined != 2 || result.Completed != 0 || len(puller.destinations) != 0 {
         t.Fatal(result, err)
     }
     for _, row := range result.Runs {
-        if row.Error == nil || row.Error.Code != "NOT_EXAMINED" || row.Error.Message == "" {
+        if row.Error == nil || !errors.As(row.Error, new(*fault.Error)) {
             t.Fatal(row)
         }
     }

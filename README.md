@@ -6,7 +6,7 @@
 
 Loaf synchronizes working code to your SSH machines and runs experiments that survive disconnection, with saved task IDs, logs, and exit results. Reuse your SSH configuration, keys, and jump hosts without handing credentials to another service.
 
-> Current source targets v0.4.0-rc.3, a prerelease with offline task inspection, names/tags, SSH diagnostics and opt-in cursor log recovery, alongside command-scoped cloud SSH reuse. The published [v0.1.0-rc.2 archive](https://github.com/elebirds/loaf/releases/tag/v0.1.0-rc.2) provides the core experiment workflow; build from current source for newer commands.
+> Current source targets **v0.5.0-rc.1**: the existing workflows on a Kong CLI, command-scoped Huh interaction, focused application services, and SQLite control state. Build from source for this refactor; a downloaded archive reflects its own tagged version.
 
 ## Install
 
@@ -22,7 +22,7 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 
 Add that directory to PATH if needed. Running an archive needs OpenSSH and rsync locally, not Go. The remote machine needs Linux and rsync; prepare the experiment's Python environment separately.
 
-The build targets macOS/Linux amd64 and arm64. Full SSH workflows have been exercised with macOS arm64 and Linux arm64 clients locally, and Linux amd64 clients in GitHub CI. The macOS amd64 client is cross-built. Linux amd64 runners have completed real GPU training, and Linux arm64 runners are exercised by the CPU fixture. Cross-builds alone are not runtime validation.
+The build targets macOS/Linux amd64 and arm64 clients, with Linux amd64/arm64 runners. This refactor has been exercised with a macOS arm64 client and a Linux arm64 CPU/SSH fixture; Linux amd64 runner cross-compilation also passes. Cross-builds alone are not runtime validation.
 
 `BUILD.json` records the source revision, modified-tree state, Go version, target, and dependency notice inventory. `loaf version --json` exposes the corresponding build identity; missing source metadata is reported as unknown, not clean. Set `archive` to the exact archive filename and `version` to the software version in that filename. Then run the check from the directory containing the archive and its checksums file:
 
@@ -109,6 +109,8 @@ loaf logs <run-id> -f
 
 `ps` lists the latest submitted or submission-uncertain runs in this project, bounded to 20 by default (`--limit` or `[ps].limit` changes the bound). An ID queries that run only. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection and remote location when project defaults change; `--target` cannot redirect an ID query.
 
+If preparation fails after saving a run ID locally, the error result retains that ID and its original binding. A saved `submission: "preparing"` record can be read with `inspect <run-id>` or `ps <run-id> --local`; it stays out of history lists and latest-run selection. A live `ps <run-id>` queries the same binding without starting or resuming execution. Preparation is not confirmed submission.
+
 Runner operations require the same software version as the local CLI. Loaf automatically deploys and verifies its bundled runner, repairing a missing or mismatched executable. It does not download an arbitrary release or hot-replace a running supervisor. Tasks created by another version return `VERSION_MISMATCH`; retain their matching CLI alongside an upgrade and invoke it explicitly for those tasks. Unknown record formats are rejected without rewriting them.
 
 ### Preview submission entirely offline
@@ -132,7 +134,7 @@ loaf inspect <run-id> --json
 
 Names and tags are saved locally at submission and remain immutable. Names need not be unique; the run ID remains the identity used for task operations. Name/tag filters match exact values before the bounded queries; repeated tags require all values. They do not change the command, remote environment, paths or latest-run selection.
 
-`ps --local`, including an explicit ID, and `inspect <run-id>` read saved facts without SSH, cloud lookup, credential access or helper deployment. They work with older-version tasks and removed aliases. JSON marks `source: "local"`; execution status is `unknown` unless a retained cleanup receipt already supplies a terminal result. Local mode rejects live `--status` filters and nonzero `--wait`.
+`ps --local`, including an explicit ID, and `inspect <run-id>` read saved facts without SSH, cloud lookup, credential access or helper deployment. They also work with removed aliases and older software versions recorded in the current SQLite format; pre-v0.5 JSON history is not imported. JSON marks `source: "local"`; execution status is `unknown` unless a retained cleanup receipt already supplies a terminal result. Local mode rejects live `--status` filters and nonzero `--wait`.
 
 `inspect` includes the saved `version`, current `client_version`, `compatible`, frozen machine/instance identity, submission confirmation, locations and output paths. It excludes SSH arguments, credential references and private execution environments. A saved-task version error also returns `error.expected_version` and `error.actual_version`. Keep old executables under versioned names, such as `loaf-v0.4.0-rc.1`, rather than overwriting the only CLI able to control an active task. These commands do not download a CLI or migrate a task.
 
@@ -188,7 +190,9 @@ loaf wait --tag ablation --timeout 1h
 
 Without an explicit `--recovery-budget`, opt-in recovery still retries once. A positive budget allows consecutive transient failures within a total disconnected-wait budget (up to 24h); healthy streaming does not consume it. Human recovery messages go to stderr. Default `logs -f` is unchanged. Sink failure, cancellation, trust/authentication failure, end and `LOG_CHANGED` never restart the stream.
 
-Successful observations save a separate public `last_observation` with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
+Successful observations save a public `last_observation` in SQLite with its observation time, phase and exit result; `last_query_failure` retains only the most recent failed query's time, code and stage. Offline `ps --local` and `inspect` show these dated facts, not a live status. No log text or execution environment is cached.
+
+A local state or cursor-checkpoint write failure is reported separately as `state_error`, containing a stable error code. History lists and `wait` count these as `state_errors`, not query errors. Local-save and output-consumer failures can fail the operation without discarding a verified remote status or exit result, and do not become `last_query_failure`. A log chunk whose consumer failed is not acknowledged.
 
 `wait` freezes explicit IDs or the exact tag-matched local set at invocation (1–1000 runs), polls their saved bindings, and returns every row with completed/pending/query-error and examined/unexamined coverage. Unreachable tasks do not prevent observation of others. Human output reports changes; JSON is one finite result. If the total budget interrupts a later query, the row retains its previous completed observation with `observed_at` and `query_interrupted`; `interrupted` counts these rows rather than inventing a target failure. Timeout or cancellation leaves all tasks running. This does not schedule workloads.
 
@@ -310,7 +314,7 @@ loaf clean <run-id> --yes --json
 
 Cleanup requires explicit IDs; it never selects the latest task or all tasks implicitly. The preview names the bound machine and remote data that would be removed without deploying a helper or deleting files. Actual cleanup rechecks ownership, completion, and locks; a preview is not a reserved deletion permit. Human output asks once for confirmation. JSON and noninteractive deletion require `--yes`.
 
-Cleanup removes the selected task's remote working files, logs, and outputs. Collect anything you need first: downloaded local results are kept, but remote payload deletion cannot be undone. Active, submission-uncertain, unowned, or unconfirmed tasks are refused rather than stopped implicitly. Other runs, source caches, shared data, and environments are not removed.
+Cleanup removes the selected task's remote working files, logs, and outputs. Collect anything you need first: downloaded local results are kept, but remote payload deletion cannot be undone. Only confirmed submissions with a freshly verified terminal result are eligible. Active, submission-uncertain, unowned, or unconfirmed tasks are refused rather than stopped implicitly. Unsubmitted preparation data (`submission: "preparing"`) cannot currently be reclaimed with `clean`. Other runs, source caches, shared data, and environments are not removed.
 
 A small deletion receipt and ID claim remain to prevent a delayed request from executing the same task again. `ps` retains the original execution outcome and reports cleanup metadata; `logs`, `pull`, and `stop` return `RUN_CLEANED`. Cleaning the newest run does not make those commands silently select an older one. For partial failure or lost confirmation, inspect the reported IDs and retry only those same explicit IDs.
 
@@ -357,9 +361,11 @@ paths = ["outputs", "checkpoints"]
 
 Target selection follows `--target`, the current project's `loaf use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf add ... --remote-dir '~/projects'`.
 
-User configuration lives in `~/.config/loaf/config.toml`; project identities and personal selections live in `~/.local/state/loaf/index.json`. Private run locators are stored alongside it in `runs.json`; execution records and logs remain on the bound remote machine. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override these locations.
+User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v1/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
 
-The current run index uses format 2. Names/tags use separate private format-1 files under `run-metadata/`, leaving the existing locator schema unchanged so matching older CLIs can still read their tasks. Previous index formats are rejected without migration or overwriting; use separate `XDG_STATE_HOME` locations for clients requiring different index formats.
+**v0.5 starts a new state namespace.** There is no import from the old JSON indexes or receipts. Run `loaf use <target>` again for each project. This allocates a new project identity and, with the default remote-directory policy, a new managed remote project directory. An explicit `remote_dir` must point to a fresh directory for the new format. Keep the matching older CLI to manage prior runs or reconcile unresolved cloud requests before making new allocations; the new database cannot enforce guards stored only in old receipts. Neither client silently converts an existing remote project.
+
+Each new remote project keeps its schema-1 control database in `<remote-project>/.loaf-control-v1/state.sqlite3`; sources, per-run working copies, logs and outputs remain ordinary files. Both databases use private permissions, WAL, FULL synchronization and bounded lock waits. Unknown schemas fail explicitly. Software, CLI schema, wire record and database schema versions are independent.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 
@@ -567,7 +573,7 @@ loaf cloud start gpu-a --wait 2m --yes
 loaf cloud stop gpu-a --wait 2m --yes
 ```
 
-Receipts are private JSON files beside the run index under `cloud/`. Network loss, cancellation during creation, invalid responses and ambiguous server failures return `CLOUD_UNCONFIRMED` (exit 3), retaining the request ID and any known instance ID. Loaf never retries such a mutation or automatically rents a replacement; unresolved allocation intents block further acquisitions on that account. Only confirmed mapped no-stock failures can trigger another sequential attempt within the original approval window.
+Receipts are private rows in the local SQLite database, committed before paid or power requests. Network loss, cancellation during creation, invalid responses and ambiguous server failures return `CLOUD_UNCONFIRMED` (exit 3), retaining the request ID and any known instance ID. Loaf never retries such a mutation or automatically rents a replacement; unresolved allocation intents block further acquisitions on that account. Only confirmed mapped no-stock failures can trigger another sequential attempt within the original approval window.
 
 For an unknown creation, check the platform console and reconcile its known ID. If a human has verified that **no instance was created**, `cloud reconcile <request-id> --no-instance --yes` clears the guard. This assertion is not an automatic inference from a bounded list. Power-operation receipts reconcile by querying the same saved instance; reconciliation never repeats a power request.
 
@@ -603,15 +609,52 @@ Finite read-only probes, status/log queries, output checks, and downloads make a
 
 For missing source files, use `loaf sync --dry-run` to inspect Git and Loaf exclusions. A project inside a parent repository's ignored directory remains subject to that ignore rule. For a failed command, inspect `loaf logs`; an accepted run can still fail because an interpreter, dependency, or input is missing. For a lost submission or stop confirmation, query the saved ID instead of starting a replacement task.
 
+## Architecture
+
+Loaf is a modular monolith with two executables, not a required daemon or API server:
+
+```text
+loaf: Kong declarations → interaction / rendering
+                        → client.Projects / Machines / Resources
+                        → run / cloud / source selection
+                        → OpenSSH / rsync / AutoDL / state / credentials
+                                      │
+loaf-runner: short control request ← SSH / rsync
+          → managed project + one Supervisor per accepted run
+          → project SQLite control state + ordinary payload files
+```
+
+### Responsibilities and dependencies
+
+- `cmd/loaf` composes concrete dependencies and process cancellation. `internal/cli` converts declared arguments to typed requests and renders finite results, NDJSON or native streams. Huh handles ordinary prompts and default-no confirmations; login uses one bounded native input session for username, password and verification. Forms and progress use stderr; JSON never prompts.
+- `internal/client` owns complete local workflows. **Projects** plans/submits/observes runs and coordinates transfer/cleanup; **Machines** manages aliases, checks and foreground operations; **Resources** handles resource selection, authorization, acquisition, binding and authentication. A caller supplies explicit authentication policy and progress sinks, not a parser, localizer or output-mode switch. `App` only composes these services.
+- `internal/run` owns execution semantics and recovery. Its pure `ResolveExecution` function normalizes and validates command, setup, environment and output selection for both preview and submission; previews expose environment names only. `internal/cloud` owns resource conditions, lifecycle intents and small provider capabilities; `internal/sync` owns selection and transfer rules. Consumer-owned interfaces isolate actual side effects. There is no generic repository, backend registry or DI container.
+- `internal/ssh`, `internal/autodl` and `internal/credentials` implement external boundaries. SSH commands and quoting stay at the transport boundary, preserving the system OpenSSH and rsync protocols.
+- `internal/task` holds frozen run locators, navigation labels and public observations. `internal/config` reads TOML, discovers projects, merges preferences and validates values. `internal/state/local`, `internal/state/receipts` and `internal/state/remote` perform explicit SQL through `database/sql` and `modernc.org/sqlite`, without an ORM. Local state records intent and location; remote state records authoritative execution facts.
+- `internal/remote` owns managed directories, process identity, group termination, reaping and final publication. It depends on wire types and system capabilities, not CLI, local configuration or cloud accounts. `cmd/loaf-runner` dispatches control requests or starts a per-run Supervisor.
+
+### Submission, uncertainty and cleanup
+
+The application resolves a plan, checks prerequisites, and saves the run identity and frozen binding as `preparing`. Source synchronization then receives the working files; the runner exclusively claims that ID and prepares its independent work copy. The client saves `uncertain` before attempting one launch, then records confirmed acceptance as `submitted`. A lost response leads to observation of **the same ID**, not another launch with a new ID. Accepted submission, observed execution state, observation failure and local-save failure remain distinct results. Canceling a wait does not stop an accepted run.
+
+SQL transactions cover short metadata updates only; they never span SSH, HTTP, file copying or process runtime. Existing OS locks still govern source receive/copy, lifecycle admission, process lifetime and payload access. Cleanup removes only the selected terminal run payload and private execution data, retaining its claim and public deletion summary so a delayed launch cannot resurrect it. Local cleanup availability is separate from execution outcome.
+
+### Extension points without speculative implementations
+
+A future Coordinator can own scheduling/admission and call the same runner entry, while each Supervisor continues owning its run. Future terminal events can be written transactionally with remote results, with a separate Bridge responsible for delivery. A future SDK can call the focused application services or machine interface; new resource providers can implement existing small capabilities. This release adds none of those services, queues, event tables or public SDK APIs.
+
 ## Development
 
 ```bash
 go run ./scripts/format.go    # Four-space Go formatting
-bash scripts/check.sh        # Unit, static, race, format, and vulnerability checks
+go tool depguard ./...       # Package dependency boundaries
+bash scripts/check.sh        # Format, dependency, unit, static, race and vulnerability checks
 bash scripts/integration.sh  # SSH, Linux process and credential tests; requires Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 bash scripts/integration.sh -run TestLinuxCloudCredentialStores
 ```
+
+The shared check script runs the pinned standalone depguard tool after formatting checks. Its deny rules protect the CLI/use-case/remote boundaries without imposing an allowlist on every package.
 
 The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, mirror boundaries, interrupted sync, concurrent starts, matching runner deployment, jump hosts, disconnected execution, saved exits, process-group stopping, bounded waits, log cancellation, and incremental downloads. Foreground operations cover live output, literal argv, PTY login, isolated tunnels, and cancellation. History and cleanup cases exercise saved target bindings, explicit deletion scope, transfer locks, retry, and retained terminal outcomes without touching research servers. Build targets are macOS/Linux clients and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks.
 

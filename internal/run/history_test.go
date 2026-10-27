@@ -11,13 +11,22 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
-type historyIndex struct{ refs []config.RunRef }
+type historyIndex struct{ refs []task.RunRef }
 
-func (i historyIndex) Runs(string) ([]config.RunRef, error)         { return i.refs, nil }
-func (i historyIndex) SaveRun(context.Context, config.RunRef) error { return nil }
+func (i historyIndex) Runs(string) ([]task.RunRef, error)         { return i.refs, nil }
+func (i historyIndex) SaveRun(context.Context, task.RunRef) error { return nil }
+func (i historyIndex) Run(project, id string) (task.RunRef, error) {
+    for _, ref := range i.refs {
+        if ref.ProjectID == project && ref.ID == id {
+            return ref, nil
+        }
+    }
+    return task.RunRef{}, fault.New("RUN_NOT_FOUND", "run_not_found", nil)
+}
 
 type historyRemote struct {
     localRemote
@@ -43,12 +52,12 @@ func (r *historyRemote) Observe(_ context.Context, target config.Target, _ strin
     }
     return wire.Observation{Record: &wire.RunRecord{FormatVersion: 1, Request: req, Status: r.status[req.RunID], SupervisorPID: 123}}, nil
 }
-func historyRefs() []config.RunRef {
-    refs := []config.RunRef{}
+func historyRefs() []task.RunRef {
+    refs := []task.RunRef{}
     now := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
     for i := 0; i < 6; i++ {
         attempted := now.Add(-time.Duration(i) * time.Hour)
-        refs = append(refs, config.RunRef{ID: fmt.Sprintf("run-%d", i), ProjectID: "project", Target: "lab", Connection: config.Target{Destination: "saved-connection"}, CreatedAt: now.Add(-48 * time.Hour), AttemptedAt: &attempted, RemoteDir: "/remote/project", Runner: "/runner", Version: wire.Version})
+        refs = append(refs, task.RunRef{ID: fmt.Sprintf("run-%d", i), ProjectID: "project", Target: "lab", Connection: config.Target{Destination: "saved-connection"}, CreatedAt: now.Add(-48 * time.Hour), AttemptedAt: &attempted, RemoteDir: "/remote/project", Runner: "/runner", Version: wire.Version})
     }
     return refs
 }

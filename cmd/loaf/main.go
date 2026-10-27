@@ -10,12 +10,14 @@ import (
 
     "github.com/elebirds/loaf/internal/autodl"
     "github.com/elebirds/loaf/internal/cli"
+    application "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/credentials"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
     sources "github.com/elebirds/loaf/internal/sync"
     "golang.org/x/term"
 )
@@ -39,32 +41,32 @@ func main() {
         os.Exit(1)
     }
     env := map[string]string{}
-    for _, k := range []string{"LOAF_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
+    for _, k := range []string{"LOAF_LANG", "LC_ALL", "LC_MESSAGES", "LANG", "TERM"} {
         env[k] = os.Getenv(k)
     }
-    var checker cli.Checker = unavailableSSH{}
-    var runner cli.RunnerVerifier
-    var syncer cli.Synchronizer
-    var cleaner cli.RunCleaner
-    var browser cli.OutputBrowser
-    var puller cli.OutputPuller
+    var checker application.Checker = unavailableSSH{}
+    var runner application.RunnerVerifier
+    var syncer application.Synchronizer
+    var cleaner application.RunCleaner
+    var browser application.OutputBrowser
+    var puller application.OutputPuller
     var runs *execution.Service
-    var operations cli.MachineOperations
+    var operations application.MachineOperations
     store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
-    authentication := &cloud.Authentication{Keyring: credentials.Keyring{}, Files: credentials.File{Dir: filepath.Join(filepath.Dir(store.IndexFile), "credentials")}}
+    settings, configErr := store.Load()
+    state := local.New(store.StateDir)
+    authentication := &cloud.Authentication{Keyring: credentials.Keyring{}, Files: credentials.File{Dir: filepath.Join(store.StateDir, "credentials")}}
     factory := autodl.Factory{LookupEnv: os.LookupEnv, ReadSecret: authentication.Token}
     authentication.Authenticate = factory.Login
-    cloudService := cli.DefaultCloudService(store, factory.Open)
+    cloudService := &cloud.Service{Open: factory.Open, Receipts: cloud.Receipts{Dir: filepath.Dir(state.Path)}}
     connections := ssh.NewConnections()
     trace := &ssh.Trace{}
     if binary, err := exec.LookPath("ssh"); err == nil {
         client := &ssh.Client{Binary: binary, Connections: connections, Trace: trace}
         client.Resolve = cloudConnection(factory.Open)
-        if cfg, err := store.Load(); err == nil {
-            for _, account := range cfg.Cloud.Accounts {
-                if account.Credential.Env != "" {
-                    client.SensitiveEnv = append(client.SensitiveEnv, account.Credential.Env)
-                }
+        for _, account := range settings.Cloud.Accounts {
+            if account.Credential.Env != "" {
+                client.SensitiveEnv = append(client.SensitiveEnv, account.Credential.Env)
             }
         }
         checker = client
@@ -84,15 +86,25 @@ func main() {
             return info.Path, err
         }
         sender := ssh.Rsync{Client: client, Binary: rsync}
-        runs = &execution.Service{Index: store, Metadata: store, Observations: store, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
+        runs = &execution.Service{Index: state, Metadata: state, Observations: state, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
         syncer = sources.Service{Check: client, Runner: prepare, Send: sender}
-        cleaner = execution.CleanupService{Runs: runs, Index: store, Remote: client, Runner: prepare}
+        cleaner = execution.CleanupService{Runs: runs, Index: state, Remote: client, Runner: prepare}
         browser = execution.OutputBrowser{Remote: client, Runner: prepare}
         puller = sources.PullService{Remote: client, Runner: prepare, Receive: sender}
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
-    code := cli.Execute(ctx, os.Args[1:], cli.Options{Store: store, Trace: trace, Cloud: cloudService, Auth: authentication, ReadPassword: terminalPassword, Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Outputs: browser, Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr, TerminalOutput: term.IsTerminal(int(os.Stdout.Fd())), Interactive: term.IsTerminal(int(os.Stdin.Fd()))})
+    app := application.New(application.Dependencies{
+        Config: store, State: state, Trace: trace, Cloud: cloudService, Auth: authentication,
+        Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Outputs: browser,
+        Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd,
+    }, settings)
+    code := cli.Execute(ctx, os.Args[1:], cli.Options{
+        App: app, Language: settings.Language, InitError: configErr, Trace: trace,
+        ReadPassword: terminalPassword, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr,
+        TerminalOutput: term.IsTerminal(int(os.Stdout.Fd())), TerminalError: term.IsTerminal(int(os.Stderr.Fd())),
+        Interactive: term.IsTerminal(int(os.Stdin.Fd())),
+    })
     connections.Close()
     os.Exit(code)
 }

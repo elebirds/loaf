@@ -237,7 +237,8 @@ func TestSSHAndDetachedRunner(t *testing.T) {
     }
     runner := checked.Data.Runner.Path
     root := "/home/researcher/project space 中文"
-    f.shell(`mkdir -p "$1/cache"; printf '%s\n' project >"$1/.loaf-project"; printf '%s\n' "$2" >"$1/cache/train.sh"`, root, "echo tick; while [ ! -f release ]; do echo tick; sleep .05; done; echo done; exit 7")
+    f.managedRemote(root)
+    f.shell(`printf '%s\n' "$2" >"$1/cache/train.sh"`, root, "echo tick; while [ ! -f release ]; do echo tick; sleep .05; done; echo done; exit 7")
     control := func(action, id string, args ...string) (*wire.RunRecord, error) {
         ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
         defer cancel()

@@ -10,6 +10,7 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/state/local"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -57,7 +58,7 @@ func TestRecoveryBudgetCoversConsecutiveFailuresAndBoundsBlockedRetry(t *testing
 }
 func TestObservationSidecarNeverChangesOfflineStatus(t *testing.T) {
     s, in, _, _ := executionFixture(t)
-    s.Observations = s.Index.(*config.Store)
+    s.Observations = s.Index.(*local.Store)
     v, err := s.Submit(context.Background(), in, nil)
     if err != nil {
         t.Fatal(err)

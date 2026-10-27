@@ -8,7 +8,17 @@ import (
     "github.com/elebirds/loaf/internal/wire"
 )
 
-func versionData(info *debug.BuildInfo) map[string]any {
+type versionResult struct {
+    Version       string `json:"version"`
+    FormatVersion int    `json:"format_version"`
+    OS            string `json:"os"`
+    Arch          string `json:"arch"`
+    GoVersion     string `json:"go_version"`
+    Revision      string `json:"revision"`
+    Modified      *bool  `json:"modified"`
+}
+
+func versionData(info *debug.BuildInfo) versionResult {
     revision := "unknown"
     var modified *bool
     if info != nil {
@@ -23,5 +33,5 @@ func versionData(info *debug.BuildInfo) map[string]any {
             }
         }
     }
-    return map[string]any{"version": wire.Version, "format_version": wire.FormatVersion, "os": runtime.GOOS, "arch": runtime.GOARCH, "go_version": runtime.Version(), "revision": revision, "modified": modified}
+    return versionResult{Version: wire.Version, FormatVersion: wire.FormatVersion, OS: runtime.GOOS, Arch: runtime.GOARCH, GoVersion: runtime.Version(), Revision: revision, Modified: modified}
 }

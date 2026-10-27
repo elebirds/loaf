@@ -340,11 +340,17 @@ other = "检查 SSH 访问后再次查询原任务 ID；查询失败不代表训
 [run_query_partial]
 other = "部分任务查询失败，已保留其他任务的成功结果。"
 
+[run_state_partial]
+other = "已保留任务观察结果，但部分本地状态保存失败。请检查 state_error 字段和本地状态目录权限。"
+
+[run_state_save_failed]
+other = "本地状态保存失败：{{.Code}}"
+
 [run_bound_target]
 other = "任务操作使用提交时保存的机器和位置，不能通过 --target 改向。"
 
 [run_not_found]
-other = "当前项目中没有匹配的已提交或提交未确认任务。"
+other = "当前项目中没有匹配的已保存任务。"
 
 [run_ambiguous]
 other = "无法唯一确定最近任务，请明确指定任务 ID，不会改选更旧任务。"
@@ -1201,6 +1207,12 @@ other = "失败阶段：{{.Stage}}。"
 [run_submission_confirmed]
 other = "提交已确认；请查询同一任务 ID"
 
+[run_submission_preparing]
+other = "准备记录；尚未接管提交"
+
+[operation_stage_local_state]
+other = "保存本地状态"
+
 [operation_stage_cloud_connection]
 other = "获取云实例连接信息"
 
@@ -1377,6 +1389,12 @@ other = "恢复预算必须在 0s 到 24h 之间。"
 
 [log_checkpoint_invalid]
 other = "游标文件无效、属于其他日志流，或会回退已确认的输出。"
+
+[log_checkpoint_failed]
+other = "无法保存已消费的日志游标。请修复游标文件，再从最后保存的位置恢复；远端任务继续运行。"
+
+[log_consumer_failed]
+other = "日志接收端处理失败，已停止观察且未确认当前块；远端任务继续运行。"
 
 [log_recovery_reconnecting]
 other = "连接中断；正在从最后已送达的游标重连……"
@@ -1623,3 +1641,9 @@ other = "本地选择"
 
 [pull_not_examined]
 other = "取消前未执行此下载，不计为已完成传输。"
+
+[operation_canceled]
+other = "操作已取消。"
+
+[log_acknowledged]
+other = "已确认任务 {{.ID}} 的日志消费至字节 {{.Offset}}。"

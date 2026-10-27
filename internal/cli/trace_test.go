@@ -10,7 +10,7 @@ import (
 
 func TestTraceIsOptInFiniteAndLocalized(t *testing.T) {
     o, _ := runFixture(t)
-    o.Trace = &ssh.Trace{}
+    o.Options.Trace = &ssh.Trace{}
     for _, lang := range []string{"en", "zh-Hans"} {
         code, out, stderr := run(t, o, "check", "--trace", "--lang", lang, "--json")
         var result struct {

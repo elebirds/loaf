@@ -13,6 +13,7 @@ import (
     "github.com/elebirds/loaf/internal/config"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/state/local"
 )
 
 func TestHistoryFiltersAndRemovedMachineBindings(t *testing.T) {
@@ -53,7 +54,8 @@ func TestHistoryFiltersAndRemovedMachineBindings(t *testing.T) {
     if code, data := list("--status", "failed", "--target", "lab"); code != 0 || data.Eligible != 2 || data.Matched != 1 || data.Truncated || len(data.Runs) != 1 || data.Runs[0].ID != failed.ID {
         t.Fatal(code, data)
     }
-    store := config.New(project, filepath.Join(project, "config"), filepath.Join(project, "state"))
+    settings := config.New(project, filepath.Join(project, "config"), filepath.Join(project, "state"))
+    store := local.New(settings.StateDir)
     root, _, err := config.Discover(context.Background(), project)
     if err != nil {
         t.Fatal(err)

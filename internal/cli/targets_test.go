@@ -18,7 +18,7 @@ func TestTargetsAreLocalReadOnlyAndSorted(t *testing.T) {
     if code != 0 || stderr != "" || !strings.Contains(out, `"targets":[]`) {
         t.Fatal(code, out, stderr)
     }
-    for _, file := range []string{o.Store.ConfigFile, o.Store.IndexFile} {
+    for _, file := range []string{o.Config.ConfigFile, o.State.Path} {
         if _, err := os.Stat(filepath.Dir(file)); !os.IsNotExist(err) {
             t.Fatal("listing created user state", file, err)
         }
@@ -64,11 +64,11 @@ func TestRemovingSelectedMachinePreservesRunBindingsAndTOML(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    project, err := o.Store.Existing(root)
+    project, err := o.State.Existing(root)
     if err != nil {
         t.Fatal(err)
     }
-    before, err := o.Store.Runs(project.ID)
+    before, err := o.State.Runs(project.ID)
     if err != nil || len(before) != 1 {
         t.Fatal(before, err)
     }
@@ -82,7 +82,7 @@ func TestRemovingSelectedMachinePreservesRunBindingsAndTOML(t *testing.T) {
     if code, out, stderr := run(t, o, "remove", "lab", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"selected":true`) {
         t.Fatal(code, out, stderr)
     }
-    after, err := o.Store.Runs(project.ID)
+    after, err := o.State.Runs(project.ID)
     if err != nil || !reflect.DeepEqual(before, after) {
         t.Fatal(after, err)
     }
@@ -104,11 +104,11 @@ func TestRemovingSelectedMachinePreservesRunBindingsAndTOML(t *testing.T) {
     if code, out, stderr := run(t, o, "use", "fallback", "--json"); code != 0 {
         t.Fatal(code, out, stderr)
     }
-    cfg, err := o.Store.Load()
+    cfg, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
-    selected, err := o.Store.Existing(root)
+    selected, err := o.State.Existing(root)
     if err != nil {
         t.Fatal(err)
     }
@@ -140,7 +140,7 @@ func TestRemovingSharedChoiceDoesNotCreatePersonalFallback(t *testing.T) {
     if code, out, stderr := run(t, o, "targets", "--json"); code != 0 || stderr != "" || !strings.Contains(out, `"target":"lab"`) || !strings.Contains(out, `"available":false`) {
         t.Fatal(code, out, stderr)
     }
-    if _, err := os.Stat(o.Store.IndexFile); !os.IsNotExist(err) {
+    if _, err := os.Stat(o.State.Path); !os.IsNotExist(err) {
         t.Fatal("local management created personal project selection", err)
     }
     if data, err := os.ReadFile(filepath.Join(o.CWD, "loaf.toml")); err != nil || string(data) != original {

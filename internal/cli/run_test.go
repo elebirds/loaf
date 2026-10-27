@@ -54,11 +54,11 @@ func (r *runRemote) Follow(_ context.Context, _ config.Target, _ string, req wir
     return emit(wire.LogEvent{Type: "end", Record: r.record(req), Log: wire.LogChunk{Offset: 11}})
 }
 
-func runFixture(t *testing.T) (Options, *runRemote) {
+func runFixture(t *testing.T) (testOptions, *runRemote) {
     t.Helper()
     o := fixture(t)
     remote := &runRemote{}
-    o.Runs = &execution.Service{Index: o.Store, Check: runChecker{}, Runner: func(context.Context, config.Target, string, bool) (string, error) { return "/remote/runner", nil }, Send: runSender{}, Remote: remote}
+    o.Runs = &execution.Service{Index: o.State, Check: runChecker{}, Runner: func(context.Context, config.Target, string, bool) (string, error) { return "/remote/runner", nil }, Send: runSender{}, Remote: remote}
     if code, out, stderr := run(t, o, "add", "lab", "--ssh", "lab", "--json"); code != 0 {
         t.Fatal(out, stderr)
     }

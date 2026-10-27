@@ -4,8 +4,8 @@ import (
     "context"
     "time"
 
-    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -15,7 +15,7 @@ func versionMismatch(actual string) *fault.Error {
     return f
 }
 
-func currentVersion(ref config.RunRef) error {
+func currentVersion(ref task.RunRef) error {
     if ref.Version != wire.Version {
         return versionMismatch(ref.Version)
     }
@@ -24,7 +24,7 @@ func currentVersion(ref config.RunRef) error {
 
 // prepareRef verifies the current control helper, never changes the saved run
 // version, and never replaces or restarts a live supervisor.
-func (s Service) prepareRef(ctx context.Context, ref config.RunRef, batch bool) (config.RunRef, error) {
+func (s Service) prepareRef(ctx context.Context, ref task.RunRef, batch bool) (task.RunRef, error) {
     if err := currentVersion(ref); err != nil {
         return ref, err
     }

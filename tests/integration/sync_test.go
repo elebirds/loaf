@@ -113,14 +113,9 @@ func TestRsyncWorkingSources(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    // Inspect the completed marker through the real SSH connection.
-    data, err := f.client.Execute(ctx, f.target, "cat "+ssh.Quote(root+"/.loaf-cache.json"), nil, true)
-    var state struct {
-        FormatVersion int  `json:"format_version"`
-        Complete      bool `json:"complete"`
-    }
-    if err != nil || json.Unmarshal(data, &state) != nil || state.FormatVersion != 1 || !state.Complete {
-        t.Fatal(string(data), err)
+    // Inspect the committed sync state through the real fixture database.
+    if state := f.remoteSQL(root, "SELECT complete FROM sync_state WHERE singleton=1"); state != "1" {
+        t.Fatal(state)
     }
     _, err = f.client.Control(ctx, f.target, runner.Path, wire.Request{FormatVersion: 1, Version: wire.Version, Action: "version"}, true)
     if err != nil {
@@ -249,7 +244,7 @@ func TestPackagedSyncPoliciesAndConnectionForms(t *testing.T) {
     if code != 1 || !strings.Contains(string(out), `"code":"PROJECT_UNOWNED"`) {
         t.Fatal(code, string(out))
     }
-    f.shell(`test "$(cat "$1/user-data")" = original; test ! -e "$1/.loaf-project"`, foreign)
+    f.shell(`test "$(cat "$1/user-data")" = original; test ! -e "$1/.loaf-control-v1"`, foreign)
 }
 
 func TestInterruptedSyncKeepsCacheUnavailableAndReleasesLock(t *testing.T) {
@@ -298,7 +293,7 @@ func TestInterruptedSyncKeepsCacheUnavailableAndReleasesLock(t *testing.T) {
         done <- err
     }()
     wait(t, 10*time.Second, func() bool {
-        return exec.Command("docker", "exec", f.id, "/bin/sh", "-c", `test -f "$1/.loaf-cache.json" && grep -q '"complete":false' "$1/.loaf-cache.json"`, "--", root).Run() == nil
+        return f.remoteSQL(root, "SELECT complete FROM sync_state WHERE singleton=1") == "0"
     })
     _, err = (ssh.Rsync{Client: f.client, Binary: binary}).Sync(ctx, f.target, runner.Path, project, input, true)
     var failure *fault.Error
@@ -331,7 +326,10 @@ func TestInterruptedSyncKeepsCacheUnavailableAndReleasesLock(t *testing.T) {
     if _, err := (ssh.Rsync{Client: f.client, Binary: binary}).Sync(ctx, f.target, runner.Path, project, input, true); err != nil {
         t.Fatal(err)
     }
-    f.shell(`grep -q '"complete":true' "$1/.loaf-cache.json"; test -s "$1/cache/large.bin"`, root)
+    if f.remoteSQL(root, "SELECT complete FROM sync_state WHERE singleton=1") != "1" {
+        t.Fatal("sync did not commit completion")
+    }
+    f.shell(`test -s "$1/cache/large.bin"`, root)
     f.shell(`grep -q 'print(1)' "$1/runs/existing/work/train.py"; grep -q 'print(2)' "$1/cache/train.py"; touch "$1/runs/existing/work/release"`, root)
     wait(t, 5*time.Second, func() bool {
         record, err := f.client.Control(ctx, f.target, runner.Path, existing, true)

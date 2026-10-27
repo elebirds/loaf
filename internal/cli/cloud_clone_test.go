@@ -41,7 +41,7 @@ func (p *cliCloner) Get(_ context.Context, r cloud.Ref) (cloud.Instance, error) 
     return cloud.Instance{Ref: r, Status: "running", Region: p.region, CloneDataStatus: p.status}, nil
 }
 
-func cloneCLIFixture(t *testing.T) (Options, *cliCloner) {
+func cloneCLIFixture(t *testing.T) (testOptions, *cliCloner) {
     t.Helper()
     o, p := cloudFixture(t)
     c := &cliCloner{cloudProvider: p, status: "succeeded", region: "west-D", source: cloud.CloneSource{Region: "west-D", Image: "original-image", Vendor: "nvidia", Architecture: "x86", CUDA: "12.8", ExpandDataDiskGB: 150}}
@@ -125,18 +125,18 @@ func TestCloudCloneRejectsUnsafeOptionsAndUnsupportedProducts(t *testing.T) {
 
 func TestCloudClonePreservesAliasAccountAndExplicitWait(t *testing.T) {
     o, p := cloneCLIFixture(t)
-    cfg, err := o.Store.Load()
+    cfg, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
     original := cfg.Cloud.Accounts["ordinary"]
     b := cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "standard", Account: "ordinary", ID: "bound-source"}, Settings: original}
-    if err := o.Store.Add(context.Background(), "source-alias", config.Target{RemoteBase: "~/projects", Cloud: &b}, false); err != nil {
+    if err := o.Config.Add(context.Background(), "source-alias", config.Target{RemoteBase: "~/projects", Cloud: &b}, false); err != nil {
         t.Fatal(err)
     }
     changed := original
     changed.Credential.Env = "NEW_TOKEN"
-    if err := o.Store.AddCloudAccount(context.Background(), "ordinary", changed, true, false); err != nil {
+    if err := o.Config.AddCloudAccount(context.Background(), "ordinary", changed, true, false); err != nil {
         t.Fatal(err)
     }
     o.Cloud.Open = func(_ context.Context, name string, a cloud.Account, product string) (cloud.Provider, error) {
@@ -173,13 +173,13 @@ func TestCloudCloneConfirmationHelpAndFlagParsing(t *testing.T) {
 
 func TestCloudCloneRawSourceUsesProfileProductBeforeAccountDefault(t *testing.T) {
     o, p := cloneCLIFixture(t)
-    cfg, err := o.Store.Load()
+    cfg, err := o.Config.Load()
     if err != nil {
         t.Fatal(err)
     }
     account := cfg.Cloud.Accounts["ordinary"]
     account.DefaultProduct = "pro"
-    if err := o.Store.AddCloudAccount(context.Background(), "ordinary", account, true, false); err != nil {
+    if err := o.Config.AddCloudAccount(context.Background(), "ordinary", account, true, false); err != nil {
         t.Fatal(err)
     }
     if err := os.WriteFile(filepath.Join(o.CWD, "loaf.toml"), []byte("[resources.default]\nproduct = 'standard'\n"), 0600); err != nil {

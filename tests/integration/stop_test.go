@@ -34,7 +34,7 @@ func TestRunnerStopGraceAndGroupCleanup(t *testing.T) {
         t.Fatal(err)
     }
     root := "/home/researcher/stopping 中文"
-    f.shell(`mkdir -p "$1/cache"; printf 'project\n' >"$1/.loaf-project"`, root)
+    f.managedRemote(root)
     invoke := func(action, id string, grace *int64, script string) *wire.RunRecord {
         t.Helper()
         req := wire.Request{FormatVersion: 1, Version: wire.Version, Action: action, Root: root, ProjectID: "project", RunID: id, GraceMillis: grace}
@@ -77,9 +77,9 @@ func TestRunnerStopGraceAndGroupCleanup(t *testing.T) {
         t.Fatalf("cleanup did not complete in grace: %+v", r)
     }
     f.shell(`test -s "$1/runs/cleanup/work/cleaned"`, root)
-    before := f.shell(`cat "$1/runs/cleanup/run.json"`, root)
+    before := f.remoteRecord(root, "cleanup")
     invoke("stop", "cleanup", &zero, "")
-    if after := f.shell(`cat "$1/runs/cleanup/run.json"`, root); after != before {
+    if after := f.remoteRecord(root, "cleanup"); after != before {
         t.Fatal("duplicate stop rewrote terminal result")
     }
 
@@ -148,9 +148,9 @@ func TestPublicStopWorkflow(t *testing.T) {
     if stopped.ID != started.ID || stopped.Target != "lab" || stopped.Status != "stopped" || stopped.ExitCode == nil || *stopped.ExitCode != 23 || stopped.StopGraceMillis == nil || *stopped.StopGraceMillis != 1000 {
         t.Fatalf("public stop: %+v", stopped)
     }
-    before := f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID)
+    before := f.remoteRecord(started.RemoteDir, started.ID)
     repeated := runCLI(t, project, "stop", started.ID, "--grace", "0s", "--json")
-    if repeated.Status != stopped.Status || f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID) != before {
+    if repeated.Status != stopped.Status || f.remoteRecord(started.RemoteDir, started.ID) != before {
         t.Fatal("repeated stop changed terminal result")
     }
     logs := runCLI(t, project, "logs", started.ID, "--json")
@@ -173,7 +173,7 @@ func TestPublicStopWorkflow(t *testing.T) {
     orphaned := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", `sh -c 'trap "" TERM; echo $$ >worker.pid; while :; do sleep .05; done' & while [ ! -s worker.pid ]; do sleep .02; done; exit 7`)
     waitRunFile(t, f, orphaned, "work/worker.pid")
     var record wire.RunRecord
-    if err := json.Unmarshal([]byte(f.shell(`cat "$1/runs/$2/run.json"`, orphaned.RemoteDir, orphaned.ID)), &record); err != nil {
+    if err := json.Unmarshal([]byte(f.remoteRecord(orphaned.RemoteDir, orphaned.ID)), &record); err != nil {
         t.Fatal(err)
     }
     wait(t, 5*time.Second, func() bool {
@@ -208,9 +208,9 @@ func TestPublicStopWorkflow(t *testing.T) {
         if result.Status == "failed" && (result.ExitCode == nil || *result.ExitCode != 7) || result.Status == "stopped" && result.Signal == "" && result.ExitCode == nil {
             t.Fatal("exit outcome lost", result)
         }
-        before := f.shell(`cat "$1/runs/$2/run.json"`, natural.RemoteDir, natural.ID)
+        before := f.remoteRecord(natural.RemoteDir, natural.ID)
         runCLI(t, project, "stop", natural.ID, "--json")
-        if after := f.shell(`cat "$1/runs/$2/run.json"`, natural.RemoteDir, natural.ID); before != after {
+        if after := f.remoteRecord(natural.RemoteDir, natural.ID); before != after {
             t.Fatal("stop overwrote natural terminal record")
         }
     }
@@ -232,7 +232,9 @@ func TestCanceledStopKeepsAcceptedRequest(t *testing.T) {
     if err := cmd.Start(); err != nil {
         t.Fatal(err)
     }
-    waitRunFile(t, f, started, "stop.request")
+    wait(t, 5*time.Second, func() bool {
+        return f.remoteSQL(started.RemoteDir, "SELECT count(*) FROM stop_requests WHERE run_id='"+started.ID+"'") == "1"
+    })
     if err := cmd.Process.Signal(os.Interrupt); err != nil {
         t.Fatal(err)
     }
@@ -257,7 +259,7 @@ func TestPublicStopRefusesLostSupervisor(t *testing.T) {
     started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while :; do sleep .05; done")
     waitRunFile(t, f, started, "work/ready")
     var record wire.RunRecord
-    if err := json.Unmarshal([]byte(f.shell(`cat "$1/runs/$2/run.json"`, started.RemoteDir, started.ID)), &record); err != nil {
+    if err := json.Unmarshal([]byte(f.remoteRecord(started.RemoteDir, started.ID)), &record); err != nil {
         t.Fatal(err)
     }
     f.shell(`kill -KILL "$1"`, fmt.Sprint(record.SupervisorPID))
@@ -269,7 +271,10 @@ func TestPublicStopRefusesLostSupervisor(t *testing.T) {
     if code != 3 || !bytes.Contains(out, []byte(`"code":"STOP_UNCONFIRMED"`)) || !bytes.Contains(out, []byte(`"status":"unknown"`)) {
         t.Fatal(code, string(out))
     }
-    f.shell(`test ! -e "$1/runs/$2/stop.request"; kill -0 "$3"`, started.RemoteDir, started.ID, fmt.Sprint(record.ChildPID))
+    if f.remoteSQL(started.RemoteDir, "SELECT count(*) FROM stop_requests WHERE run_id='"+started.ID+"'") != "0" {
+        t.Fatal("stop accepted for a lost supervisor")
+    }
+    f.shell(`kill -0 "$1"`, fmt.Sprint(record.ChildPID))
 }
 
 func TestLostStopConfirmationQueriesWithoutReplaying(t *testing.T) {

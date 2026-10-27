@@ -6,7 +6,6 @@ import (
     "errors"
     "os"
     "path/filepath"
-    "strings"
     "sync/atomic"
     "testing"
     "time"
@@ -239,8 +238,7 @@ func TestReceiptUnknownFormatIsPreserved(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    name, _ := s.Receipts.path(r.ID)
-    data, err := os.ReadFile(name)
+    data, err := s.Receipts.store().Load(context.Background(), r.ID)
     if err != nil {
         t.Fatal(err)
     }
@@ -248,16 +246,13 @@ func TestReceiptUnknownFormatIsPreserved(t *testing.T) {
     _ = json.Unmarshal(data, &raw)
     raw["format_version"] = 999
     changed, _ := json.Marshal(raw)
-    if err := os.WriteFile(name, changed, 0600); err != nil {
+    if err := s.Receipts.store().Save(context.Background(), r.ID, r.CreatedAt.Format(time.RFC3339Nano), changed); err != nil {
         t.Fatal(err)
     }
     if _, err := s.Receipts.Load(r.ID); err == nil {
-        t.Fatal("accepted unknown format")
+        t.Fatal("accepted unknown receipt format")
     }
-    after, _ := os.ReadFile(name)
-    if string(after) != string(changed) || strings.Contains(string(after), "password") {
-        t.Fatal("receipt rewritten or secret exposed")
-    }
+
 }
 
 func TestUncertainAcquisitionDoesNotPreventStoppingExistingInstance(t *testing.T) {

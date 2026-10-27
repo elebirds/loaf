@@ -4,8 +4,8 @@ import (
     "context"
     "time"
 
-    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/task"
 )
 
 // RecoveryOptions opts into a total reconnection waiting budget. Zero keeps the
@@ -22,7 +22,7 @@ func (o RecoveryOptions) notify(state string) {
 }
 
 // FollowRecovering extends opt-in recovery without changing existing callers.
-func (s Service) FollowRecovering(ctx context.Context, ref config.RunRef, wait time.Duration, tail int, batch bool, cursor string, options RecoveryOptions, emit func(View, string) error) (View, error) {
+func (s Service) FollowRecovering(ctx context.Context, ref task.RunRef, wait time.Duration, tail int, batch bool, cursor string, options RecoveryOptions, emit func(View, string) error) (View, error) {
     if options.Budget < 0 || options.Budget > 24*time.Hour {
         return view(ref, nil), fault.New("BAD_CONFIG", "log_recovery_budget", nil)
     }

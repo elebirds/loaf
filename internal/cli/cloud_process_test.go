@@ -21,9 +21,11 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/autodl"
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/credentials"
+    "github.com/elebirds/loaf/internal/state/local"
 )
 
 // Only test processes can redirect the fixed provider hosts to a loopback
@@ -42,7 +44,7 @@ func (x loopbackCloudTransport) RoundTrip(r *http.Request) (*http.Response, erro
 }
 
 func processAuthentication(store *config.Store) *cloud.Authentication {
-    state := filepath.Dir(store.IndexFile)
+    state := store.StateDir
     auth := &cloud.Authentication{
         Files:   credentials.File{Dir: filepath.Join(state, "credentials")},
         Keyring: credentials.File{Dir: filepath.Join(state, "test-vault")},
@@ -74,12 +76,13 @@ func TestCloudProcessHelper(t *testing.T) {
         t.Fatal("missing helper command")
     }
     store := config.New(root, filepath.Join(root, "config"), filepath.Join(root, "state"))
+    state := local.New(store.StateDir)
     auth := processAuthentication(store)
     factory := autodl.Factory{HTTP: &http.Client{Transport: loopbackCloudTransport{endpoint}}, ReadSecret: auth.Token}
     auth.Authenticate = factory.Login
-    os.Exit(Execute(context.Background(), os.Args[separator:], Options{
-        Store: store, Auth: auth, Cloud: DefaultCloudService(store, factory.Open), CWD: root,
-        In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Env: map[string]string{"LANG": "C"},
+    os.Exit(execute(context.Background(), os.Args[separator:], testOptions{
+        Dependencies: client.Dependencies{Config: store, State: state, Auth: auth, Cloud: &cloud.Service{Open: factory.Open, Receipts: cloud.Receipts{Dir: filepath.Dir(state.Path)}}, CWD: root},
+        Options:      Options{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Env: map[string]string{"LANG": "C"}},
     }))
 }
 
@@ -366,13 +369,13 @@ func TestCloudCredentialLifecycleAcrossProcesses(t *testing.T) {
     native := runtime.GOOS == "linux" && os.Getenv("LOAF_TEST_NATIVE_VAULT") == "1"
     if native {
         f.childEnv = []string{"DBUS_SESSION_BUS_ADDRESS=unix:path=" + filepath.Join(f.root, "missing-bus")}
-    } else if err := os.Chmod(filepath.Join(filepath.Dir(f.store().IndexFile), "test-vault"), 0755); err != nil {
+    } else if err := os.Chmod(filepath.Join(f.store().StateDir, "test-vault"), 0755); err != nil {
         t.Fatal(err)
     }
     result = f.invoke(1, "", "cloud", "list", "--json")
     f.childEnv = nil
     if !native {
-        if err := os.Chmod(filepath.Join(filepath.Dir(f.store().IndexFile), "test-vault"), 0700); err != nil {
+        if err := os.Chmod(filepath.Join(f.store().StateDir, "test-vault"), 0700); err != nil {
             t.Fatal(err)
         }
     }
@@ -437,7 +440,7 @@ func TestCloudAcquisitionRecoveryAcrossProcesses(t *testing.T) {
                         t.Fatal("ambiguous creation was confirmed")
                     }
                 }
-                receipts := cloud.Receipts{Dir: filepath.Join(filepath.Dir(f.store().IndexFile), "cloud")}
+                receipts := cloud.Receipts{Dir: filepath.Dir(local.New(f.store().StateDir).Path)}
                 rows, err := receipts.List()
                 if err != nil || len(rows) != 1 || rows[0].Attempts != 1 || rows[0].Status != "intent" && rows[0].Status != "uncertain" {
                     t.Fatal("lost durable intent", err)
@@ -483,7 +486,7 @@ func TestCloudPowerRecoveryAcrossProcesses(t *testing.T) {
             f.mu.Unlock()
             args := []string{"cloud", "stop", "instance-fixture", "--product", product, "--yes", "--json"}
             f.invoke(3, "", args...)
-            receipts := cloud.Receipts{Dir: filepath.Join(filepath.Dir(f.store().IndexFile), "cloud")}
+            receipts := cloud.Receipts{Dir: filepath.Dir(local.New(f.store().StateDir).Path)}
             rows, err := receipts.List()
             if err != nil || len(rows) != 1 {
                 t.Fatal(err)

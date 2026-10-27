@@ -117,23 +117,35 @@ func TestHelpMetadataAndBilingualLayout(t *testing.T) {
         if !found {
             t.Fatal(out)
         }
-        for _, node := range []string{"run", "logs", "pull", "wait", "cloud acquire"} {
+        for _, node := range []string{"", "machine", "run", "logs", "pull", "wait", "cloud acquire"} {
             args := append([]string{"help"}, strings.Fields(node)...)
-            args = append(args, "--lang", lang)
+            args = append(args, "--lang", lang, "--json")
             code, out, stderr := run(t, o, args...)
-            if code != 0 || stderr != "" {
+            if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &e) != nil {
                 t.Fatal(code, out, stderr)
             }
-            for _, line := range strings.Split(out, "\n") {
-                if displayWidth(line) > 80 {
-                    t.Fatalf("help exceeds narrow terminal: %s", line)
+            // Each description is one logical line. Terminal width, including
+            // long flag labels and CJK text, must not insert newlines into it.
+            requireLine := func(label, description string) {
+                t.Helper()
+                for _, line := range strings.Split(e.Data.Help, "\n") {
+                    if strings.Contains(line, label+" ") && strings.Contains(line, description) {
+                        return
+                    }
                 }
+                t.Fatalf("description wrapped away from %q: %s", label, e.Data.Help)
             }
-            if node == "pull" && !strings.Contains(out, "[") {
-                t.Fatal("optional IDs absent", out)
+            for _, flag := range e.Data.Flags {
+                requireLine("--"+flag.Name, flag.Description)
             }
-            if node == "wait" && !strings.Contains(out, "--tag") {
-                t.Fatal("tag selection absent", out)
+            for _, child := range e.Data.Commands {
+                requireLine("  "+child.Name, child.Description)
+            }
+            if node == "pull" && !strings.Contains(e.Data.Help, "[") {
+                t.Fatal("optional IDs absent", e.Data.Help)
+            }
+            if node == "wait" && !strings.Contains(e.Data.Help, "--tag") {
+                t.Fatal("tag selection absent", e.Data.Help)
             }
         }
     }

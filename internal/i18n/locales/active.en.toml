@@ -1,7 +1,7 @@
 [root_short]
-other = "Connect research projects to existing SSH machines."
+other = "Run your projects on SSH machines."
 [exec_short]
-other = "Run a foreground machine command without source sync or a task ID."
+other = "Run a foreground command on the selected machine."
 [exec_args]
 other = "-- <command> [args...]"
 [exec_flag_cwd]
@@ -77,7 +77,7 @@ other = "Show help."
 [flag_lang]
 other = "Interface language: auto, en, or zh-Hans."
 [flag_json]
-other = "Write structured JSON without interaction; exec, logs -f and cloud watch stream NDJSON."
+other = "Print JSON; exec, logs -f and cloud watch stream NDJSON."
 [flag_target]
 other = "Override the project's target alias."
 [flag_ssh]
@@ -609,7 +609,7 @@ other = "Rows with query errors are retained; their status filter match could no
 [clean_ids_arg]
 other = "<run-id>..."
 [clean_short]
-other = "Remove explicitly selected completed runs' remote data"
+other = "Remove completed tasks' remote data."
 [clean_flag_dry_run]
 other = "Preview selected paths and terminal outcomes without changing files"
 [clean_flag_yes]
@@ -654,7 +654,7 @@ other = "cleanup unconfirmed"
 other = "Query the same run ID with loaf status to confirm acceptance before cleaning; do not submit a replacement run."
 
 [cloud_short]
-other = "Manage explicit cloud rentals and connect them to SSH targets"
+other = "Manage cloud resources and connect machines."
 
 [cloud_config]
 other = "Invalid cloud settings. Check the account, resource conditions, image, units and time bounds."
@@ -870,7 +870,7 @@ other = "Required GPU vendor (for example nvidia)"
 other = "Allowed model names; replaces the configured model list"
 
 [cloud_flag_gpu_count]
-other = "Required GPU card count (built-in: 1)"
+other = "Required GPU card count."
 
 [cloud_flag_min_gpu_memory]
 other = "Minimum memory per GPU, with GiB suffix (for example 24GiB)"
@@ -1292,7 +1292,7 @@ other = "Require this saved tag; repeat to require all tags."
 other = "Local task facts cannot satisfy live status filters. Omit --status or --local."
 
 [inspect_short]
-other = "Inspect one saved task offline, including its required CLI version."
+other = "Inspect saved task details offline."
 
 [inspect_args]
 other = "<run-id>"
@@ -1409,7 +1409,7 @@ other = "Log recovery budget exhausted; keep the cursor and resume later."
 other = "<run-id>... | --tag <tag>"
 
 [wait_short]
-other = "Wait for an explicitly selected, frozen set of tasks."
+other = "Wait for selected tasks to finish."
 
 [flag_wait_timeout]
 other = "Foreground observation budget, greater than 0s and at most 24h; never stops tasks."
@@ -1436,7 +1436,7 @@ other = "  Last observed exit: {{.Value}}"
 other = "  Last query failure {{.Value}}: {{.Code}} ({{.Stage}})"
 
 [outputs_short]
-other = "Browse bounded output metadata without downloading files."
+other = "List a task's output files."
 
 [flag_outputs_depth]
 other = "Maximum depth below each saved output root (0–20)."
@@ -1484,7 +1484,7 @@ other = "Some selected downloads failed or were not examined; completed destinat
 other = "Downloaded {{.Count}}/{{.Total}}; failed {{.Value}}, unexamined {{.Matched}}."
 
 [flag_run_dry]
-other = "Explain the complete local submission plan without SSH, credentials, IDs or state writes."
+other = "Preview the local submission plan."
 
 [run_preview_heading]
 other = "Local submission preview"
@@ -1653,13 +1653,13 @@ other = "Acknowledged logs for {{.ID}} through byte {{.Offset}}."
 other = "Manage saved machines and the current project selection."
 
 [machine_list_short]
-other = "List saved machines without connecting."
+other = "List saved machines."
 
 [machine_show_short]
-other = "Show one saved machine without connecting."
+other = "Show a saved machine's configuration."
 
 [flag_version]
-other = "Show the build version without loading project state."
+other = "Show the build version."
 
 [group_experiments]
 other = "Experiments and project files:"
@@ -1675,12 +1675,6 @@ other = "Diagnostics and help:"
 
 [help_examples]
 other = "Examples:"
-
-[help_configurable]
-other = "Configurable."
-
-[help_more]
-other = "Use --json for structured results. Full examples and constraints are in the bundled manual."
 
 [input_unknown_option]
 other = "Unknown option {{.Argument}}. Check the spelling and command."
@@ -1801,8 +1795,8 @@ other = "assigned at submission, without allocating an ID in this preview"
 [preview_policies]
 other = "Log tail: {{.Count}} lines; sync: {{.Mode}}."
 
-[help_defaults]
-other = "Shown defaults are built-ins; project and user settings may override them."
-
 [input_out_of_range]
 other = "{{.Argument}} is outside the supported numeric range."
+
+[builtin_default_value]
+other = "built-in: {{.Value}}"

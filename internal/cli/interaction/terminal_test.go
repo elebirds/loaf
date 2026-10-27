@@ -86,8 +86,16 @@ func TestTerminalSecretRestoresStateAndDoesNotEcho(t *testing.T) {
                 t.Fatal("terminal state was not restored")
             }
             fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
-            if n, err := unix.Poll(fds, 20); err != nil || n != 0 {
-                t.Fatal("terminal echoed secret input", n, err)
+            deadline := time.Now().Add(20 * time.Millisecond)
+            for time.Now().Before(deadline) {
+                n, err := unix.Poll(fds, max(1, int(time.Until(deadline).Milliseconds())))
+                if errors.Is(err, unix.EINTR) {
+                    continue
+                }
+                if err != nil || n != 0 {
+                    t.Fatal("terminal echoed secret input", n, err)
+                }
+                break
             }
             if cancelRead {
                 // The unfinished canceled secret must not become the next
@@ -109,6 +117,7 @@ type renderedPrompt struct {
     *os.File
     mu    sync.Mutex
     text  bytes.Buffer
+    title string
     ready chan struct{}
     once  sync.Once
 }
@@ -118,32 +127,25 @@ func (w *renderedPrompt) Write(p []byte) (int, error) {
     defer w.mu.Unlock()
     n, err := w.File.Write(p)
     w.text.Write(p[:n])
-    if bytes.Contains(w.text.Bytes(), []byte("Delete payload?")) {
+    if bytes.Contains(w.text.Bytes(), []byte(w.title)) {
         w.once.Do(func() { close(w.ready) })
     }
     return n, err
 }
 
 func TestHuhDefaultNoAndCtrlCRestoreTerminal(t *testing.T) {
-    // Only macOS race runs are quarantined; ordinary terminal coverage remains.
-    // Re-enable when released dependencies fix the upstream reader shutdown race:
-    // https://github.com/charmbracelet/bubbletea/issues/1599
-    // https://github.com/charmbracelet/bubbletea/issues/1875
-    if skipHuhShutdownRace {
-        t.Skip("upstream Bubble Tea/cancelreader shutdown race: https://github.com/charmbracelet/bubbletea/issues/1875")
-    }
     for _, tc := range []struct {
         key     string
         columns uint16
-    }{{"\r", 80}, {"\x03", 80}, {"\r", 120}, {"\x03", 120}} {
+    }{{"\r", 80}, {"\x03", 80}, {"", 80}, {"\r", 120}, {"\x03", 120}, {"", 120}} {
         key := tc.key
-        t.Run(fmt.Sprintf("%s-%d", map[string]string{"\r": "default-no", "\x03": "ctrl-c"}[key], tc.columns), func(t *testing.T) {
+        t.Run(fmt.Sprintf("%s-%d", map[string]string{"\r": "default-no", "\x03": "ctrl-c", "": "context-cancel"}[key], tc.columns), func(t *testing.T) {
             master, terminal := openTerminal(t)
             if err := pty.Setsize(terminal, &pty.Winsize{Rows: 24, Cols: tc.columns}); err != nil {
                 t.Fatal(err)
             }
             before := terminalState(t, terminal)
-            output := &renderedPrompt{File: terminal, ready: make(chan struct{})}
+            output := &renderedPrompt{File: terminal, title: "Delete payload?", ready: make(chan struct{})}
             session := New(Options{In: terminal, Err: output, Interactive: true, Rich: true})
             ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
             defer cancel()
@@ -166,7 +168,9 @@ func TestHuhDefaultNoAndCtrlCRestoreTerminal(t *testing.T) {
                 output.mu.Unlock()
                 t.Fatalf("Huh did not render: %v; output=%q", ctx.Err(), rendered)
             }
-            if _, err := io.WriteString(master, key); err != nil {
+            if key == "" {
+                cancel()
+            } else if _, err := io.WriteString(master, key); err != nil {
                 t.Fatal(err)
             }
             got := <-done
@@ -176,6 +180,9 @@ func TestHuhDefaultNoAndCtrlCRestoreTerminal(t *testing.T) {
             if key == "\x03" && !errors.Is(got.err, ErrCanceled) {
                 t.Fatal(got.err)
             }
+            if key == "" && !errors.Is(got.err, context.Canceled) {
+                t.Fatal(got.err)
+            }
             if key == "\r" && got.err != nil {
                 t.Fatal(got.err)
             }
@@ -183,5 +190,62 @@ func TestHuhDefaultNoAndCtrlCRestoreTerminal(t *testing.T) {
                 t.Fatal("Huh did not restore terminal")
             }
         })
+    }
+}
+
+func TestHuhTextPreservesInputAndRestoresTerminal(t *testing.T) {
+    master, terminal := openTerminal(t)
+    before := terminalState(t, terminal)
+    output := &renderedPrompt{File: terminal, title: "SSH Host", ready: make(chan struct{})}
+    session := New(Options{In: terminal, Err: output, Interactive: true, Rich: true})
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    type result struct {
+        value string
+        err   error
+    }
+    done := make(chan result, 1)
+    go func() {
+        value, err := session.Text(ctx, TextPrompt{Title: "SSH Host", Validate: func(value string) error {
+            if value != "ssh -p 2222 lab-gpu" {
+                return errors.New("enter the complete connection")
+            }
+            return nil
+        }})
+        done <- result{value, err}
+    }()
+    select {
+    case <-output.ready:
+    case <-ctx.Done():
+        t.Fatal("Huh did not render", ctx.Err())
+    }
+    if _, err := io.WriteString(master, "ssh -p 2222 lab-gpu\r"); err != nil {
+        t.Fatal(err)
+    }
+    got := <-done
+    if got.err != nil || got.value != "ssh -p 2222 lab-gpu" {
+        t.Fatal(got.value, got.err)
+    }
+    if after := terminalState(t, terminal); *after != *before {
+        t.Fatal("Huh did not restore terminal")
+    }
+}
+
+type failedTerminal struct{ *os.File }
+
+func (failedTerminal) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+func TestHuhOutputFailureRestoresTerminal(t *testing.T) {
+    _, terminal := openTerminal(t)
+    before := terminalState(t, terminal)
+    session := New(Options{In: terminal, Err: failedTerminal{terminal}, Interactive: true, Rich: true})
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    _, err := session.Confirm(ctx, Confirmation{Title: "Delete payload?", AcceptLabel: "Yes", RejectLabel: "No"})
+    if !errors.Is(err, io.ErrClosedPipe) {
+        t.Fatal(err)
+    }
+    if after := terminalState(t, terminal); *after != *before {
+        t.Fatal("Huh did not restore terminal")
     }
 }

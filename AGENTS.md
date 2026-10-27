@@ -169,6 +169,7 @@ Use `go-i18n` templates and `x/text/language` matching in the local rendering la
 - Select language by `--lang`, `LOAF_LANG`, then the global `language` setting. For `auto`, use the first nonempty `LC_ALL`, `LC_MESSAGES`, or `LANG`, falling back to English when unmatched. Normalize locale tags and distinguish Simplified and Traditional scripts. Reject unsupported explicit choices rather than ignoring them.
 - Keep language preference out of shared project TOML. Do not alter remote `LANG`/`LC_*`, rewrite script logs, or translate external-tool diagnostics. JSON `message` and `hint` may be localized; Agents use codes and structured fields.
 - Test required plural forms, placeholder compatibility, and actual English/Chinese help layout. Do not add language-specific business branches or a translation service.
+- Keep each help description on one logical line and let the terminal wrap it. Summaries say what an action does; operational constraints belong beside the relevant parameter or in the manual.
 
 ## Match verification to the change
 
@@ -194,7 +195,7 @@ A real GPU workflow is separate acceptance work on an explicitly authorized exis
 
 ## Documentation, Git, and handoff
 
-- Keep README as the concise product/install/first-experiment entry point. Detailed usage belongs in the tracked bilingual `manual/`, which is included in archives; retain offline relative links and standalone Skill references.
+- Keep README centered on the product's purpose, design principles and one working quick start. Use “Code here. Run anywhere.” as the slogan. Detailed usage, installation, upgrade conditions and safety guidance belong in the tracked bilingual `manual/`, which is included in archives; retain offline relative links and standalone Skill references.
 - Keep `README.md` and `README.zh-Hans.md` aligned with actual availability, commands, configuration, and supported platforms. Write for users; do not add implementation diaries or invented install instructions.
 - `docs/` is local-only and Git-ignored. Do not force-add it, link to it from public entry points, or make builds/tests depend on it. This repository rule is not a global `docs/` exclusion for projects synchronized by Loaf.
 - Leave CONTRIBUTING, governance/Issue/PR templates, SECURITY, CHANGELOG, ADR, CODEOWNERS, and automated dependency-update configuration deferred until requested. Do not recreate them as part of ordinary feature work.

@@ -1,60 +1,44 @@
 # Loaf
 
+**Code here. Run anywhere.**
+
+[![CI](https://github.com/elebirds/loaf/actions/workflows/ci.yml/badge.svg)](https://github.com/elebirds/loaf/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/elebirds/loaf?include_prereleases)](https://github.com/elebirds/loaf/releases)
+[![MIT License](https://img.shields.io/github/license/elebirds/loaf)](LICENSE)
+
 [English](README.md) · [简体中文](README.zh-Hans.md)
 
-**Write code locally. Run recoverable experiments on your SSH machines.**
+Loaf is a lightweight, local-first remote compute tool for developers,
+researchers, and coding agents. Keep your editor and workflow on your laptop;
+put the compute on a lab server or cloud GPU.
 
-Loaf connects a local research project to an existing Linux machine. Submit the
-command you already use; return later for its status, logs, and outputs.
+Loaf brings machine access, code sync, background execution, and result retrieval
+into one CLI. Run your current working files, disconnect while the job continues,
+and come back to the same task ID for its status, logs, and outputs.
 
-- **Run your current code.** Synchronize working files, including uncommitted
-  changes, and give each experiment an independent working copy.
-- **Disconnect without losing the experiment.** Accepted tasks run under a remote
-  supervisor, independently of your laptop and SSH connection.
-- **Find the result again.** A saved task ID stays bound to its original machine,
-  logs, exit result, and output selection.
+## Why Loaf
 
-Loaf reuses OpenSSH, your keys, SSH Config, and jump hosts. Optional AutoDL
-acquisition is explicit; running an experiment never rents a machine.
+- **Simple things should be simple.** Pick a machine, run a command, get the result.
+- **Complexity is opt-in.** Start with an SSH connection; add project settings,
+  batch operations, and cloud resources as you need them.
+- **Reliable by default.** Each task has its own working copy and a saved identity
+  that follows it through submission, observation, and result retrieval.
+- **Agent-friendly, not Agent-dependent.** Readable terminal output for people;
+  structured results and discoverable parameters for agents.
+- **Own the compute lifecycle, not the workload logic.** Loaf handles resources,
+  execution, and delivery so you can focus on the program you're running.
+- **Reuse before reinventing.** Build on OpenSSH, rsync, and the remote environments
+  you already use.
+- **One product, progressive capabilities.** Move from a single experiment to
+  machine and AutoDL resource management in the same workflow.
 
-## Install
+## Get started
 
-These commands describe the current source. For a downloaded release, use the
-README shipped with that archive; older versions use different command names.
+[Install Loaf](manual/en/installation.md) on macOS or Linux. Have a Linux machine
+ready that you can reach with SSH; Loaf uses your existing SSH configuration.
 
-Download a matching archive from [Releases](https://github.com/elebirds/loaf/releases)
-and extract it into a new directory. From the extracted directory:
-
-```bash
-mkdir -p "$HOME/.local/bin"
-install -m 755 loaf "$HOME/.local/bin/loaf"
-"$HOME/.local/bin/loaf" --version
-```
-
-Add `$HOME/.local/bin` to PATH if needed. Clients target macOS/Linux on amd64 and
-arm64. You need OpenSSH and rsync locally, and Linux with rsync remotely.
-Experiment dependencies are your own environment, not installed by Loaf.
-
-To use the new command layout directly from this checkout, build with the
-Go version pinned in `mise.toml`:
-
-```bash
-bash scripts/build.sh
-export PATH="$PWD/dist:$PATH"
-loaf --version
-```
-
-See [installation and verification](manual/en/installation.md) and
-[upgrading](manual/en/upgrading.md). A complete build embeds the Linux runners;
-plain `go install` is not a complete installation.
-
-## Your first experiment
-
-Use the CPU example included in both the archive and the repository. It needs
-only `/bin/sh` remotely. Replace `lab-gpu` with your existing SSH Host alias
-(or a quoted SSH connection such as `"ssh -p 2222 user@host"`).
-
-From the extracted archive or repository:
+The archive and source tree both include a small CPU example. From either one,
+replace `lab-gpu` with your SSH Host alias and run:
 
 ```bash
 cd examples/cpu
@@ -66,104 +50,49 @@ loaf logs
 loaf pull
 ```
 
-The example configures its command and waits briefly for completion. Expect
-`succeeded` and a downloaded `outputs/result.txt` containing `result=42` under
-`loaf-results/<run-id>/`. `pull` prints the exact destination.
+The task finishes with `succeeded`. `pull` prints the download directory;
+`loaf-results/<run-id>/outputs/result.txt` contains `result=42`.
 
-`machine add` saves a connection; it does not connect. Establish host trust with native
-SSH before noninteractive use. Static targets need keys, an SSH agent, or working
-native connection sharing for batch authentication.
+### Run your own project
 
-In your own project, no initialization or configuration file is required:
+From your project directory, select a machine and use the command you'd run there:
 
 ```bash
+loaf machine use lab
 loaf run -- python3 train.py
 ```
 
-`run` checks prerequisites, synchronizes source, prepares an independent copy,
-and submits the background task. No preceding `check` or `sync` is required.
-The remote interpreter and dependencies must already be available.
-
-## Everyday commands
-
-| What you want | Shortest call |
-| --- | --- |
-| Run the command in `loaf.toml` | `loaf run` |
-| Run a program with literal arguments | `loaf run -- python3 train.py` |
-| Preview without connecting or writing state | `loaf run --dry-run -- python3 train.py` |
-| List recent tasks | `loaf status` |
-| Query one task | `loaf status ID` |
-| Read the latest task's log | `loaf logs` |
-| Follow its log | `loaf logs -f` |
-| Stop that task | `loaf stop` |
-| Browse its outputs | `loaf outputs` |
-| Download its outputs | `loaf pull` |
-| List saved machines | `loaf machine` |
-| Select a machine for this project | `loaf machine use NAME` |
-
-Use an explicit task ID when several experiments are involved:
+Loaf checks the machine, syncs your working files, and starts an independent
+background task. Follow the logs or bring the outputs home:
 
 ```bash
-loaf status r_0123456789abcdef01234567
-loaf logs r_0123456789abcdef01234567 -f
-loaf pull r_0123456789abcdef01234567
+loaf logs -f
+loaf pull
 ```
 
-IDs in examples are placeholders. Omitting an ID selects this project's latest
-submitted or submission-uncertain task for logs, stop, outputs, and pull.
-Changing the selected machine does not redirect saved tasks.
+See the [complete command list](manual/en/commands.md) for the shortest calls,
+or use `loaf help run` to explore a command.
 
-`--wait 10s` is an observation budget, not a training time limit. Closing a log
-stream or waiting client does not stop accepted work. If submission is
-unconfirmed, query its saved ID rather than starting a replacement.
+## Work with an agent
 
-See the [complete command list with minimal calls](manual/en/commands.md), or
-ask the CLI directly:
-
-```bash
-loaf help run
-loaf help machine
-```
-
-## Use Loaf from an agent
-
-Give your agent the self-contained [Loaf Skill](skills/loaf/SKILL.md). It starts
-with existing machines and explains how to preserve IDs and recover uncertain
-results. The Skill's `references/` directory must travel with it.
+Give your coding agent the [Loaf Skill](skills/loaf/SKILL.md), together with its
+`references/` directory. It covers running an experiment, interpreting its result,
+and continuing from a saved task ID.
 
 ```bash
 loaf run --wait 10s --json -- python3 train.py
-# Save data.run_id, including when the operation returns an error.
-loaf status r_0123456789abcdef01234567 --json
 ```
 
-Finite commands return one versioned JSON result. `logs -f`, `exec`, and
-`cloud watch` stream NDJSON when `--json` is set. `ok` describes the CLI
-operation; inspect task `status` and `exit_code` for the experiment result.
+Save `data.run_id` for follow-up calls. Agents can discover parameters with
+`loaf help run --json`; the [JSON reference](manual/en/json.md) explains result
+fields, streaming events, and recovery.
 
-Discover parameters without parsing help prose:
+## Documentation
 
-```bash
-loaf help run --json
-```
-
-Read the [JSON contract and result examples](manual/en/json.md). JSON mode does
-not prompt. Permission to run an experiment does not authorize paid acquisition,
-whole-instance shutdown, or deletion.
-
-## Go further
-
-- [Usage guide](manual/en/guide.md): waiting, synchronization, outputs, cleanup,
-  foreground commands, and service forwarding.
-- [Configuration](manual/en/configuration.md): project discovery, preferences,
-  output selection, explicit zero/false values, and precedence.
-- [AutoDL resources](manual/en/cloud.md): login, connect, acquire, clone, and
-  recover a saved request.
-- [Troubleshooting](manual/en/troubleshooting.md): diagnose a failure and continue
-  the same task or resource operation.
-- [Upgrading](manual/en/upgrading.md): command changes and matching old CLIs.
-- [Development](manual/en/development.md): build, tests, architecture, and the
-  isolated Linux SSH fixture.
+- [Command reference](manual/en/commands.md) · [Usage guide](manual/en/guide.md)
+- [Configuration](manual/en/configuration.md) · [AutoDL resources](manual/en/cloud.md)
+- [Troubleshooting](manual/en/troubleshooting.md) · [Upgrading](manual/en/upgrading.md)
+- [Development](manual/en/development.md)
 
 ## License
 

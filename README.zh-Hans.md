@@ -1,55 +1,36 @@
 # Loaf
 
+**Code here. Run anywhere.**
+
+[![CI](https://github.com/elebirds/loaf/actions/workflows/ci.yml/badge.svg)](https://github.com/elebirds/loaf/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/elebirds/loaf?include_prereleases)](https://github.com/elebirds/loaf/releases)
+[![MIT License](https://img.shields.io/github/license/elebirds/loaf)](LICENSE)
+
 [English](README.md) · [简体中文](README.zh-Hans.md)
 
-**本地写代码，在已有的 SSH 机器上运行可找回的实验。**
+Loaf 是面向开发者、科研人员与 Coding Agent 的轻量化、本地优先远程计算工具。
+在熟悉的编辑器里写代码，让实验室服务器或云 GPU 承担计算。
 
-Loaf 把本地科研项目连接到已有的 Linux 机器。提交原本准备运行的命令，
-之后凭任务 ID 查看状态、日志并取回输出。
+Loaf 把机器接入、代码同步、后台执行和结果回收串成一个命令行工作流。
+运行当前工作区的代码，断开连接去做别的事，再凭同一个任务 ID 找回状态、日志与产物。
 
-- **运行当前代码。** 同步工作文件，包括未提交修改；每个实验使用独立工作副本。
-- **断开连接也能继续。** 已接管的任务由远端监督进程管理，不依赖本地终端或 SSH 连接。
-- **找回同一次结果。** 任务 ID 固定绑定原机器、日志、退出结果和输出选择。
+## 为什么是 Loaf
 
-Loaf 继续使用 OpenSSH、密钥、SSH Config 和跳板机。
-AutoDL 租用是可选的显式操作；运行实验不会隐式租卡。
+- **简单的事就该简单。** 选一台机器，运行命令，取回结果。
+- **复杂度按需引入。** 从一个 SSH 连接开始，按需使用项目配置、批量操作与云资源。
+- **默认可靠。** 每个任务都有独立工作副本和保存的身份，贯穿提交、观察与结果回收。
+- **对 Agent 友好，也为人而做。** 人读清晰的终端输出，Agent 读结构化结果和参数信息。
+- **管理计算生命周期，让你专注程序本身。** 资源、执行和结果交付交给 Loaf，业务逻辑由你掌握。
+- **复用成熟工具。** 继续使用 OpenSSH、rsync 和已经熟悉的远端环境。
+- **一个产品，渐进使用。** 从单次实验到机器与 AutoDL 资源管理，沿用同一套工作流。
 
-## 安装
+## 开始使用
 
-本页描述当前源码的命令体系。下载发行包时，请使用包内 README；
-旧版本使用不同的命令名称。
+在 macOS 或 Linux 上[安装 Loaf](manual/zh-Hans/installation.md)，
+准备一台可通过 SSH 访问的 Linux 机器。Loaf 沿用你已有的 SSH 配置。
 
-从 [Releases](https://github.com/elebirds/loaf/releases) 下载匹配平台的压缩包，
-解压到新目录。在解压后的目录执行：
-
-```bash
-mkdir -p "$HOME/.local/bin"
-install -m 755 loaf "$HOME/.local/bin/loaf"
-"$HOME/.local/bin/loaf" --version
-```
-
-按需将 `$HOME/.local/bin` 加入 PATH。客户端构建目标为 macOS/Linux 的
-amd64、arm64；本地需要 OpenSSH 和 rsync，远端需要 Linux 和 rsync。
-实验依赖使用你已有的环境，Loaf 不代为安装。
-
-要从当前工作区使用新命令，使用 `mise.toml` 固定的 Go 版本构建：
-
-```bash
-bash scripts/build.sh
-export PATH="$PWD/dist:$PATH"
-loaf --version
-```
-
-详见[安装与校验](manual/zh-Hans/installation.md)和[升级说明](manual/zh-Hans/upgrading.md)。
-完整构建会内置 Linux runner；单独 `go install` 不是完整安装路径。
-
-## 第一次实验
-
-使用发行包和源码都包含的 CPU 示例，远端只需 `/bin/sh`。
-将 `lab-gpu` 换成已有的 SSH Host 别名，也可以传入完整连接：
-`"ssh -p 2222 user@host"`。
-
-在解压后的发行包或源码目录中执行：
+发行包和源码都包含一个小型 CPU 示例。在其中任一目录下，
+将 `lab-gpu` 换成你的 SSH Host 别名，然后执行：
 
 ```bash
 cd examples/cpu
@@ -61,94 +42,47 @@ loaf logs
 loaf pull
 ```
 
-示例已配置执行命令，并短暂等待完成。预期任务状态为成功，
-下载到 `loaf-results/<run-id>/` 下的 `outputs/result.txt` 包含 `result=42`。
-`pull` 会打印准确的本地位置。
+任务完成后状态为 `succeeded`。`pull` 会打印下载目录；
+`loaf-results/<run-id>/outputs/result.txt` 中包含 `result=42`。
 
-`machine add` 只保存连接，不连接远端。非交互使用前，请通过原生 SSH 建立主机信任。
-静态机器的批量认证需要密钥、SSH agent 或已生效的原生连接复用。
+### 运行自己的项目
 
-在自己的项目中，无须初始化或编写配置文件，可以直接提交：
+在项目目录中选择机器，提交你原本准备在远端运行的命令：
 
 ```bash
+loaf machine use lab
 loaf run -- python3 train.py
 ```
 
-`run` 自动检查前提、同步源码、准备独立副本并提交后台任务，
-不需要预先执行 `check` 或 `sync`。远端解释器和依赖应已准备好。
-
-## 日常使用速查
-
-| 你想做什么 | 最简调用 |
-| --- | --- |
-| 运行 `loaf.toml` 中的命令 | `loaf run` |
-| 原样传入程序及参数 | `loaf run -- python3 train.py` |
-| 不连接、不写状态地预览提交 | `loaf run --dry-run -- python3 train.py` |
-| 列出最近任务 | `loaf status` |
-| 查询一个任务 | `loaf status ID` |
-| 查看最近任务的日志 | `loaf logs` |
-| 持续查看其日志 | `loaf logs -f` |
-| 停止该任务 | `loaf stop` |
-| 浏览其输出 | `loaf outputs` |
-| 下载其输出 | `loaf pull` |
-| 列出保存的机器 | `loaf machine` |
-| 为当前项目选择机器 | `loaf machine use NAME` |
-
-涉及多个实验时，明确填写任务 ID：
+Loaf 检查机器、同步工作文件，并启动独立的后台任务。
+接下来可以持续查看日志，或把产物取回本地：
 
 ```bash
-loaf status r_0123456789abcdef01234567
-loaf logs r_0123456789abcdef01234567 -f
-loaf pull r_0123456789abcdef01234567
+loaf logs -f
+loaf pull
 ```
 
-示例 ID 是占位值。`logs`、`stop`、`outputs`、`pull` 省略 ID 时，
-选择当前项目最近的已提交或提交未确认任务。
-更换所选机器不会将已有任务改向。
+[完整命令列表](manual/zh-Hans/commands.md)汇总了最简用法，
+也可以通过 `loaf help run` 了解一个命令。
 
-`--wait 10s` 是观察预算，不是训练时限。关闭日志流或等待客户端不会停止已接管任务。
-提交未确认时，应查询保存的原 ID，而不是重新提交替代任务。
+## 与 Agent 一起工作
 
-完整清单见[命令与最简用法](manual/zh-Hans/commands.md)，也可以直接查询：
-
-```bash
-loaf help run
-loaf help machine
-```
-
-## 让 Agent 使用 Loaf
-
-向 Agent 提供自包含的 [Loaf Skill](skills/loaf/SKILL.md)。
-它从已有机器开始，说明如何保留 ID、判断结果和恢复未确认操作。
-复制 Skill 时须同时保留其 `references/` 目录。
+把 [Loaf Skill](skills/loaf/SKILL.md) 及其 `references/` 目录交给 Coding Agent。
+它说明如何运行实验、判读结果，以及凭保存的任务 ID 继续工作。
 
 ```bash
 loaf run --wait 10s --json -- python3 train.py
-# 保存 data.run_id，包括本次操作返回错误时。
-loaf status r_0123456789abcdef01234567 --json
 ```
 
-有限命令返回一个带版本的 JSON 结果；`logs -f`、`exec`、`cloud watch`
-在 JSON 模式下输出 NDJSON 流。`ok` 表示 CLI 操作结果，
-实验结果应读取 `status` 和 `exit_code`。
+保存 `data.run_id`，用于后续查询。Agent 可以通过 `loaf help run --json`
+读取参数信息；[JSON 参考](manual/zh-Hans/json.md)介绍结果字段、流式事件与恢复方式。
 
-参数信息也可以直接结构化读取：
+## 文档
 
-```bash
-loaf help run --json
-```
-
-详见 [JSON 契约与结果示例](manual/zh-Hans/json.md)。JSON 模式不弹出交互提示。
-运行实验的授权不包含付费获取、整机关机或数据删除。
-
-## 进一步阅读
-
-- [使用指南](manual/zh-Hans/guide.md)：等待、同步、输出、清理、前台命令和服务转发。
-- [配置参考](manual/zh-Hans/configuration.md)：项目发现、偏好、输出、显式零值/false 和优先级。
-- [AutoDL 资源](manual/zh-Hans/cloud.md)：登录、接入、获取、克隆与原请求恢复。
-- [故障恢复](manual/zh-Hans/troubleshooting.md)：定位失败并继续处理同一任务或资源操作。
-- [升级说明](manual/zh-Hans/upgrading.md)：命令变化与匹配旧任务的 CLI。
-- [开发说明](manual/zh-Hans/development.md)：构建、测试、架构及隔离 Linux SSH fixture。
+- [命令参考](manual/zh-Hans/commands.md) · [使用指南](manual/zh-Hans/guide.md)
+- [配置参考](manual/zh-Hans/configuration.md) · [AutoDL 资源](manual/zh-Hans/cloud.md)
+- [故障恢复](manual/zh-Hans/troubleshooting.md) · [升级说明](manual/zh-Hans/upgrading.md)
+- [开发说明](manual/zh-Hans/development.md)
 
 ## 许可证
 

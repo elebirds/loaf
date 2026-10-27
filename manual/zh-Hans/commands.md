@@ -9,11 +9,11 @@
 | 选项 | 类型 | 用途 |
 | --- | --- | --- |
 | `--lang` | `string` | 界面语言：auto、en 或 zh-Hans。 |
-| `--json` | `bool` | 输出结构化 JSON，不进行交互；exec、logs -f 和 cloud watch 使用 NDJSON 流。 |
+| `--json` | `bool` | 输出 JSON；exec、logs -f 和 cloud watch 使用 NDJSON。 |
 | `--trace` | `bool` | 为有限命令报告脱敏 SSH 阶段耗时及连接／重试计数。 |
 | `--target` | `string` | 覆盖当前项目的目标别名。 |
 | `--help` | `bool` | 显示帮助。 |
-| `--version` | `bool` | 显示构建版本，不读取项目状态。 |
+| `--version` | `bool` | 显示构建版本。 |
 
 ## 实验与项目文件
 
@@ -23,11 +23,11 @@
 | `loaf status` | `loaf status` | 查询指定任务或列出当前项目最近的任务。 |
 | `loaf logs` | `loaf logs` | 读取有限日志尾部或持续查看任务日志。 |
 | `loaf stop` | `loaf stop` | 停止已保存的任务，并等待确认结果。 |
-| `loaf inspect` | `loaf inspect r_example` | 离线查看一项已保存任务及其所需 CLI 版本。 |
-| `loaf outputs` | `loaf outputs` | 浏览有界的输出文件元数据，不下载内容。 |
-| `loaf wait` | `loaf wait --tag experiment` | 前台等待明确选择并冻结的一组任务。 |
+| `loaf inspect` | `loaf inspect r_example` | 离线查看已保存任务的详情。 |
+| `loaf outputs` | `loaf outputs` | 查看任务的输出文件。 |
+| `loaf wait` | `loaf wait --tag experiment` | 等待选定任务完成。 |
 | `loaf pull` | `loaf pull` | 下载已保存任务的选定输出。 |
-| `loaf clean` | `loaf clean r_example --dry-run` | 清理明确指定的已结束任务的远端数据 |
+| `loaf clean` | `loaf clean r_example --dry-run` | 清理已结束任务的远端数据。 |
 | `loaf sync` | `loaf sync --dry-run` | 将当前工作源码同步到受管远端缓存。 |
 
 ## 机器与前台操作
@@ -35,12 +35,12 @@
 | 命令 | 最简调用 | 用途 |
 | --- | --- | --- |
 | `loaf machine` | `loaf machine` | 管理已保存的机器与当前项目的机器选择。 |
-| `loaf machine list` | `loaf machine list` | 列出已保存的机器，不连接远端。 |
-| `loaf machine show` | `loaf machine show lab` | 查看一台机器的本地配置，不连接远端。 |
+| `loaf machine list` | `loaf machine list` | 列出保存的机器。 |
+| `loaf machine show` | `loaf machine show lab` | 查看一台机器的配置。 |
 | `loaf machine add` | `loaf machine add lab --ssh lab-gpu` | 保存 SSH 机器别名。 |
 | `loaf machine use` | `loaf machine use lab` | 选择当前项目的默认机器。 |
 | `loaf machine remove` | `loaf machine remove lab` | 移除本地机器别名，保留任务和远端文件。 |
-| `loaf exec` | `loaf exec -- nvidia-smi` | 前台执行机器命令，不同步源码、不生成任务 ID。 |
+| `loaf exec` | `loaf exec -- nvidia-smi` | 在所选机器上执行前台命令。 |
 | `loaf ssh` | `loaf ssh` | 打开所选机器的原生 SSH 交互终端。 |
 | `loaf forward` | `loaf forward 6006` | 通过前台 SSH 连接转发本地回环端口。 |
 
@@ -48,7 +48,7 @@
 
 | 命令 | 最简调用 | 用途 |
 | --- | --- | --- |
-| `loaf cloud` | `loaf cloud --help` | 管理显式授权的云实例租用并接入 SSH 机器 |
+| `loaf cloud` | `loaf cloud --help` | 管理云资源并接入机器。 |
 | `loaf cloud login` | `loaf cloud login main` | 通过 AutoDL 主账号或子账号密码登录 |
 | `loaf cloud logout` | `loaf cloud logout main` | 清除所选账号保存的会话和登录摘要 |
 | `loaf cloud list` | `loaf cloud list` | 分页查看此账号的实例 |

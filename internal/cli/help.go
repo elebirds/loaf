@@ -196,12 +196,6 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
     }
     if len(h.Flags) > 0 {
         fmt.Fprintln(out, "\n"+l.Text("flags"))
-        for _, flag := range h.Flags {
-            if flag.Configurable && flag.Default != nil {
-                wrapHelp(out, "  ", "  ", l.Text("help_defaults"))
-                break
-            }
-        }
     }
     for _, flag := range h.Flags {
         label := "--" + flag.Name
@@ -214,46 +208,18 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
         }
         description := flag.Description
         if flag.Default != nil {
-            description += " (" + l.Text("default_value", map[string]any{"Value": flag.Default}) + ")"
-        }
-        if flag.Configurable {
-            description += " " + l.Text("help_configurable")
+            key := "default_value"
+            if flag.Configurable {
+                key = "builtin_default_value"
+            }
+            description += " (" + l.Text(key, map[string]any{"Value": flag.Default}) + ")"
         }
         writeHelpLine(out, label, description)
-    }
-    if len(node.Children) == 0 && node.Name != "version" && node.Name != "help" {
-        fmt.Fprintln(out)
-        wrapHelp(out, "", "", l.Text("help_more"))
     }
 }
 
 func writeHelpLine(out io.Writer, label, description string) {
-    if displayWidth(label) > 24 {
-        fmt.Fprintln(out, "  "+label)
-        label = ""
-    }
-    prefix := "  " + padFlag(label, 26)
-    wrapHelp(out, prefix, strings.Repeat(" ", 28), description)
-}
-
-func wrapHelp(out io.Writer, prefix, continuation, text string) {
-    line, cells := prefix, displayWidth(prefix)
-    for _, r := range text {
-        n := displayWidth(string(r))
-        if cells+n > 80 {
-            carry := ""
-            if split := strings.LastIndex(line, " "); split > len(prefix) && len(line)-split < 24 {
-                carry = strings.TrimLeft(line[split+1:], " ")
-                line = line[:split]
-            }
-            fmt.Fprintln(out, strings.TrimRight(line, " "))
-            line = continuation + carry
-            cells = displayWidth(line)
-        }
-        line += string(r)
-        cells += n
-    }
-    fmt.Fprintln(out, strings.TrimRight(line, " "))
+    fmt.Fprintf(out, "  %s%s\n", padFlag(label, max(26, displayWidth(label)+2)), description)
 }
 
 func displayWidth(s string) int {

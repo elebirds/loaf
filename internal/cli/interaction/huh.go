@@ -2,10 +2,10 @@ package interaction
 
 import (
     "context"
-    "errors"
     "io"
     "sync"
 
+    tea "charm.land/bubbletea/v2"
     "charm.land/huh/v2"
 )
 
@@ -47,20 +47,62 @@ func (s *InputSession) runForm(ctx context.Context, form *huh.Form) error {
         // A plain io.Writer wrapper would hide it and produce a blank view.
         writer = terminalFormWriter{terminalOutput: terminal, checked: output}
     }
-    // Never enter Huh's accessible path: it does not propagate context or field
-    // errors. The caller chooses our cancellable plain renderer instead.
-    err := form.WithAccessible(false).WithShowHelp(false).
-        WithInput(s.options.In).WithOutput(writer).RunWithContext(runCtx)
+    // Embed the form so cancellation uses a graceful Quit, not Bubble Tea's
+    // killed path, which closes the input reader without joining its worker.
+    // The command owns signals and context; the form still owns its fields.
+    form.WithAccessible(false).WithShowHelp(false)
+    form.SubmitCmd, form.CancelCmd = tea.Quit, tea.Quit
+    _, err := tea.NewProgram(formModel{form: form, ctx: runCtx},
+        tea.WithInput(s.options.In), tea.WithOutput(writer), tea.WithoutSignalHandler(),
+        tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+            // Bubble Tea sends initial size and resize events itself. Huh's
+            // redundant request starts an unjoined fd query during shutdown.
+            if msg == tea.RequestWindowSize() {
+                return nil
+            }
+            return msg
+        })).Run()
     if writeErr := output.failure(); writeErr != nil {
         return writeErr
     }
     if ctx.Err() != nil {
         return ctx.Err()
     }
-    if errors.Is(err, huh.ErrUserAborted) {
+    if form.State == huh.StateAborted {
         return ErrCanceled
     }
     return err
+}
+
+type formCanceled struct{}
+
+// formModel adapts Huh's string view to Bubble Tea's view and serializes context
+// cancellation with field updates, allowing the terminal reader to finish first.
+type formModel struct {
+    form *huh.Form
+    ctx  context.Context
+}
+
+func (m formModel) Init() tea.Cmd {
+    return tea.Batch(m.form.Init(), func() tea.Msg {
+        <-m.ctx.Done()
+        return formCanceled{}
+    })
+}
+
+func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    if _, canceled := msg.(formCanceled); canceled {
+        return m, tea.Quit
+    }
+    form, cmd := m.form.Update(msg)
+    m.form = form.(*huh.Form)
+    return m, cmd
+}
+
+func (m formModel) View() tea.View {
+    view := tea.NewView(m.form.View())
+    view.ReportFocus = true
+    return view
 }
 
 type terminalOutput interface {

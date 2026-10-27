@@ -1,7 +1,7 @@
 [root_short]
-other = "连接科研项目与已有的 SSH 机器。"
+other = "在 SSH 机器上运行你的项目。"
 [exec_short]
-other = "前台执行机器命令，不同步源码、不生成任务 ID。"
+other = "在所选机器上执行前台命令。"
 [exec_args]
 other = "-- <命令> [参数...]"
 [exec_flag_cwd]
@@ -77,7 +77,7 @@ other = "显示帮助。"
 [flag_lang]
 other = "界面语言：auto、en 或 zh-Hans。"
 [flag_json]
-other = "输出结构化 JSON，不进行交互；exec、logs -f 和 cloud watch 使用 NDJSON 流。"
+other = "输出 JSON；exec、logs -f 和 cloud watch 使用 NDJSON。"
 [flag_target]
 other = "覆盖当前项目的目标别名。"
 [flag_ssh]
@@ -609,7 +609,7 @@ other = "保留查询失败的任务；无法确认它们是否符合状态筛�
 [clean_ids_arg]
 other = "<任务 ID>..."
 [clean_short]
-other = "清理明确指定的已结束任务的远端数据"
+other = "清理已结束任务的远端数据。"
 [clean_flag_dry_run]
 other = "只读预览所选路径和终态，不修改文件"
 [clean_flag_yes]
@@ -654,7 +654,7 @@ other = "清理未确认"
 other = "先用 loaf status 查询同一任务 ID，确认已接受后再清理；不要提交替代任务。"
 
 [cloud_short]
-other = "管理显式授权的云实例租用并接入 SSH 机器"
+other = "管理云资源并接入机器。"
 
 [cloud_config]
 other = "云配置无效，请检查账号、资源条件、镜像、单位和时间范围。"
@@ -870,7 +870,7 @@ other = "要求的 GPU 厂商（例如 nvidia）"
 other = "允许的型号，CSV 或重复选项；整体替换配置列表"
 
 [cloud_flag_gpu_count]
-other = "要求的 GPU 卡数（内置默认值：1）"
+other = "要求的 GPU 卡数。"
 
 [cloud_flag_min_gpu_memory]
 other = "每张 GPU 最小显存，必须带 GiB 单位（如 24GiB）"
@@ -1292,7 +1292,7 @@ other = "要求包含此标签；重复指定时须全部匹配。"
 other = "本地资料不能满足实时状态筛选，请去掉 --status 或 --local。"
 
 [inspect_short]
-other = "离线查看一项已保存任务及其所需 CLI 版本。"
+other = "离线查看已保存任务的详情。"
 
 [inspect_args]
 other = "<任务 ID>"
@@ -1409,7 +1409,7 @@ other = "日志恢复预算已耗尽；保留游标后可继续恢复。"
 other = "<任务 ID>... | --tag <标签>"
 
 [wait_short]
-other = "前台等待明确选择并冻结的一组任务。"
+other = "等待选定任务完成。"
 
 [flag_wait_timeout]
 other = "前台观察预算，大于 0s 且不超过 24h；不会停止任务。"
@@ -1436,7 +1436,7 @@ other = "  上次观察的退出码：{{.Value}}"
 other = "  最近查询失败 {{.Value}}：{{.Code}}（{{.Stage}}）"
 
 [outputs_short]
-other = "浏览有界的输出文件元数据，不下载内容。"
+other = "查看任务的输出文件。"
 
 [flag_outputs_depth]
 other = "每个已保存输出根目录下的最大深度（0–20）。"
@@ -1484,7 +1484,7 @@ other = "部分所选下载失败或未执行；已完成的目标仍可使用�
 other = "下载完成 {{.Count}}/{{.Total}}；失败 {{.Value}}，未执行 {{.Matched}}。"
 
 [flag_run_dry]
-other = "完全离线解释提交计划；不连接 SSH、不读取凭据、不分配 ID、不写入状态。"
+other = "预览本地提交计划。"
 
 [run_preview_heading]
 other = "本地提交预览"
@@ -1653,13 +1653,13 @@ other = "已确认任务 {{.ID}} 的日志消费至字节 {{.Offset}}。"
 other = "管理已保存的机器与当前项目的机器选择。"
 
 [machine_list_short]
-other = "列出已保存的机器，不连接远端。"
+other = "列出保存的机器。"
 
 [machine_show_short]
-other = "查看一台机器的本地配置，不连接远端。"
+other = "查看一台机器的配置。"
 
 [flag_version]
-other = "显示构建版本，不读取项目状态。"
+other = "显示构建版本。"
 
 [group_experiments]
 other = "实验与项目文件："
@@ -1675,12 +1675,6 @@ other = "诊断与帮助："
 
 [help_examples]
 other = "示例："
-
-[help_configurable]
-other = "可配置。"
-
-[help_more]
-other = "使用 --json 获取结构化结果；完整示例和参数条件见随包手册。"
 
 [input_unknown_option]
 other = "未知选项 {{.Argument}}，请检查拼写及所属命令。"
@@ -1801,8 +1795,8 @@ other = "提交时分配；预览不创建 ID"
 [preview_policies]
 other = "日志尾部：{{.Count}} 行；同步：{{.Mode}}。"
 
-[help_defaults]
-other = "显示的是内置默认值，项目和用户配置可覆盖。"
-
 [input_out_of_range]
 other = "{{.Argument}} 超出支持的数值范围。"
+
+[builtin_default_value]
+other = "内置：{{.Value}}"

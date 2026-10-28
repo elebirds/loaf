@@ -50,6 +50,9 @@ func (w Webhook) Deliver(ctx context.Context, d Destination, m Message) (Receipt
     }
     request.Header.Set("Content-Type", "application/json")
     request.Header.Set("Idempotency-Key", m.ID)
+    // The key is correlation metadata, not evidence that this receiver dedupes.
+    // Disable net/http's replayable-body path for idempotency-keyed POSTs.
+    request.GetBody = nil
     client := &http.Client{Transport: w.Transport, Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
     response, err := client.Do(request)
     if err != nil {

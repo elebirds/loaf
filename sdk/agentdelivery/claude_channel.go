@@ -23,6 +23,7 @@ type ClaudeChannel struct{}
 type channelRequest struct {
     Action    string   `json:"action"`
     SessionID string   `json:"session_id"`
+    CWD       string   `json:"cwd,omitempty"`
     Message   *Message `json:"message,omitempty"`
     MessageID string   `json:"message_id,omitempty"`
 }
@@ -53,6 +54,7 @@ func channelCall(ctx context.Context, d Destination, request channelRequest) (ch
     stop := context.AfterFunc(ctx, func() { connection.Close() })
     defer stop()
     request.SessionID = d.SessionID
+    request.CWD = d.CWD
     if err = json.NewEncoder(connection).Encode(request); err != nil {
         return response, ErrUnconfirmed
     }
@@ -83,8 +85,11 @@ func (c ClaudeChannel) Deliver(ctx context.Context, d Destination, m Message) (R
         rejected.RetrySafe = false
         return rejected, ErrMessage
     }
-    if _, err := c.Probe(ctx, d); err != nil {
+    if capabilities, err := c.Probe(ctx, d); err != nil {
         rejected.ReasonCode = "CLAUDE_CHANNEL_UNAVAILABLE"
+        if capabilities.ReasonCode == "DESTINATION_ID_MISMATCH" || capabilities.ReasonCode == "DESTINATION_WORKSPACE_MISMATCH" {
+            rejected.ReasonCode, rejected.RetrySafe = capabilities.ReasonCode, false
+        }
         return rejected, err
     }
     response, err := channelCall(ctx, d, channelRequest{Action: "deliver", Message: &m})
@@ -111,6 +116,7 @@ type ClaudeChannelServer struct {
     mu          sync.Mutex
     connection  mcp.Connection
     initialized bool
+    cwd         string
     receipts    map[string]Receipt
     messages    map[string]Message
 }
@@ -150,6 +156,14 @@ func (s *ClaudeChannelServer) Serve(ctx context.Context, transport mcp.Transport
     if _, err = os.Lstat(s.SocketPath); !os.IsNotExist(err) {
         return ErrDestination
     }
+    cwd, err := os.Getwd()
+    if err != nil {
+        return err
+    }
+    cwd, err = filepath.EvalSymlinks(cwd)
+    if err != nil {
+        return err
+    }
     listener, err := net.Listen("unix", s.SocketPath)
     if err != nil {
         return err
@@ -163,6 +177,7 @@ func (s *ClaudeChannelServer) Serve(ctx context.Context, transport mcp.Transport
     s.receipts = map[string]Receipt{}
     s.messages = map[string]Message{}
     s.initialized = false
+    s.cwd = cwd
     s.mu.Unlock()
     lifetime, cancel := context.WithCancel(ctx)
     defer cancel()
@@ -243,18 +258,29 @@ func (s *ClaudeChannelServer) serveConnection(ctx context.Context, connection ne
         return
     }
     response := channelResponse{}
+    requestedCWD := ""
+    if request.CWD != "" {
+        requestedCWD, _ = filepath.EvalSymlinks(request.CWD)
+    }
     s.mu.Lock()
     sameSession := request.SessionID == s.SessionID
-    ready := s.initialized && sameSession
+    sameWorkspace := request.CWD == "" || requestedCWD != "" && requestedCWD == s.cwd
+    sameBinding := sameSession && sameWorkspace
+    ready := s.initialized && sameBinding
     response.Capabilities = Capabilities{Available: ready, ExistingSession: true, ReceiptQueryable: true, ProcessingAcknowledgement: true}
     if !ready {
         response.Capabilities.ReasonCode = "CLAUDE_CHANNEL_NOT_READY"
+        if !sameSession {
+            response.Capabilities.ReasonCode = "DESTINATION_ID_MISMATCH"
+        } else if !sameWorkspace {
+            response.Capabilities.ReasonCode = "DESTINATION_WORKSPACE_MISMATCH"
+        }
     }
     s.mu.Unlock()
     switch request.Action {
     case "probe":
     case "lookup":
-        if !sameSession {
+        if !sameBinding {
             response.Receipt = Receipt{MessageID: request.MessageID, State: "rejected", ReasonCode: "DESTINATION_ID_MISMATCH"}
             break
         }

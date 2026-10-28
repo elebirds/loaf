@@ -71,6 +71,12 @@ func TestClaudeChannelWriteAndExplicitAgentAcknowledgement(t *testing.T) {
         case <-ready.C:
         }
     }
+    wrongWorkspace := destination
+    wrongWorkspace.CWD = t.TempDir()
+    rejected, err := adapter.Deliver(ctx, wrongWorkspace, Message{ID: "wrong_workspace", Text: "Do not deliver"})
+    if err == nil || rejected.State != "rejected" || rejected.RetrySafe || rejected.ReasonCode != "DESTINATION_WORKSPACE_MISMATCH" {
+        t.Fatal("workspace mismatch sent a notification", rejected, err)
+    }
     type delivered struct {
         receipt Receipt
         err     error

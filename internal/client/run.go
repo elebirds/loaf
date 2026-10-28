@@ -202,6 +202,9 @@ func (c *Projects) previewRun(in RunInput, p runPlan) execution.RunPreview {
     if len(p.metadata.Tags) > 0 {
         provenance["tags"] = []string{"flag"}
     }
+    if len(in.Notify) > 0 {
+        provenance["notifications"] = []string{"flag"}
+    }
     remote := f.RemoteDir
     if remote == "" && p.project.ID != "" {
         remote = path.Join(p.machine.RemoteBase, p.project.ID)

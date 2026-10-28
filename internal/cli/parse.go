@@ -16,11 +16,12 @@ type parsedCommand struct {
     help    bool
 }
 type bootstrapOptions struct {
-    json        bool
-    language    string
-    languageSet bool
-    help        bool
-    version     bool
+    json          bool
+    language      string
+    languageSet   bool
+    help          bool
+    version       bool
+    nativeChannel bool
 }
 
 func newParser(g *grammar) (*kong.Kong, error) {
@@ -79,6 +80,7 @@ func bootstrap(model *kong.Application, args []string) bootstrapOptions {
             }
         }
     }
+    result.nativeChannel = node.Path() == "notify channel"
     return result
 }
 

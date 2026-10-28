@@ -38,11 +38,11 @@ func TestCommandReferenceAndExamples(t *testing.T) {
         var out strings.Builder
         if lang == "en" {
             out.WriteString("# Commands and minimal calls\n\n[Home](../../README.md) · [Guide](guide.md) · [简体中文](../zh-Hans/commands.md)\n\n")
-            out.WriteString("Generated from the CLI grammar. NAME, IDs, hosts and environment references in examples are placeholders. Cloud calls require a configured, applicable account and resource conditions; mutation still requires explicit authority and confirmation. See [cloud prerequisites](cloud.md). Add `--json` for noninteractive structured results, except native `ssh` and `forward`. Use an explicit run ID for agent follow-ups.\n\n")
+            out.WriteString("Generated from the CLI grammar. NAME, IDs, hosts and environment references in examples are placeholders. Cloud calls require a configured, applicable account and resource conditions; mutation still requires explicit authority and confirmation. See [cloud prerequisites](cloud.md). Add `--json` for noninteractive structured results, except native `ssh`, `forward` and `notify channel`. Use an explicit run ID for agent follow-ups.\n\n")
             out.WriteString("## Global options\n\n| Option | Type | Purpose |\n| --- | --- | --- |\n")
         } else {
             out.WriteString("# 命令与最简用法\n\n[首页](../../README.zh-Hans.md) · [使用指南](guide.md) · [English](../en/commands.md)\n\n")
-            out.WriteString("由 CLI 声明生成。示例中的别名、ID、主机与环境变量引用为占位值。云调用需已配置适用账号与资源条件，变更仍须明确授权和确认，详见[云资源前提](cloud.md)。添加 `--json` 获取非交互结构化结果；原生 `ssh`、`forward` 除外。Agent 后续操作应明确填写任务 ID。\n\n")
+            out.WriteString("由 CLI 声明生成。示例中的别名、ID、主机与环境变量引用为占位值。云调用需已配置适用账号与资源条件，变更仍须明确授权和确认，详见[云资源前提](cloud.md)。添加 `--json` 获取非交互结构化结果；原生 `ssh`、`forward`、`notify channel` 除外。Agent 后续操作应明确填写任务 ID。\n\n")
             out.WriteString("## 全局选项\n\n| 选项 | 类型 | 用途 |\n| --- | --- | --- |\n")
         }
         for _, flag := range helpData(parser.Model.Node, l).Flags {

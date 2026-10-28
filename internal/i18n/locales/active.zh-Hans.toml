@@ -1877,7 +1877,7 @@ other = "最多读取条数，范围为 1 至 1000。"
 other = "接入类型：codex、claude-channel、claude-resume 或 webhook。"
 
 [flag_destination_session]
-other = "明确的会话 ID，不自动选择最近会话。"
+other = "明确 Agent 会话 ID，或 notify channel --session 的唯一标签；不会选择最近会话。"
 
 [flag_destination_endpoint]
 other = "私有本地接入端或 Webhook URL，不作为 Shell 命令执行。"
@@ -2166,3 +2166,15 @@ other = "本地队列状态保存失败（{{.Code}}）；请保留已确认的�
 
 [cloud_binding_next]
 other = "使用 loaf machine use {{.Target}} 为当前项目选定此机器，再用 loaf run 提交项目命令。"
+
+[notify_channel_short]
+other = "通过原生 MCP stdio 提供 Claude Channel；要求会话开启且平台允许。"
+
+[flag_channel_socket]
+other = "现有私有目录（0700）中的绝对 Unix socket 路径；新建 socket 权限为 0600。"
+
+[flag_channel_session]
+other = "当前开启 Claude 会话的唯一标签；目的地绑定需使用同一标签。"
+
+[notify_channel_native]
+other = "Claude Channel 使用原生 MCP 标准输入/输出，不使用 Loaf JSON 或 NDJSON。请去掉 --json 和 --trace；诊断写入 stderr。"

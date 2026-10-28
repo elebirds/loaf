@@ -111,6 +111,9 @@ loaf help run --json
 每行沿用版本化 envelope。早期错误可能是唯一一行，不应假定先有 chunk。
 错误携带普通 `error` 和 `data.type: "error"`；没有最终事件的 EOF 不证明成功。
 `ssh`、`forward` 不支持 JSON，保留原生终端/隧道行为。
+`notify channel` 的标准输入/输出仅承载原生 MCP，不使用 Loaf envelope 或 NDJSON。
+传入 `--json`、`--trace` 时退出码为 2，诊断写入 stderr，stdout 留空；
+仍可使用 `help notify channel --json` 查看结构化帮助。
 
 日志每块最多 256 KiB，`truncated` 表示前面内容被省略。
 偏移按源日志字节而非字符计。有限游标位于 `data.log.cursor`，

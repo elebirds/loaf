@@ -64,6 +64,12 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
     }
     service := c.app.Notify
     switch path {
+    case "notify channel":
+        channel, ok := service.(client.ChannelService)
+        if !ok {
+            return nil, asyncUnavailable("notify channel")
+        }
+        return nil, channel.Channel(ctx, client.ChannelInput{Socket: g.Notify.Channel.Socket, SessionID: g.Notify.Channel.Session}, client.Streams{In: c.options.In, Out: p.out, Err: p.err})
     case "notify destination", "notify destination list":
         return service.Destinations(ctx)
     case "notify destination add":

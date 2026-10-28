@@ -2,7 +2,7 @@
 
 [Home](../../README.md) · [Guide](guide.md) · [简体中文](../zh-Hans/commands.md)
 
-Generated from the CLI grammar. NAME, IDs, hosts and environment references in examples are placeholders. Cloud calls require a configured, applicable account and resource conditions; mutation still requires explicit authority and confirmation. See [cloud prerequisites](cloud.md). Add `--json` for noninteractive structured results, except native `ssh` and `forward`. Use an explicit run ID for agent follow-ups.
+Generated from the CLI grammar. NAME, IDs, hosts and environment references in examples are placeholders. Cloud calls require a configured, applicable account and resource conditions; mutation still requires explicit authority and confirmation. See [cloud prerequisites](cloud.md). Add `--json` for noninteractive structured results, except native `ssh`, `forward` and `notify channel`. Use an explicit run ID for agent follow-ups.
 
 ## Global options
 
@@ -92,6 +92,7 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | `loaf notify subscriptions` | `loaf notify subscriptions` | List durable notification subscriptions. |
 | `loaf notify deliveries` | `loaf notify deliveries` | Inspect acceptance and processing evidence. |
 | `loaf notify serve` | `loaf notify serve --once` | Collect and deliver events; Ctrl-C stops only this Bridge. |
+| `loaf notify channel` | `loaf notify channel --socket /private/channel.sock --session research` | Serve a Claude Channel on native MCP stdio; requires an open, platform-permitted session. |
 | `loaf help` | `loaf help run` | Show help for a command. |
 
 ## Parameters and constraints

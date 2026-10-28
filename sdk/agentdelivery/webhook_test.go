@@ -2,11 +2,30 @@ package agentdelivery
 
 import (
     "context"
+    "errors"
     "net/http"
     "net/http/httptest"
     "sync/atomic"
     "testing"
 )
+
+type failingWebhookTransport struct{ calls int }
+
+func (t *failingWebhookTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+    t.calls++
+    if r.GetBody != nil {
+        return nil, errors.New("request body incorrectly replayable")
+    }
+    return nil, errors.New("lost reply after possible send")
+}
+
+func TestWebhookPossibleSendHasNoReplayableBody(t *testing.T) {
+    transport := &failingWebhookTransport{}
+    receipt, err := (Webhook{Transport: transport}).Deliver(context.Background(), Destination{Kind: "webhook", Endpoint: "https://example.invalid/event"}, Message{ID: "event_1", Text: "Finished"})
+    if err != ErrUnconfirmed || receipt.State != "unconfirmed" || receipt.RetrySafe || transport.calls != 1 {
+        t.Fatal(receipt, err, transport.calls)
+    }
+}
 
 func TestWebhookAcceptanceAndRedirectBoundary(t *testing.T) {
     var forwarded atomic.Int32

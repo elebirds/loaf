@@ -21,6 +21,8 @@ receipt, err := sender.Deliver(ctx, destination, agentdelivery.Message{
 Save the receipt alongside the operation that generated the message. A send
 that returns `unconfirmed` must not be blindly repeated: it may have already
 entered the Agent's queue. The SDK itself never retries or opens another session.
+See [compatibility evidence](COMPATIBILITY.md) for the tested native versions
+and the distinction between transport, acceptance and processing results.
 
 ## Supported modes
 

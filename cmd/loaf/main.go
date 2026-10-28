@@ -52,6 +52,8 @@ func main() {
     var puller application.OutputPuller
     var runs *execution.Service
     var operations application.MachineOperations
+    var eventRemote application.EventRemote
+    var queueRemote application.QueueRemote
     store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
     settings, configErr := store.Load()
     state := local.New(store.StateDir)
@@ -71,6 +73,8 @@ func main() {
         }
         checker = client
         operations = client
+        eventRemote = client
+        queueRemote = client
         bootstrap := execution.Bootstrap{Remote: client}
         runner = bootstrap
         rsync, _ := exec.LookPath("rsync")
@@ -94,11 +98,16 @@ func main() {
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
+    events, notifications := application.NewEventServices(application.EventDependencies{
+        State: state, Settings: settings, CWD: cwd, Runs: runs, Remote: eventRemote,
+    })
     app := application.New(application.Dependencies{
+        Events: events, Notify: notifications,
         Config: store, State: state, Trace: trace, Cloud: cloudService, Auth: authentication,
         Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Outputs: browser,
         Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd,
     }, settings)
+    app.Queue = application.NewQueueService(app.Projects, queueRemote, notifications)
     code := cli.Execute(ctx, os.Args[1:], cli.Options{
         App: app, Language: settings.Language, InitError: configErr, Trace: trace,
         ReadPassword: terminalPassword, Env: env, In: os.Stdin, Out: os.Stdout, Err: os.Stderr,

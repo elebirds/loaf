@@ -2164,6 +2164,9 @@ other = "Preparing an independent queued input copy ({{.Count}} selected files)â
 [queue_state_save_failed]
 other = "Local queue state could not be saved ({{.Code}}); retain the confirmed remote result."
 
+[queue_more]
+other = "Queue list is truncated; use a larger --limit or inspect a request by ID."
+
 [cloud_binding_next]
 other = "Select this machine for your project with loaf machine use {{.Target}}, then use loaf run with your project command."
 

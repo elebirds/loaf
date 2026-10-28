@@ -39,7 +39,7 @@ func TestPackagedDirectRunEventReplayAndDelivery(t *testing.T) {
     }
     f := newFixture(t)
     project := stopProject(t, f)
-    sourceFile(t, project, "loaf.toml", "[outputs]\npaths=['outputs']\n[env]\nTEST_TOKEN='event-private-value'\n")
+    sourceFile(t, project, "loaf.toml", "[outputs]\npaths=['outputs']\n[run.env]\nTEST_TOKEN='event-private-value'\n")
     var mu sync.Mutex
     var bodies []string
     destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -170,8 +170,16 @@ func TestPackagedFIFOSharedTargetFrozenInputAndCancellation(t *testing.T) {
     if canceled.Request == nil || canceled.Request.State != "canceled" {
         t.Fatal("waiting request not canceled", canceled)
     }
-    asyncCLIData[queue.Result](t, second, "queue", "clean", c.Request.ID, "--dry-run", "--json")
-    asyncCLIData[queue.Result](t, second, "queue", "clean", c.Request.ID, "--yes", "--json")
+    type cleanView struct {
+        DryRun     bool         `json:"dry_run"`
+        RequestIDs []string     `json:"request_ids"`
+        Result     queue.Result `json:"result"`
+    }
+    preview := asyncCLIData[cleanView](t, second, "queue", "clean", c.Request.ID, "--dry-run", "--json")
+    cleaned := asyncCLIData[cleanView](t, second, "queue", "clean", c.Request.ID, "--yes", "--json")
+    if !preview.DryRun || cleaned.DryRun || len(cleaned.RequestIDs) != 1 || cleaned.RequestIDs[0] != c.Request.ID {
+        t.Fatal("cleanup preview/execution lost explicit selection", preview, cleaned)
+    }
     f.shell(`touch /tmp/loaf-queue-release`)
     wait(t, 20*time.Second, func() bool {
         code, out := cli(t, second, "queue", "show", b.Request.ID, "--json")

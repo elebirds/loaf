@@ -126,6 +126,22 @@ func (f *fakeQueue) Clean(_ context.Context, in client.QueueCleanInput) (queue.R
     return result, f.err
 }
 
+func TestQueueHumanCoverageIsExplicit(t *testing.T) {
+    for _, lang := range []string{"en", "zh-Hans"} {
+        l, err := i18n.New(lang, nil)
+        if err != nil {
+            t.Fatal(err)
+        }
+        var out bytes.Buffer
+        if err := printQueueResult(&out, queue.Result{Requests: []queue.Request{{ID: "q_1", RunID: "r_1", State: "queued"}}, HasMore: true}, l); err != nil {
+            t.Fatal(err)
+        }
+        if !strings.Contains(out.String(), l.Text("queue_more")) {
+            t.Fatal("bounded queue coverage was hidden", out.String())
+        }
+    }
+}
+
 func TestAsyncOptionalServicesAreActionable(t *testing.T) {
     for _, args := range [][]string{{"events", "list", "--json"}, {"notify", "--json"}, {"queue", "list", "--json"}} {
         code, out, stderr := run(t, fixture(t), args...)
@@ -143,7 +159,7 @@ func TestAsyncGrammarDispatchAndPrivateDestination(t *testing.T) {
     o.Queue = q
     calls := [][]string{
         {"events", "list", "--source", "resources", "--subject", "resource:instance_1", "--limit", "7", "--json"},
-        {"notify", "destination", "add", "research", "--kind", "codex", "--session", "thread_1", "--endpoint", "private-endpoint-secret", "--json"},
+        {"notify", "destination", "add", "research", "--kind", "codex", "--session", "thread_1", "--endpoint", "/private/tmp/private-endpoint-secret", "--json"},
         {"notify", "subscribe", "run:r_1", "--destination", "research", "--replay=false", "--json"},
         {"queue", "enable", "--slots", "2", "--target", "lab", "--json"},
         {"queue", "submit", "--notify", "research", "--tag", "exp", "--json", "--", "python3", "train.py", "--json", "--notify", "literal"},
@@ -160,7 +176,7 @@ func TestAsyncGrammarDispatchAndPrivateDestination(t *testing.T) {
     if events.input.Source != "resources" || events.input.Limit != 7 || events.input.Subject.ID != "instance_1" || !events.input.Policy.Batch {
         t.Fatalf("%+v", events.input)
     }
-    if notify.destination.Destination.SessionID != "thread_1" || notify.destination.Destination.Endpoint != "private-endpoint-secret" || notify.subscription.Replay || notify.subscription.Source != "project" {
+    if notify.destination.Destination.SessionID != "thread_1" || notify.destination.Destination.Endpoint != "/private/tmp/private-endpoint-secret" || notify.subscription.Replay || notify.subscription.Source != "project" {
         t.Fatalf("%+v", notify)
     }
     want := []string{"python3", "train.py", "--json", "--notify", "literal"}

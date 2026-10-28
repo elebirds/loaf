@@ -2164,6 +2164,9 @@ other = "正在准备独立队列输入副本（选中 {{.Count}} 个文件）�
 [queue_state_save_failed]
 other = "本地队列状态保存失败（{{.Code}}）；请保留已确认的远端结果。"
 
+[queue_more]
+other = "队列列表已截断；可增大 --limit，或按请求 ID 查看详情。"
+
 [cloud_binding_next]
 other = "使用 loaf machine use {{.Target}} 为当前项目选定此机器，再用 loaf run 提交项目命令。"
 

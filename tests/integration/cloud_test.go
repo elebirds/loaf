@@ -18,6 +18,7 @@ import (
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/credentials"
+    "github.com/elebirds/loaf/internal/event"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
     "github.com/elebirds/loaf/internal/state/local"
@@ -205,7 +206,9 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             o := commands.Options{Env: map[string]string{"LANG": "C"}, In: strings.NewReader("")}
             execute := func(args []string) int {
                 settings, err := store.Load()
-                o.App = application.New(dependencies, settings)
+                invocation := dependencies
+                invocation.Events, invocation.Notify = application.NewEventServices(application.EventDependencies{State: state, Settings: settings, CWD: project, Runs: runs, Remote: f.client})
+                o.App = application.New(invocation, settings)
                 o.Language, o.InitError = settings.Language, err
                 return commands.Execute(context.Background(), args, o)
             }
@@ -248,6 +251,25 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             invoke(acquire...)
             if created != 1 || cloning && cloned != 1 {
                 t.Fatal(created)
+            }
+            // Resource acquisition is an event source before any project Run or
+            // queue request exists. Its confirmed created/ready facts are distinct.
+            var resourceFacts struct {
+                Data event.Page `json:"data"`
+            }
+            if err := json.Unmarshal(invoke("events", "list", "--source", "resources"), &resourceFacts); err != nil {
+                t.Fatal(err)
+            }
+            acquired, ready := false, false
+            for _, fact := range resourceFacts.Data.Events {
+                if fact.Correlation.RunID != "" || fact.Correlation.QueueRequestID != "" {
+                    t.Fatal("resource event requires a Job", fact)
+                }
+                acquired = acquired || fact.Type == "resource.acquired"
+                ready = ready || fact.Type == "resource.ready"
+            }
+            if !acquired || !ready {
+                t.Fatal("missing distinct confirmed resource facts", resourceFacts.Data)
             }
             invoke("machine", "use", "gpu")
             var started struct{ Data execution.View }

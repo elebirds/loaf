@@ -41,7 +41,25 @@ func Serve(in io.Reader, out io.Writer) int {
         err = errors.New("BAD_REQUEST")
     }
     response := wire.Response{FormatVersion: 1, Version: wire.Version}
-    if err == nil && (req.Action == "clean" || req.Action == "clean-preview") {
+    if err == nil && req.Action == "queue" {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        result, queueErr := QueueControl(ctx, req)
+        response.Queue = &result
+        err = queueErr
+    } else if err == nil && req.Action == "events" {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        if req.Events != nil && req.Events.Source == "queue" {
+            page, eventErr := QueueEvents(ctx, req)
+            response.Events = &page
+            err = eventErr
+        } else {
+            page, eventErr := Events(ctx, req)
+            response.Events = &page
+            err = eventErr
+        }
+    } else if err == nil && (req.Action == "clean" || req.Action == "clean-preview") {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()
         response.Cleanup, err = Clean(ctx, req, req.Action == "clean-preview")
@@ -223,6 +241,9 @@ func copyWork(req wire.Request, dir string) (*wire.RunRecord, error) {
     if err := cleanedAvailability(req, dir); err != nil {
         return nil, err
     }
+    if err := QueueRunGuard(req, false); err != nil {
+        return nil, err
+    }
     r := &wire.RunRecord{FormatVersion: wire.FormatVersion, Request: req, Status: "starting", Phase: "copying", CreatedAt: time.Now().UTC()}
     state, err := remotestate.Open(req.Root, true)
     if err != nil {
@@ -287,6 +308,9 @@ func launch(req wire.Request, dir string) (*wire.RunRecord, error) {
     }
     if r.Phase != "prepared" {
         return existingStart(req, dir)
+    }
+    if err := QueueRunGuard(req, true); err != nil {
+        return r, err
     }
     r.Request = req
     r.Phase = "starting"

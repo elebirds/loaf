@@ -235,6 +235,11 @@ func printQueueResult(out io.Writer, r queue.Result, l *i18n.Localizer) error {
             return err
         }
     }
+    if r.HasMore {
+        if _, err := fmt.Fprintln(out, l.Text("queue_more")); err != nil {
+            return err
+        }
+    }
     if len(r.Cleaned) > 0 {
         _, err := fmt.Fprintln(out, l.Text("queue_clean_done", map[string]any{"Value": strings.Join(r.Cleaned, ", ")}))
         return err

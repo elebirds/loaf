@@ -91,8 +91,9 @@ func (r *queueRemote) QueueControl(ctx context.Context, target config.Target, _ 
         result.Request = &e.Request
         err = eErr
     case "list":
-        entries, eErr := r.store.List(ctx, c.Limit)
+        entries, more, eErr := r.store.List(ctx, c.Limit)
         err = eErr
+        result.HasMore = more
         for _, e := range entries {
             result.Requests = append(result.Requests, e.Request)
         }
@@ -192,6 +193,26 @@ func TestQueueSubmitFreezesInputAndRegistersBeforeSideEffects(t *testing.T) {
     data, _ := json.Marshal(result)
     if strings.Contains(string(data), "not-public") || strings.Contains(string(data), "TOKEN") {
         t.Fatalf("execution environment leaked: %s", data)
+    }
+}
+
+func TestQueueListPreservesBoundedCoverage(t *testing.T) {
+    q, _, _, _, _, _ := queueClientFixture(t)
+    ctx := context.Background()
+    first, err := q.Submit(ctx, QueueSubmitInput{}, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    second, err := q.Submit(ctx, QueueSubmitInput{}, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err = q.Cancel(ctx, QueueIDInput{ID: first.Request.ID}); err != nil {
+        t.Fatal(err)
+    }
+    result, err := q.List(ctx, QueueListInput{Limit: 1})
+    if err != nil || !result.HasMore || len(result.Requests) != 1 || result.Requests[0].ID != second.Request.ID {
+        t.Fatalf("list lost live work or coverage: %+v %v", result, err)
     }
 }
 
@@ -340,5 +361,83 @@ func TestQueueCloudIdentityIsIndependentOfLocalAccountAliases(t *testing.T) {
     }
     if _, err = queuestate.Open(ctx, path, queuestate.Identity{Host: "same-host-uid", Binding: queueHostBinding(clone)}, true); err == nil {
         t.Fatal("cloned instance inherited donor ledger")
+    }
+}
+
+type queuedRunObserver struct{ record *wire.RunRecord }
+
+func (r queuedRunObserver) Control(context.Context, config.Target, string, wire.Request, bool) (*wire.RunRecord, error) {
+    return r.record, nil
+}
+func (r queuedRunObserver) Observe(context.Context, config.Target, string, wire.Request, bool) (wire.Observation, error) {
+    return wire.Observation{Record: r.record}, nil
+}
+func (r queuedRunObserver) Follow(context.Context, config.Target, string, wire.Request, bool, func(wire.LogEvent) error) error {
+    return nil
+}
+
+func TestQueueRunCanBeObservedDirectlyWithoutQueueShow(t *testing.T) {
+    for _, phase := range []string{"prepared", "running", "unknown"} {
+        t.Run(phase, func(t *testing.T) {
+            q, remote, _, _, _, _ := queueClientFixture(t)
+            ctx := context.Background()
+            result, err := q.Submit(ctx, QueueSubmitInput{}, nil)
+            if err != nil {
+                t.Fatal(err)
+            }
+            ref, err := q.Projects.State.Run(result.Request.ProjectID, result.Request.RunID)
+            if err != nil {
+                t.Fatal(err)
+            }
+            e, err := remote.store.Entry(ctx, result.Request.ID)
+            if err != nil {
+                t.Fatal(err)
+            }
+            record := &wire.RunRecord{FormatVersion: 1, Request: wire.Request{FormatVersion: 1, Version: wire.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID}, Status: "starting", Phase: "prepared", CreatedAt: ref.CreatedAt}
+            if phase != "prepared" {
+                selected, err := remote.store.Reserve(ctx, queue.FIFO{})
+                if err != nil || len(selected) != 1 {
+                    t.Fatal(err)
+                }
+                e, err = remote.store.MarkAttempted(ctx, result.Request.ID)
+                if err != nil {
+                    t.Fatal(err)
+                }
+                if _, err = remote.store.Confirm(ctx, result.Request.ID, false); err != nil {
+                    t.Fatal(err)
+                }
+                record.Request.QueueRequestID = e.Request.ID
+                record.Request.AttemptedAt = e.Request.AttemptedAt
+                record.Request.Args = e.Execution.Args
+                record.Request.Env = e.Execution.Env
+                record.Request.Outputs = e.Execution.Outputs
+                record.Status = phase
+                record.Phase = "command"
+                record.SupervisorPID = 123
+                record.SupervisorStart = "12345"
+                record.BootID = "boot"
+                if phase == "unknown" {
+                    record.Reason = "SUPERVISOR_LOST"
+                }
+            }
+            q.Projects.Runs.Remote = queuedRunObserver{record: record}
+            observed, err := q.Projects.Runs.Observe(ctx, ref, 0, 0, true)
+            if err != nil || observed.QueryError != "" {
+                t.Fatalf("valid queue-owned Run not observable: %+v %v", observed, err)
+            }
+            saved, err := q.Projects.State.Run(ref.ProjectID, ref.ID)
+            if err != nil {
+                t.Fatal(err)
+            }
+            if phase == "prepared" {
+                if saved.Submission != "preparing" || saved.AttemptedAt != nil || observed.Phase != "prepared" {
+                    t.Fatalf("input preparation was treated as acceptance: %+v %+v", saved, observed)
+                }
+            } else {
+                if saved.Submission != "submitted" || observed.Submission != "submitted" || saved.AttemptedAt == nil || !saved.AttemptedAt.Equal(*e.Request.AttemptedAt) || observed.Status != phase {
+                    t.Fatalf("verified admission lost: %+v %+v", saved, observed)
+                }
+            }
+        })
     }
 }

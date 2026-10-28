@@ -98,6 +98,7 @@ type Result struct {
     StateError string    `json:"state_error,omitempty"`
     Request    *Request  `json:"request,omitempty"`
     Requests   []Request `json:"requests,omitempty"`
+    HasMore    bool      `json:"has_more,omitempty"`
     Status     *Status   `json:"status,omitempty"`
     Cleaned    []string  `json:"cleaned,omitempty"`
 }

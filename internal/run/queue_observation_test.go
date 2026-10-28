@@ -21,7 +21,7 @@ func (q queuedObservation) Observe(context.Context, config.Target, string, wire.
 }
 
 func TestObserveConfirmsOnlyBoundQueuedAdmissionAndRealAttempt(t *testing.T) {
-    for _, mode := range []string{"confirmed", "different_queue", "missing_attempt", "not_accepted", "direct_preparing", "save_failed"} {
+    for _, mode := range []string{"confirmed", "different_queue", "missing_attempt", "not_accepted", "prepared_without_queue", "direct_preparing", "save_failed"} {
         t.Run(mode, func(t *testing.T) {
             service, input, _, _ := executionFixture(t)
             state := service.Index.(*local.Store)
@@ -44,6 +44,9 @@ func TestObserveConfirmsOnlyBoundQueuedAdmissionAndRealAttempt(t *testing.T) {
                 record.Request.AttemptedAt = nil
             case "not_accepted":
                 record.Status, record.Phase, record.SupervisorPID = "preparing", "copying", 0
+            case "prepared_without_queue":
+                record.Status, record.Phase, record.SupervisorPID = "preparing", "prepared", 0
+                record.Request.QueueRequestID, record.Request.AttemptedAt = "", nil
             case "save_failed":
                 service.Index = &failIndex{RunIndex: state, failAt: 1}
             }
@@ -66,6 +69,9 @@ func TestObserveConfirmsOnlyBoundQueuedAdmissionAndRealAttempt(t *testing.T) {
             default:
                 if saved.Submission != "preparing" || saved.AttemptedAt != nil || observed.Submission != "preparing" {
                     t.Fatal("unverified admission promoted", observed, saved, err)
+                }
+                if mode == "prepared_without_queue" && (err != nil || observed.Phase != "prepared" || observed.QueryError != "") {
+                    t.Fatal("prepared input falsely rejected", observed, err)
                 }
             }
             changed := saved

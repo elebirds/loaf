@@ -7,6 +7,26 @@ import (
     "testing"
 )
 
+func TestWorkspaceSDKKeepsActualDevelopmentIdentity(t *testing.T) {
+    tests := []struct {
+        path, built, resolved string
+        main                  bool
+        want                  bool
+    }{
+        {"github.com/elebirds/loaf/sdk/agentdelivery", "(devel)", "", true, true},
+        {"github.com/elebirds/loaf/sdk/agentdelivery", "(devel)", "", false, false},
+        {"example.com/foreign", "(devel)", "", true, false},
+        {"example.com/library", "v1.2.3", "v1.2.3", false, true},
+        {"example.com/library", "v1.2.3", "v1.2.4", false, false},
+        {"example.com/library", "", "", false, false},
+    }
+    for _, tt := range tests {
+        if got := sourceVersionMatches(tt.path, tt.built, tt.resolved, tt.main); got != tt.want {
+            t.Errorf("%+v: got %t", tt, got)
+        }
+    }
+}
+
 func TestCopyNoticesPreservesRequiredTextsAndRejectsMissingLicense(t *testing.T) {
     source, destination := t.TempDir(), t.TempDir()
     for _, name := range []string{"LICENSE.txt", "NOTICE", "PATENTS", "README.md"} {

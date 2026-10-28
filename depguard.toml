@@ -25,6 +25,15 @@ files = ["**/internal/remote/**", "!$test"]
 "github.com/elebirds/loaf/internal/i18n" = "Return stable codes and values; localize in the CLI."
 "github.com/alecthomas/kong" = "Keep argument parsing in entry points."
 "charm.land/huh" = "The runner is noninteractive."
+"github.com/elebirds/loaf/sdk/agentdelivery" = "Agent integrations are local delivery adapters, never remote execution dependencies."
+
+[delivery_sdk]
+listMode = "Lax"
+files = ["**/sdk/agentdelivery/**", "!$test"]
+[delivery_sdk.deny]
+"github.com/elebirds/loaf/internal" = "The standalone SDK must be usable without Loaf internals."
+"database/sql$" = "Durable application delivery state belongs to Loaf, not the transport SDK."
+"modernc.org/sqlite" = "The standalone delivery SDK does not own a database."
 
 [cli_adapters]
 listMode = "Lax"

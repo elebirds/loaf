@@ -108,7 +108,10 @@ func collect(out, version string, binaries []string) error {
         decoder := json.NewDecoder(strings.NewReader(string(data)))
         found := map[string]bool{}
         for {
-            var module struct{ Path, Version, Dir string }
+            var module struct {
+                Path, Version, Dir string
+                Main               bool
+            }
             err := decoder.Decode(&module)
             if errors.Is(err, io.EOF) {
                 break
@@ -116,16 +119,17 @@ func collect(out, version string, binaries []string) error {
             if err != nil {
                 return err
             }
-            if module.Dir == "" || modules[module.Path] != module.Version {
+            builtVersion := modules[module.Path]
+            if module.Dir == "" || !sourceVersionMatches(module.Path, builtVersion, module.Version, module.Main) {
                 return fmt.Errorf("dependency source unavailable or mismatched: %s", module.Path)
             }
             found[module.Path] = true
-            name := module.Path + "@" + module.Version
+            name := module.Path + "@" + builtVersion
             notices, err := copyNotices(module.Dir, filepath.Join(out, "THIRD_PARTY_LICENSES", filepath.FromSlash(name)))
             if err != nil {
                 return fmt.Errorf("%s: %w", module.Path, err)
             }
-            result.Dependencies = append(result.Dependencies, dependency{module.Path, module.Version, noticePaths(name, notices)})
+            result.Dependencies = append(result.Dependencies, dependency{module.Path, builtVersion, noticePaths(name, notices)})
         }
         if len(found) != len(paths) {
             return errors.New("dependency notice inventory is incomplete")
@@ -136,6 +140,17 @@ func collect(out, version string, binaries []string) error {
         return err
     }
     return os.WriteFile(filepath.Join(out, "BUILD.json"), append(data, '\n'), 0644)
+}
+
+// sourceVersionMatches retains the binary's actual dependency identity. Go marks
+// a linked workspace main module as (devel), while go list leaves Version empty.
+// Only our independently versioned, source-distributed delivery SDK uses that
+// development path; arbitrary replaced or unversioned dependencies stay rejected.
+func sourceVersionMatches(path, built, resolved string, main bool) bool {
+    if built != "" && built == resolved {
+        return true
+    }
+    return path == "github.com/elebirds/loaf/sdk/agentdelivery" && built == "(devel)" && resolved == "" && main
 }
 
 func noticePaths(module string, names []string) []string {

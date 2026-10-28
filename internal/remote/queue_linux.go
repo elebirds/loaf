@@ -539,6 +539,9 @@ func cleanQueuedInput(ctx context.Context, e queuestate.Entry, dry bool) error {
     defer projectLock.Close()
     dir, err := runPath(req)
     if err != nil {
+        if err.Error() == "RUN_NOT_FOUND" {
+            return nil
+        }
         return err
     }
     dataLock, err := lockData(dir, true)
@@ -553,7 +556,7 @@ func cleanQueuedInput(ctx context.Context, e queuestate.Entry, dry bool) error {
     if err != nil {
         return err
     }
-    if record.Phase != "prepared" || record.SupervisorPID != 0 || record.ChildPID != 0 {
+    if record.Phase != "prepared" && record.Phase != "copying" || record.SupervisorPID != 0 || record.ChildPID != 0 {
         return errors.New("QUEUE_NOT_CANCELABLE")
     }
     launchLock, err := cleanupLock(filepath.Join(dir, "launch.lock"), !dry)

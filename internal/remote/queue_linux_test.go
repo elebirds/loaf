@@ -11,6 +11,7 @@ import (
     "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/queue"
     queuestate "github.com/elebirds/loaf/internal/state/queue"
+    remotestate "github.com/elebirds/loaf/internal/state/remote"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -163,5 +164,57 @@ func TestQueuedExecutionCarriesFrozenAdmissionMetadata(t *testing.T) {
     r.Request.QueueRequestID = "other"
     if queueOutcome(e, r).Accepted {
         t.Fatal("foreign admission accepted as this Run")
+    }
+}
+
+func TestQueueCanceledPreparationReclaimsMissingAndPartialCopies(t *testing.T) {
+    ctx := context.Background()
+    _, _, store := queueFixture(t)
+    root := t.TempDir()
+    if _, err := initProject(root, "project"); err != nil {
+        t.Fatal(err)
+    }
+    now := time.Now().UTC()
+    e, err := store.Prepare(ctx, queue.Request{FormatVersion: 1, ID: "q_partial", TargetID: store.TargetID, ProjectID: "project", RunID: "partial", CreatedAt: now}, queue.Execution{Version: wire.Version, Root: root, Args: []string{"command"}})
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err = store.Cancel(ctx, e.Request.ID); err != nil {
+        t.Fatal(err)
+    }
+    e, err = store.Entry(ctx, e.Request.ID)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if err = cleanQueuedInput(ctx, e, false); err != nil {
+        t.Fatalf("missing not-started payload cannot be cleaned: %v", err)
+    }
+    // failCopy leaves phase=copying with no Supervisor/child. This is safe to
+    // reclaim only through the retained canceled request's no-start proof.
+    dir := filepath.Join(root, "runs", e.Request.RunID)
+    if err = os.MkdirAll(filepath.Join(dir, "work"), 0700); err != nil {
+        t.Fatal(err)
+    }
+    if err = os.WriteFile(filepath.Join(dir, "work", "partial.txt"), []byte("partial"), 0600); err != nil {
+        t.Fatal(err)
+    }
+    state, err := remotestate.Open(root, true)
+    if err != nil {
+        t.Fatal(err)
+    }
+    req := queuedExecution(e, "launch")
+    if err = state.CreateRun(&wire.RunRecord{FormatVersion: 1, Request: req, Status: "failed", Phase: "copying", CreatedAt: now, Reason: "COPY_FAILED"}); err != nil {
+        t.Fatal(err)
+    }
+    state.Close()
+    if err = cleanQueuedInput(ctx, e, false); err != nil {
+        t.Fatalf("partial not-started payload cannot be cleaned: %v", err)
+    }
+    if _, err = os.Stat(dir); !os.IsNotExist(err) {
+        t.Fatalf("partial payload remains: %v", err)
+    }
+    retained, err := store.Entry(ctx, e.Request.ID)
+    if err != nil || retained.Request.State != "canceled" {
+        t.Fatal("cleanup erased no-start identity")
     }
 }

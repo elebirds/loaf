@@ -3,6 +3,7 @@ module github.com/elebirds/loaf/sdk/agentdelivery
 go 1.27.3
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/pmenglund/codex-sdk-go v0.164.0
 )

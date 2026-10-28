@@ -5,14 +5,13 @@ import "context"
 // Client manually composes the supported concrete adapters. It has no registry,
 // background retry, persistent store or implicit new-session fallback.
 type Client struct {
-    CodexBinary string
-    Webhook     Webhook
+    Webhook Webhook
 }
 
 func (c Client) sender(d Destination) Sender {
     switch d.Kind {
     case "codex":
-        return Codex{Binary: c.CodexBinary}
+        return Codex{}
     case "claude-channel":
         return ClaudeChannel{}
     case "webhook":

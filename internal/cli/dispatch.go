@@ -168,6 +168,12 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
     if strings.HasPrefix(path, "cloud ") {
         return c.cloud(ctx, path)
     }
+    if path == "queue" || strings.HasPrefix(path, "queue ") {
+        return c.queue(ctx, path)
+    }
+    if path == "events" || strings.HasPrefix(path, "events ") || path == "notify" || strings.HasPrefix(path, "notify ") {
+        return c.async(ctx, path)
+    }
     return nil, fault.New("BAD_CONFIG", "invalid_command", nil)
 }
 
@@ -210,7 +216,7 @@ func (c *invocation) run(ctx context.Context) (any, error) {
             return writeLog(c.output.out, v)
         }
     }
-    result, err := c.app.Projects.Run(ctx, client.RunInput{Target: c.grammar.Target, Wait: v.Wait, Args: args, Name: v.Name, Tags: v.Tag, DryRun: v.DryRun, Policy: c.policy}, feedback)
+    result, err := c.app.Projects.Run(ctx, client.RunInput{Target: c.grammar.Target, Wait: v.Wait, Args: args, Name: v.Name, Tags: v.Tag, Notify: v.Notify, DryRun: v.DryRun, Policy: c.policy}, feedback)
     if result.Preview != nil {
         return *result.Preview, err
     }

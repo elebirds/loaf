@@ -77,7 +77,7 @@ other = "Show help."
 [flag_lang]
 other = "Interface language: auto, en, or zh-Hans."
 [flag_json]
-other = "Print JSON; exec, logs -f and cloud watch stream NDJSON."
+other = "Print JSON; exec, logs -f, cloud watch and continuous notify serve stream NDJSON."
 [flag_target]
 other = "Override the project's target alias."
 [flag_ssh]
@@ -125,9 +125,9 @@ other = "Remote directory must be absolute or start with ~/; root, home itself, 
 [target_exists]
 other = "Target {{.Target}} already exists. Use --replace to change it."
 [target_unknown]
-other = "Unknown target: {{.Target}}. Add it with loaf machine add first."
+other = "Unknown target: {{.Target}}. Find saved aliases with loaf machine list, or add a connection with loaf machine add NAME --ssh HOST."
 [target_required]
-other = "No target selected. Use loaf machine use <name> or --target <name>."
+other = "No target selected for this project. Use loaf machine list, then loaf machine use NAME; add a new connection with loaf machine add NAME --ssh HOST."
 [ssh_input]
 other = "Enter only an SSH connection or Host alias. Commands, expansions, forwarding, and unsafe SSH options are not accepted."
 [ssh_prompt]
@@ -1800,3 +1800,369 @@ other = "{{.Argument}} is outside the supported numeric range."
 
 [builtin_default_value]
 other = "built-in: {{.Value}}"
+
+[queue_short]
+other = "Queue work on one machine with optional FIFO dispatch."
+
+[queue_list_short]
+other = "List the selected machine’s queue and shared capacity."
+
+[queue_enable_short]
+other = "Explicitly enable FIFO dispatch with fixed concurrency."
+
+[queue_submit_short]
+other = "Freeze project input and enqueue one background task."
+
+[queue_show_short]
+other = "Inspect a saved request and its Run identity."
+
+[queue_cancel_short]
+other = "Cancel a request that has not entered dispatch."
+
+[queue_pause_short]
+other = "Pause new dispatch; running tasks continue."
+
+[queue_resume_short]
+other = "Resume dispatch from the saved queue."
+
+[queue_clean_short]
+other = "Delete prepared inputs for explicitly canceled requests."
+
+[events_short]
+other = "Read saved run, queue and resource facts."
+
+[events_list_short]
+other = "Read a bounded event page with an optional cursor."
+
+[notify_short]
+other = "Manage explicit destinations and event delivery."
+
+[notify_destination_short]
+other = "Manage private bindings to exact destinations."
+
+[notify_destination_list_short]
+other = "List destinations without private connection details."
+
+[notify_destination_add_short]
+other = "Save an explicit Agent session or Webhook destination."
+
+[notify_subscribe_short]
+other = "Subscribe one subject to named destinations."
+
+[notify_subscriptions_short]
+other = "List durable notification subscriptions."
+
+[notify_deliveries_short]
+other = "Inspect acceptance and processing evidence."
+
+[notify_serve_short]
+other = "Collect and deliver events; Ctrl-C stops only this Bridge."
+
+[flag_notify]
+other = "Notify this saved destination; repeat for more destinations."
+
+[flag_event_source]
+other = "Source: local inbox, resources, project, or machine queue."
+
+[flag_event_subject]
+other = "Filter an exact subject, such as run:r_example."
+
+[flag_event_cursor]
+other = "Continue from this source-bound event cursor."
+
+[flag_event_limit]
+other = "Maximum rows, from 1 to 1000."
+
+[flag_destination_kind]
+other = "Integration: codex, claude-channel, claude-resume, or webhook."
+
+[flag_destination_session]
+other = "Exact session ID; never selects the latest session."
+
+[flag_destination_endpoint]
+other = "Private local endpoint or Webhook URL, never a Shell command."
+
+[flag_destination_cwd]
+other = "Explicit workspace for the supported integration mode."
+
+[event_subject_arg]
+other = "<kind:id>"
+
+[flag_subscription_destination]
+other = "Saved destination name; repeat for more than one."
+
+[flag_subscription_replay]
+other = "Include retained facts; --replay=false selects only future facts."
+
+[flag_notify_once]
+other = "Collect and dispatch once, returning one finite result."
+
+[flag_notify_interval]
+other = "Positive delay between collection rounds."
+
+[flag_queue_slots]
+other = "Positive concurrent-task limit shared by this machine and remote user."
+
+[flag_queue_dry_run]
+other = "Preview locally without connecting or writing state."
+
+[queue_id_arg]
+other = "<queue-request-id>"
+
+[queue_ids_arg]
+other = "<queue-request-id>..."
+
+[flag_queue_clean_dry_run]
+other = "Preview selected canceled-input deletion without deleting files."
+
+[async_unavailable]
+other = "This build has no {{.Value}} service. Build the complete CLI with bash scripts/build.sh."
+
+[event_subject_invalid]
+other = "Use kind:id, with kind run, queue_request, resource_operation, or resource."
+
+[event_local_target]
+other = "The local source rejects --target. Select --source project or queue for a remote source."
+
+[async_limit]
+other = "The row limit must be between 1 and 1000."
+
+[notify_destination_invalid]
+other = "Provide an explicit Agent session or Webhook endpoint. NUL and line breaks are not allowed."
+
+[notify_interval_invalid]
+other = "The notification interval must be a positive duration."
+
+[queue_slots_invalid]
+other = "Queue concurrency must be a positive integer."
+
+[queue_clean_confirmation_required]
+other = "Add --yes to delete canceled inputs noninteractively, or use --dry-run."
+
+[queue_clean_scope]
+other = "Delete prepared inputs only for canceled requests: {{.Value}}. Shared datasets, active Runs and local downloads are excluded."
+
+[queue_clean_confirm]
+other = "Delete these canceled queue inputs?"
+
+[events_empty]
+other = "No matching saved events in this page."
+
+[events_more]
+other = "More events are available. Next cursor: {{.Value}}"
+
+[notify_destinations_empty]
+other = "No destinations. Add one with loaf notify destination add NAME --kind KIND."
+
+[notify_subscriptions_empty]
+other = "No saved notification subscriptions."
+
+[notify_deliveries_empty]
+other = "No saved deliveries."
+
+[notify_summary]
+other = "Received {{.Count}}; attempted {{.Total}}; accepted {{.Matched}}; unconfirmed {{.Value}}; pending {{.Bytes}}."
+
+[delivery_state_pending]
+other = "pending"
+
+[delivery_state_written]
+other = "transport written; acceptance unconfirmed"
+
+[delivery_state_accepted]
+other = "destination accepted"
+
+[delivery_state_processed]
+other = "Agent processing confirmed"
+
+[delivery_state_unconfirmed]
+other = "delivery unconfirmed"
+
+[delivery_state_rejected]
+other = "rejected"
+
+[queue_state_preparing]
+other = "preparing input"
+
+[queue_state_queued]
+other = "queued"
+
+[queue_state_dispatching]
+other = "dispatching"
+
+[queue_state_submitted]
+other = "Run accepted"
+
+[queue_state_running]
+other = "running"
+
+[queue_state_completed]
+other = "Run finished"
+
+[queue_state_canceled]
+other = "canceled before dispatch"
+
+[queue_state_unconfirmed]
+other = "dispatch unconfirmed"
+
+[queue_state_dispatch_unconfirmed]
+other = "dispatch unconfirmed"
+
+[queue_next]
+other = "Inspect this request with loaf queue show {{.ID}}."
+
+[queue_active]
+other = "dispatch enabled"
+
+[queue_paused]
+other = "dispatch paused"
+
+[queue_summary]
+other = "{{.Target}}  {{.Value}}  reserved {{.Count}}/{{.Total}}  waiting {{.Matched}}"
+
+[queue_capacity_scope]
+other = "Capacity covers queue participants only; direct Runs and external programs are not isolated."
+
+[queue_coordinator_inactive]
+other = "Coordinator is not observed running. Resume dispatch explicitly; accepted Runs are unaffected."
+
+[queue_clean_done]
+other = "Canceled inputs removed: {{.Value}}. Request identities are retained."
+
+[queue_empty]
+other = "No requests in this queue page."
+
+[source_large_warning]
+other = "Selected source is at least 1 GiB. Review exclusions; selected bytes are not the incremental upload size."
+
+[outputs_observed_bytes]
+other = "Observed regular output files: {{.Count}}; bytes: {{.Bytes}}. Bounded output coverage is not total Run storage."
+
+[clean_payload_scope]
+other = "Deletion includes this Run’s working copy, logs and outputs under the path above; local downloads remain."
+
+[probe_observed]
+other = "Observed at {{.Value}}."
+
+[probe_cpu]
+other = "CPU logical processors: {{.Count}}"
+
+[probe_memory]
+other = "Memory: total {{.Total}} GiB; available {{.Bytes}} GiB."
+
+[probe_unavailable]
+other = "Unavailable: {{.Value}}. Unknown is not zero."
+
+[probe_gpu_stats]
+other = "GPU {{.Count}}: {{.Value}}; memory {{.Bytes}}/{{.Total}} GiB; utilization {{.Matched}}%."
+
+[probe_unknown]
+other = "unknown"
+
+[async_failed]
+other = "The asynchronous operation could not be completed. Inspect its saved request or delivery before retrying."
+
+[probe_component_cpu]
+other = "CPU count"
+
+[probe_component_memory]
+other = "memory"
+
+[probe_component_memory_total]
+other = "total memory"
+
+[probe_component_memory_available]
+other = "available memory"
+
+[probe_component_gpu]
+other = "GPU observations"
+
+[probe_component_gpu_memory]
+other = "GPU memory"
+
+[probe_component_gpu_utilization]
+other = "GPU utilization"
+
+[queue_operation_failed]
+other = "The queue operation could not be completed ({{.Code}}). Inspect the saved request before retrying."
+
+[delivery_dispatch_pending]
+other = "pending delivery"
+
+[delivery_dispatch_in_flight]
+other = "delivery in flight"
+
+[delivery_dispatch_accepted]
+other = "destination accepted"
+
+[delivery_dispatch_processed]
+other = "processing confirmed"
+
+[delivery_dispatch_unconfirmed]
+other = "delivery unconfirmed"
+
+[delivery_dispatch_rejected]
+other = "delivery rejected"
+
+[delivery_evidence]
+other = "SDK evidence: {{.Value}}"
+
+[delivery_next_attempt]
+other = "Next safe attempt: {{.Value}}"
+
+[event_type_run_accepted]
+other = "Run accepted"
+
+[event_type_run_succeeded]
+other = "Run succeeded"
+
+[event_type_run_failed]
+other = "Run failed"
+
+[event_type_run_stopped]
+other = "Run stopped"
+
+[event_type_queue_enqueued]
+other = "Request queued"
+
+[event_type_queue_dispatched]
+other = "Dispatch confirmed"
+
+[event_type_queue_canceled]
+other = "Request canceled"
+
+[event_type_queue_attention_required]
+other = "Queue request needs attention"
+
+[event_type_resource_acquired]
+other = "Resource acquired"
+
+[event_type_resource_ready]
+other = "Resource ready"
+
+[event_type_resource_started]
+other = "Instance started"
+
+[event_type_resource_stopped]
+other = "Instance stopped"
+
+[event_type_resource_attention_required]
+other = "Resource operation needs attention"
+
+[event_type_attention_required]
+other = "Attention required"
+
+[flag_destination_replace]
+other = "Replace this saved destination explicitly; existing frozen deliveries retain their binding."
+
+[queue_checking_progress]
+other = "Checking the machine for queued input preparation…"
+
+[queue_syncing_progress]
+other = "Preparing an independent queued input copy ({{.Count}} selected files)…"
+
+[queue_state_save_failed]
+other = "Local queue state could not be saved ({{.Code}}); retain the confirmed remote result."
+
+[cloud_binding_next]
+other = "Select this machine for your project with loaf machine use {{.Target}}, then use loaf run with your project command."

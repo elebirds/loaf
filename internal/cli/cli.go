@@ -127,7 +127,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
         return p.finish(nil, inputFailure("conflicting_arguments", "--target", "input_target_forbidden", nil, parsed.node))
     }
     if model.Trace {
-        if model.Logs.Follow || parsed.path == "exec" || parsed.path == "ssh" || parsed.path == "forward" || parsed.path == "cloud watch" {
+        if model.Logs.Follow || parsed.path == "exec" || parsed.path == "ssh" || parsed.path == "forward" || parsed.path == "cloud watch" || parsed.path == "notify serve" && !model.Notify.Serve.Once {
             return p.finish(nil, fault.New("BAD_CONFIG", "trace_finite_only", nil))
         }
         o.Trace.Enable()
@@ -135,7 +135,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: o.TerminalError && o.Env["TERM"] != "dumb", ReadPassword: o.ReadPassword})
     call := invocation{app: o.App, options: o, grammar: model, output: p, input: input, policy: client.CallPolicy{Batch: p.json || !o.Interactive}}
     result, err := call.dispatch(ctx, parsed.path)
-    if p.json && (parsed.path == "exec" || parsed.path == "cloud watch" || parsed.path == "logs" && model.Logs.Follow) {
+    if p.json && (parsed.path == "exec" || parsed.path == "cloud watch" || parsed.path == "logs" && model.Logs.Follow || parsed.path == "notify serve" && !model.Notify.Serve.Once) {
         return p.finishStream(result, err)
     }
     return p.finish(result, err)
@@ -218,8 +218,14 @@ func exitCode(view *errorView) int {
         if view.Code == "BAD_CONFIG" {
             code = 2
         }
+        if view.Code == "EVENT_CURSOR_INVALID" || view.Code == "DESTINATION_INVALID" {
+            code = 2
+        }
+        if strings.HasPrefix(view.Code, "QUEUE_") && strings.HasSuffix(view.Code, "_UNCONFIRMED") {
+            code = 3
+        }
         switch view.Code {
-        case "SUBMISSION_UNKNOWN", "STOP_UNCONFIRMED", "EXEC_UNCONFIRMED", "CLEAN_UNCONFIRMED", "CLOUD_UNCONFIRMED":
+        case "SUBMISSION_UNKNOWN", "STOP_UNCONFIRMED", "EXEC_UNCONFIRMED", "CLEAN_UNCONFIRMED", "CLOUD_UNCONFIRMED", "QUEUE_UNCONFIRMED", "DELIVERY_UNCONFIRMED":
             code = 3
         }
     }

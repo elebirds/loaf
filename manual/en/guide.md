@@ -1,6 +1,6 @@
 # Run and retrieve an experiment
 
-[Home](../../README.md) · [Command reference](commands.md) · [简体中文](../zh-Hans/guide.md)
+[Home](../../README.md) · [Command reference](commands.md) · [Notifications and queues](async.md) · [简体中文](../zh-Hans/guide.md)
 
 ## Set up a research machine
 
@@ -32,6 +32,11 @@ loaf check --runner
 Normal `check` only observes the remote environment. `--runner` additionally uploads the matching bundled executable into a private, versioned Loaf directory and verifies its version. It does not start an experiment or install Python, uv, CUDA, or project dependencies.
 
 Python, uv, and GPU tools are optional observations. Their absence does not make a CPU-capable machine fail the check. Missing rsync, unsupported platforms, or an unwritable remote location do.
+
+Ordinary `check` also reports a timestamped CPU count, total/available memory and
+per-card GPU memory/utilization when readable. Missing values remain unknown,
+not zero. These observations do not reserve resources or prove that external
+work can safely be preempted. Minimal Run preflight skips these extra probes.
 
 ### Check several targets and export diagnostics
 
@@ -266,6 +271,10 @@ loaf pull r_A r_B --into ./comparison --concurrency 2 --json
 Multiple explicit IDs require `--into`; each downloads under `<into>/<run-id>/` using its own saved connection and output paths. JSON retains every result/error with completed, failed and unexamined counts; one failure does not discard successful downloads. Downloads are serial by default; `--concurrency 1–4` is explicit and interactive authentication stays serial. Repeating is incremental and preserves local extras. Single-run `--to` still names the exact directory and cannot be combined with batch `--into`. One-off download destinations need normal ignore/exclude rules if they sit in your source tree.
 
 
+The human output also totals the regular output files actually visited. This
+bounded sum excludes unvisited output contents, working input and logs; it is
+not total Run storage. Review coverage before using it to plan downloads.
+
 ## Reclaim completed task data
 
 ```bash
@@ -295,6 +304,9 @@ The preview is local-only: it needs no configured target, SSH connection, or run
 Sources go to `<remote_dir>/cache/`. The first sync requires a new or empty project directory; subsequent syncs verify its project marker. Do not select an existing research directory containing data or environments. Keep those beside `cache/`, not inside it.
 
 The default **mirror** mode removes deleted and newly excluded source paths from `cache/` only. Other project directories and existing run copies are untouched. A project lock prevents overlapping source updates and run-copy preparation. Failed or canceled transfers leave the cache unavailable for new runs until an explicit sync succeeds; they do not stop existing runs. The cache is updated incrementally, not as an atomic directory swap.
+
+Selected source of at least 1 GiB produces a human-mode size reminder in previews.
+Review exclusions before transfer; source bytes are not incremental network bytes.
 
 ### Choose what to upload
 

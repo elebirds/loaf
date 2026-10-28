@@ -20,7 +20,7 @@
 | 0 | CLI 操作成功，包括成功查到失败实验 |
 | 1 | 其他操作失败，包括部分查询或下载失败 |
 | 2 | 参数或配置错误 |
-| 3 | 提交、停止、前台执行、清理或云变更未确认 |
+| 3 | 提交、停止、前台执行、清理、云变更、队列变更或 Agent 投递未确认 |
 
 任务结果包含 `run_id`、`version`、`target`、`remote_dir`、`status`、`created_at`
 和可为 `null` 的 `exit_code`。提交确认、阶段、结束时间、信号、原因、标签、日志、
@@ -58,6 +58,12 @@
 | `check` | 单目标报告；批量使用 `checks[]` 和覆盖计数 |
 | `wait` | 全部选中任务及 completed/pending/query_errors/state_errors/examined/unexamined/interrupted/timed_out |
 | `clean` | `runs[]` 的逐任务清理结果及错误码；执行结果另行保留 |
+| `events list` | 绑定来源的 events、source_id、next_cursor、has_more；事件保留原来源身份 |
+| `notify destination list`、`notify subscriptions`、`notify deliveries` | 安全的目的地、订阅或投递行；派发状态与 SDK 证据分开 |
+| `notify serve --once` | received/attempted/accepted/unconfirmed/pending 计数 |
+| `queue submit` | 队列 request、可选 Run 观察或离线 preview；入队不代表执行接受 |
+| 其他队列查询/控制 | request(s)、共享额度 status 或明确已删除的 cleaned ID |
+| `queue clean` | 明确的 dry_run、request_ids 和队列 result |
 | `cloud search` | 冻结计划、匹配、拒绝、观察时间和分页覆盖 |
 | `cloud acquire/bind` | 按阶段返回计划/收据/绑定，失败仍保留已知请求及实例 ID |
 | `cloud list/info/requests` | 有界实例页、一个实例、收据列表或指定收据 |
@@ -100,6 +106,7 @@ loaf help run --json
 | `logs ID -f --json` | `type: "chunk"` / `"end"`，任务在 `run`，日志在 `run.log` |
 | `exec --json -- PROGRAM` | chunk 包含 type、stream、offset、encoding、data；最终 end/error 带目标及执行结果 |
 | `cloud watch --wait 10m --json` | 变化/心跳观察及最终 end 或 error |
+| 不带 `--once` 的 `notify serve --json` | type 为 delivery，携带 delivery 行；最终 end/error 携带 result |
 
 每行沿用版本化 envelope。早期错误可能是唯一一行，不应假定先有 chunk。
 错误携带普通 `error` 和 `data.type: "error"`；没有最终事件的 EOF 不证明成功。

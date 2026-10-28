@@ -93,8 +93,9 @@ type Command struct {
 
 // Result preserves selected identities and admission facts on partial failures.
 type Result struct {
-    Request  *Request  `json:"request,omitempty"`
-    Requests []Request `json:"requests,omitempty"`
-    Status   *Status   `json:"status,omitempty"`
-    Cleaned  []string  `json:"cleaned,omitempty"`
+    StateError string    `json:"state_error,omitempty"`
+    Request    *Request  `json:"request,omitempty"`
+    Requests   []Request `json:"requests,omitempty"`
+    Status     *Status   `json:"status,omitempty"`
+    Cleaned    []string  `json:"cleaned,omitempty"`
 }

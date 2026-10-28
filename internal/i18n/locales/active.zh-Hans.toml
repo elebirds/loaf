@@ -77,7 +77,7 @@ other = "显示帮助。"
 [flag_lang]
 other = "界面语言：auto、en 或 zh-Hans。"
 [flag_json]
-other = "输出 JSON；exec、logs -f 和 cloud watch 使用 NDJSON。"
+other = "输出 JSON；exec、logs -f、cloud watch 和持续 notify serve 使用 NDJSON。"
 [flag_target]
 other = "覆盖当前项目的目标别名。"
 [flag_ssh]
@@ -125,9 +125,9 @@ other = "远端目录须为绝对路径或以 ~/ 开头，不允许根目录、�
 [target_exists]
 other = "目标 {{.Target}} 已存在，修改时请使用 --replace。"
 [target_unknown]
-other = "未知目标：{{.Target}}。请先使用 loaf machine add 添加。"
+other = "未知目标：{{.Target}}。使用 loaf machine list 查找已保存别名，或用 loaf machine add NAME --ssh HOST 添加连接。"
 [target_required]
-other = "尚未选择目标，请使用 loaf machine use <别名> 或 --target <别名>。"
+other = "当前项目尚未选择目标。先用 loaf machine list 查看别名，再用 loaf machine use NAME 选择；新连接使用 loaf machine add NAME --ssh HOST 添加。"
 [ssh_input]
 other = "请仅输入 SSH 连接或 Host 别名，不接受远端命令、变量展开、端口转发或不安全的 SSH 选项。"
 [ssh_prompt]
@@ -1800,3 +1800,369 @@ other = "{{.Argument}} 超出支持的数值范围。"
 
 [builtin_default_value]
 other = "内置：{{.Value}}"
+
+[queue_short]
+other = "将任务加入可选的单机 FIFO 队列。"
+
+[queue_list_short]
+other = "列出所选机器的队列和共享并发额度。"
+
+[queue_enable_short]
+other = "显式启用固定并发额度的 FIFO 派发。"
+
+[queue_submit_short]
+other = "固定项目输入并将一个后台任务加入队列。"
+
+[queue_show_short]
+other = "查看已保存请求及其 Run 身份。"
+
+[queue_cancel_short]
+other = "取消尚未进入派发的请求。"
+
+[queue_pause_short]
+other = "暂停新派发，运行中任务继续。"
+
+[queue_resume_short]
+other = "从持久队列恢复派发。"
+
+[queue_clean_short]
+other = "删除明确已取消请求的准备输入。"
+
+[events_short]
+other = "读取运行、队列与资源的持久事件。"
+
+[events_list_short]
+other = "使用可选游标读取有界事件页。"
+
+[notify_short]
+other = "管理明确的目的地和事件投递。"
+
+[notify_destination_short]
+other = "管理指向明确目的地的私有绑定。"
+
+[notify_destination_list_short]
+other = "列出目的地，不显示私有连接详情。"
+
+[notify_destination_add_short]
+other = "保存明确的 Agent 会话或 Webhook 目的地。"
+
+[notify_subscribe_short]
+other = "为指定主体登记通知目的地。"
+
+[notify_subscriptions_short]
+other = "列出持久通知订阅。"
+
+[notify_deliveries_short]
+other = "查看接收与处理证据。"
+
+[notify_serve_short]
+other = "接收并投递事件，Ctrl-C 仅停止当前 Bridge。"
+
+[flag_notify]
+other = "通知此已保存目的地，可重复指定。"
+
+[flag_event_source]
+other = "来源：local 接收箱、resources 云资源、project 项目或 queue 机器队列。"
+
+[flag_event_subject]
+other = "筛选明确主体，例如 run:r_example。"
+
+[flag_event_cursor]
+other = "从绑定此来源的事件游标继续。"
+
+[flag_event_limit]
+other = "最多读取条数，范围为 1 至 1000。"
+
+[flag_destination_kind]
+other = "接入类型：codex、claude-channel、claude-resume 或 webhook。"
+
+[flag_destination_session]
+other = "明确的会话 ID，不自动选择最近会话。"
+
+[flag_destination_endpoint]
+other = "私有本地接入端或 Webhook URL，不作为 Shell 命令执行。"
+
+[flag_destination_cwd]
+other = "受支持接入模式所用的明确工作目录。"
+
+[event_subject_arg]
+other = "<类型:标识>"
+
+[flag_subscription_destination]
+other = "已保存目的地名称，可重复指定多个。"
+
+[flag_subscription_replay]
+other = "包含保留的事实；--replay=false 仅订阅之后的事实。"
+
+[flag_notify_once]
+other = "接收并投递一轮，返回一个有限结果。"
+
+[flag_notify_interval]
+other = "各轮接收之间的正数等待时长。"
+
+[flag_queue_slots]
+other = "此机器及远端用户共享的正数任务并发上限。"
+
+[flag_queue_dry_run]
+other = "仅在本地预览，不连接或写入状态。"
+
+[queue_id_arg]
+other = "<队列请求标识>"
+
+[queue_ids_arg]
+other = "<队列请求标识>…"
+
+[flag_queue_clean_dry_run]
+other = "预览所选取消输入的删除范围，不删除文件。"
+
+[async_unavailable]
+other = "当前构建未接入 {{.Value}} 服务。请使用 bash scripts/build.sh 构建完整 CLI。"
+
+[event_subject_invalid]
+other = "请使用 类型:标识；类型为 run、queue_request、resource_operation 或 resource。"
+
+[event_local_target]
+other = "本地来源不接受 --target。远端来源请使用 --source project 或 queue。"
+
+[async_limit]
+other = "读取条数必须在 1 至 1000 之间。"
+
+[notify_destination_invalid]
+other = "必须指定明确 Agent 会话或 Webhook 接入端；不允许 NUL 或换行。"
+
+[notify_interval_invalid]
+other = "通知接收间隔必须是正数时长。"
+
+[queue_slots_invalid]
+other = "队列并发上限必须是正整数。"
+
+[queue_clean_confirmation_required]
+other = "非交互删除取消输入时请添加 --yes，或先使用 --dry-run。"
+
+[queue_clean_scope]
+other = "仅删除已取消请求 {{.Value}} 的准备输入，不包括共享数据集、活跃 Run 或本地下载。"
+
+[queue_clean_confirm]
+other = "删除这些已取消请求的准备输入？"
+
+[events_empty]
+other = "本页没有匹配的持久事件。"
+
+[events_more]
+other = "还有后续事件。下一游标：{{.Value}}"
+
+[notify_destinations_empty]
+other = "尚无目的地。使用 loaf notify destination add NAME --kind KIND 添加。"
+
+[notify_subscriptions_empty]
+other = "尚无已保存的通知订阅。"
+
+[notify_deliveries_empty]
+other = "尚无已保存的投递记录。"
+
+[notify_summary]
+other = "已接收 {{.Count}}；尝试投递 {{.Total}}；明确接收 {{.Matched}}；未确认 {{.Value}}；待投递 {{.Bytes}}。"
+
+[delivery_state_pending]
+other = "待投递"
+
+[delivery_state_written]
+other = "已写入传输，接收未确认"
+
+[delivery_state_accepted]
+other = "目的地已接收"
+
+[delivery_state_processed]
+other = "Agent 处理已确认"
+
+[delivery_state_unconfirmed]
+other = "投递未确认"
+
+[delivery_state_rejected]
+other = "已拒绝"
+
+[queue_state_preparing]
+other = "准备输入中"
+
+[queue_state_queued]
+other = "等待派发"
+
+[queue_state_dispatching]
+other = "派发中"
+
+[queue_state_submitted]
+other = "Run 已接受"
+
+[queue_state_running]
+other = "运行中"
+
+[queue_state_completed]
+other = "Run 已结束"
+
+[queue_state_canceled]
+other = "派发前已取消"
+
+[queue_state_unconfirmed]
+other = "派发未确认"
+
+[queue_state_dispatch_unconfirmed]
+other = "派发未确认"
+
+[queue_next]
+other = "使用 loaf queue show {{.ID}} 查看此请求。"
+
+[queue_active]
+other = "允许派发"
+
+[queue_paused]
+other = "派发已暂停"
+
+[queue_summary]
+other = "{{.Target}}  {{.Value}}  占用 {{.Count}}/{{.Total}}  等待 {{.Matched}}"
+
+[queue_capacity_scope]
+other = "额度仅约束队列参与任务，不隔离直接 Run 或外部程序。"
+
+[queue_coordinator_inactive]
+other = "未观察到 Coordinator 运行。请显式恢复派发；已接受的 Run 不受影响。"
+
+[queue_clean_done]
+other = "已删除取消输入：{{.Value}}；请求身份继续保留。"
+
+[queue_empty]
+other = "本页没有队列请求。"
+
+[source_large_warning]
+other = "所选源码至少 1 GiB。请检查排除规则；所选字节数不等于增量上传大小。"
+
+[outputs_observed_bytes]
+other = "已观察普通输出文件 {{.Count}} 个，共 {{.Bytes}} 字节。有界输出统计不代表整个 Run 占用。"
+
+[clean_payload_scope]
+other = "删除包括上述路径下此 Run 的工作副本、日志和产物；本地下载保留。"
+
+[probe_observed]
+other = "观察时间：{{.Value}}。"
+
+[probe_cpu]
+other = "CPU 逻辑处理器：{{.Count}}"
+
+[probe_memory]
+other = "内存：总计 {{.Total}} GiB；可用 {{.Bytes}} GiB。"
+
+[probe_unavailable]
+other = "无法获取：{{.Value}}。未知不表示为零。"
+
+[probe_gpu_stats]
+other = "GPU {{.Count}}：{{.Value}}；显存 {{.Bytes}}/{{.Total}} GiB；利用率 {{.Matched}}%。"
+
+[probe_unknown]
+other = "未知"
+
+[async_failed]
+other = "异步操作未能完成。重试前请检查已保存的请求或投递记录。"
+
+[probe_component_cpu]
+other = "CPU 数量"
+
+[probe_component_memory]
+other = "内存"
+
+[probe_component_memory_total]
+other = "总内存"
+
+[probe_component_memory_available]
+other = "可用内存"
+
+[probe_component_gpu]
+other = "GPU 观察"
+
+[probe_component_gpu_memory]
+other = "GPU 显存"
+
+[probe_component_gpu_utilization]
+other = "GPU 利用率"
+
+[queue_operation_failed]
+other = "队列操作未能完成（{{.Code}}）。重试前请检查已保存的请求。"
+
+[delivery_dispatch_pending]
+other = "等待投递"
+
+[delivery_dispatch_in_flight]
+other = "投递进行中"
+
+[delivery_dispatch_accepted]
+other = "目的地已接收"
+
+[delivery_dispatch_processed]
+other = "处理已确认"
+
+[delivery_dispatch_unconfirmed]
+other = "投递未确认"
+
+[delivery_dispatch_rejected]
+other = "投递已拒绝"
+
+[delivery_evidence]
+other = "SDK 证据：{{.Value}}"
+
+[delivery_next_attempt]
+other = "下次安全投递时间：{{.Value}}"
+
+[event_type_run_accepted]
+other = "Run 已接受"
+
+[event_type_run_succeeded]
+other = "Run 已成功"
+
+[event_type_run_failed]
+other = "Run 已失败"
+
+[event_type_run_stopped]
+other = "Run 已停止"
+
+[event_type_queue_enqueued]
+other = "请求已入队"
+
+[event_type_queue_dispatched]
+other = "派发已确认"
+
+[event_type_queue_canceled]
+other = "请求已取消"
+
+[event_type_queue_attention_required]
+other = "队列请求需要处理"
+
+[event_type_resource_acquired]
+other = "资源已获取"
+
+[event_type_resource_ready]
+other = "资源已就绪"
+
+[event_type_resource_started]
+other = "实例已开机"
+
+[event_type_resource_stopped]
+other = "实例已关机"
+
+[event_type_resource_attention_required]
+other = "资源操作需要处理"
+
+[event_type_attention_required]
+other = "需要处理"
+
+[flag_destination_replace]
+other = "显式替换此已保存目的地；已有冻结投递保留原绑定。"
+
+[queue_checking_progress]
+other = "正在检查机器以准备队列输入…"
+
+[queue_syncing_progress]
+other = "正在准备独立队列输入副本（选中 {{.Count}} 个文件）…"
+
+[queue_state_save_failed]
+other = "本地队列状态保存失败（{{.Code}}）；请保留已确认的远端结果。"
+
+[cloud_binding_next]
+other = "使用 loaf machine use {{.Target}} 为当前项目选定此机器，再用 loaf run 提交项目命令。"

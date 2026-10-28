@@ -9,7 +9,7 @@
 | 选项 | 类型 | 用途 |
 | --- | --- | --- |
 | `--lang` | `string` | 界面语言：auto、en 或 zh-Hans。 |
-| `--json` | `bool` | 输出 JSON；exec、logs -f 和 cloud watch 使用 NDJSON。 |
+| `--json` | `bool` | 输出 JSON；exec、logs -f、cloud watch 和持续 notify serve 使用 NDJSON。 |
 | `--trace` | `bool` | 为有限命令报告脱敏 SSH 阶段耗时及连接／重试计数。 |
 | `--target` | `string` | 覆盖当前项目的目标别名。 |
 | `--help` | `bool` | 显示帮助。 |
@@ -29,6 +29,15 @@
 | `loaf pull` | `loaf pull` | 下载已保存任务的选定输出。 |
 | `loaf clean` | `loaf clean r_example --dry-run` | 清理已结束任务的远端数据。 |
 | `loaf sync` | `loaf sync --dry-run` | 将当前工作源码同步到受管远端缓存。 |
+| `loaf queue` | `loaf queue` | 将任务加入可选的单机 FIFO 队列。 |
+| `loaf queue list` | `loaf queue list` | 列出所选机器的队列和共享并发额度。 |
+| `loaf queue enable` | `loaf queue enable --slots 1` | 显式启用固定并发额度的 FIFO 派发。 |
+| `loaf queue submit` | `loaf queue submit -- python3 train.py` | 固定项目输入并将一个后台任务加入队列。 |
+| `loaf queue show` | `loaf queue show q_example` | 查看已保存请求及其 Run 身份。 |
+| `loaf queue cancel` | `loaf queue cancel q_example` | 取消尚未进入派发的请求。 |
+| `loaf queue pause` | `loaf queue pause` | 暂停新派发，运行中任务继续。 |
+| `loaf queue resume` | `loaf queue resume` | 从持久队列恢复派发。 |
+| `loaf queue clean` | `loaf queue clean q_example --dry-run` | 删除明确已取消请求的准备输入。 |
 
 ## 机器与前台操作
 
@@ -73,6 +82,16 @@
 | --- | --- | --- |
 | `loaf check` | `loaf check` | 检查连接与远端基础环境。 |
 | `loaf version` | `loaf version` | 显示构建与协议版本、源码提交和平台。 |
+| `loaf events` | `loaf events` | 读取运行、队列与资源的持久事件。 |
+| `loaf events list` | `loaf events list` | 使用可选游标读取有界事件页。 |
+| `loaf notify` | `loaf notify` | 管理明确的目的地和事件投递。 |
+| `loaf notify destination` | `loaf notify destination --help` | 管理指向明确目的地的私有绑定。 |
+| `loaf notify destination list` | `loaf notify destination list` | 列出目的地，不显示私有连接详情。 |
+| `loaf notify destination add` | `loaf notify destination add research --kind codex --session thread-id` | 保存明确的 Agent 会话或 Webhook 目的地。 |
+| `loaf notify subscribe` | `loaf notify subscribe run:r_example --destination research` | 为指定主体登记通知目的地。 |
+| `loaf notify subscriptions` | `loaf notify subscriptions` | 列出持久通知订阅。 |
+| `loaf notify deliveries` | `loaf notify deliveries` | 查看接收与处理证据。 |
+| `loaf notify serve` | `loaf notify serve --once` | 接收并投递事件，Ctrl-C 仅停止当前 Bridge。 |
 | `loaf help` | `loaf help run` | 显示命令帮助。 |
 
 ## 参数与条件

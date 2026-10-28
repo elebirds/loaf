@@ -63,6 +63,9 @@ func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
         if r.Request != nil {
             printCloud(out, *r.Request, l)
         }
+        if r.Status == "ready" {
+            fmt.Fprintln(out, l.Text("cloud_binding_next", map[string]any{"Target": r.Target}))
+        }
     case cloud.Receipt:
         if r.ID != "" {
             fmt.Fprintf(out, "%s  %s  %s\n", r.ID, r.Operation, l.Text("cloud_status_"+r.Status))

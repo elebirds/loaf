@@ -16,6 +16,9 @@ func printSync(out io.Writer, r syncResult, l *i18n.Localizer) {
         fmt.Fprintln(out, l.Text("sync_done"))
     }
     fmt.Fprintln(out, l.Text("sync_selection", map[string]any{"Count": r.SelectedFiles, "Bytes": r.SelectedBytes}))
+    if r.SelectedBytes >= 1<<30 {
+        fmt.Fprintln(out, l.Text("source_large_warning"))
+    }
     fmt.Fprintln(out, l.Text("sync_policy", map[string]any{"Mode": l.Text("sync_mode_" + r.Policy.Mode)}))
     ignore := "sync_ignore_on"
     if !r.Policy.RespectGitignore {

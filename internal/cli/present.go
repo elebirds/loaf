@@ -12,6 +12,9 @@ import (
 )
 
 func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
+    if handled, err := printAsync(out, data, l); handled {
+        return err
+    }
     if printCloud(out, data, l) {
         return nil
     }
@@ -127,7 +130,10 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
                 }
             }
         }
-        if r.Report.GPU != "" {
+        if r.Report.Resources != nil {
+            printResourceObservation(out, r.Report.Resources, l)
+        }
+        if r.Report.GPU != "" && (r.Report.Resources == nil || len(r.Report.Resources.GPUs) == 0) {
             fmt.Fprintf(out, "%s: %s\n", l.Text("gpu"), r.Report.GPU)
         }
         if r.Runner != nil {

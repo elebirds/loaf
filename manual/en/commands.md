@@ -9,7 +9,7 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | Option | Type | Purpose |
 | --- | --- | --- |
 | `--lang` | `string` | Interface language: auto, en, or zh-Hans. |
-| `--json` | `bool` | Print JSON; exec, logs -f and cloud watch stream NDJSON. |
+| `--json` | `bool` | Print JSON; exec, logs -f, cloud watch and continuous notify serve stream NDJSON. |
 | `--trace` | `bool` | Report safe SSH-stage timings and connection/retry counts for a finite command. |
 | `--target` | `string` | Override the project's target alias. |
 | `--help` | `bool` | Show help. |
@@ -29,6 +29,15 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | `loaf pull` | `loaf pull` | Download selected outputs from a saved run. |
 | `loaf clean` | `loaf clean r_example --dry-run` | Remove completed tasks' remote data. |
 | `loaf sync` | `loaf sync --dry-run` | Synchronize working sources to the managed remote cache. |
+| `loaf queue` | `loaf queue` | Queue work on one machine with optional FIFO dispatch. |
+| `loaf queue list` | `loaf queue list` | List the selected machine’s queue and shared capacity. |
+| `loaf queue enable` | `loaf queue enable --slots 1` | Explicitly enable FIFO dispatch with fixed concurrency. |
+| `loaf queue submit` | `loaf queue submit -- python3 train.py` | Freeze project input and enqueue one background task. |
+| `loaf queue show` | `loaf queue show q_example` | Inspect a saved request and its Run identity. |
+| `loaf queue cancel` | `loaf queue cancel q_example` | Cancel a request that has not entered dispatch. |
+| `loaf queue pause` | `loaf queue pause` | Pause new dispatch; running tasks continue. |
+| `loaf queue resume` | `loaf queue resume` | Resume dispatch from the saved queue. |
+| `loaf queue clean` | `loaf queue clean q_example --dry-run` | Delete prepared inputs for explicitly canceled requests. |
 
 ## Machines and foreground operations
 
@@ -73,6 +82,16 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | --- | --- | --- |
 | `loaf check` | `loaf check` | Inspect connectivity and the remote environment. |
 | `loaf version` | `loaf version` | Show build and protocol versions, source revision, and platform. |
+| `loaf events` | `loaf events` | Read saved run, queue and resource facts. |
+| `loaf events list` | `loaf events list` | Read a bounded event page with an optional cursor. |
+| `loaf notify` | `loaf notify` | Manage explicit destinations and event delivery. |
+| `loaf notify destination` | `loaf notify destination --help` | Manage private bindings to exact destinations. |
+| `loaf notify destination list` | `loaf notify destination list` | List destinations without private connection details. |
+| `loaf notify destination add` | `loaf notify destination add research --kind codex --session thread-id` | Save an explicit Agent session or Webhook destination. |
+| `loaf notify subscribe` | `loaf notify subscribe run:r_example --destination research` | Subscribe one subject to named destinations. |
+| `loaf notify subscriptions` | `loaf notify subscriptions` | List durable notification subscriptions. |
+| `loaf notify deliveries` | `loaf notify deliveries` | Inspect acceptance and processing evidence. |
+| `loaf notify serve` | `loaf notify serve --once` | Collect and deliver events; Ctrl-C stops only this Bridge. |
 | `loaf help` | `loaf help run` | Show help for a command. |
 
 ## Parameters and constraints

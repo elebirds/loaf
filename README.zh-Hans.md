@@ -80,6 +80,7 @@ loaf run --wait 10s --json -- python3 train.py
 ## 文档
 
 - [命令参考](manual/zh-Hans/commands.md) · [使用指南](manual/zh-Hans/guide.md)
+- [通知与共享机器队列](manual/zh-Hans/async.md)
 - [配置参考](manual/zh-Hans/configuration.md) · [AutoDL 资源](manual/zh-Hans/cloud.md)
 - [故障恢复](manual/zh-Hans/troubleshooting.md) · [升级说明](manual/zh-Hans/upgrading.md)
 - [开发说明](manual/zh-Hans/development.md)

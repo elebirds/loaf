@@ -69,6 +69,8 @@ type Delivery struct {
     Attempts       int                   `json:"attempts"`
     UpdatedAt      time.Time             `json:"updated_at"`
     ErrorCode      string                `json:"error_code,omitempty"`
+    State          string                `json:"state,omitempty"`
+    NextAttemptAt  *time.Time            `json:"next_attempt_at,omitempty"`
 }
 
 // NotifyServeInput controls observation/dispatch lifetime without an output mode.

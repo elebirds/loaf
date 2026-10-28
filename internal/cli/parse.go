@@ -154,11 +154,14 @@ func tracedNode(ctx *kong.Context) *kong.Node {
 func parseFailure() error { return inputFailure("invalid_value", "", "invalid_flags", nil, nil) }
 
 func targetForbidden(path string) bool {
+    if (path == "notify" || strings.HasPrefix(path, "notify ")) && path != "notify subscribe" {
+        return true
+    }
     if path == "cloud" || strings.HasPrefix(path, "cloud ") || path == "machine" || strings.HasPrefix(path, "machine ") {
         return true
     }
     switch path {
-    case "logs", "stop", "pull", "clean", "inspect", "outputs", "wait":
+    case "logs", "stop", "pull", "clean", "inspect", "outputs", "wait", "queue show", "queue cancel", "queue clean":
         return true
     }
     return false

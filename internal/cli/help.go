@@ -155,8 +155,8 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
         short = "root_short"
     }
     fmt.Fprintf(out, "%s\n\n%s\n  %s", l.Text(short), l.Text("usage"), node.FullPath())
-    if node.Name == "run" || node.Name == "exec" {
-        fmt.Fprintf(out, " %s %s", l.Text("options_arg"), l.Text(map[string]string{"run": "run_args", "exec": "exec_args"}[node.Name]))
+    if args := node.Tag.Get("usage-args"); args != "" {
+        fmt.Fprintf(out, " %s %s", l.Text("options_arg"), l.Text(args))
     } else if node.Path() == "wait" {
         fmt.Fprintf(out, " %s %s", l.Text("wait_args"), l.Text("options_arg"))
     } else {

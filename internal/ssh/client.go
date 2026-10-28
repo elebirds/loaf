@@ -72,15 +72,16 @@ type Tool struct {
 
 // Report contains observations, not an inferred training-environment guarantee.
 type Report struct {
-    OS                 string          `json:"os"`
-    Arch               string          `json:"arch"`
-    RemoteDir          string          `json:"remote_dir"`
-    Writable           bool            `json:"directory_writable"`
-    DiskAvailableBytes int64           `json:"disk_available_bytes"`
-    Local              map[string]Tool `json:"local_tools"`
-    Remote             map[string]Tool `json:"remote_tools"`
-    GPU                string          `json:"gpu,omitempty"`
-    Issues             []string        `json:"issues"`
+    OS                 string               `json:"os"`
+    Arch               string               `json:"arch"`
+    RemoteDir          string               `json:"remote_dir"`
+    Writable           bool                 `json:"directory_writable"`
+    DiskAvailableBytes int64                `json:"disk_available_bytes"`
+    Local              map[string]Tool      `json:"local_tools"`
+    Remote             map[string]Tool      `json:"remote_tools"`
+    GPU                string               `json:"gpu,omitempty"`
+    Resources          *ResourceObservation `json:"resources,omitempty"`
+    Issues             []string             `json:"issues"`
 }
 
 // Check observes the remote environment without installing tools or creating directories.
@@ -127,7 +128,7 @@ func (c *Client) check(ctx context.Context, target config.Target, remoteDir stri
         return r, fault.At(err, "preflight")
     }
     fields := strings.Split(string(out), "\x00")
-    if len(fields) != 18 || fields[0] != "loaf-probe-1" {
+    if len(fields) != 22 || fields[0] != "loaf-probe-2" {
         return r, fault.New("SSH_FAILED", "probe_failed", nil)
     }
     r.OS, r.Arch, r.RemoteDir = fields[1], fields[2], fields[3]
@@ -141,6 +142,9 @@ func (c *Client) check(ctx context.Context, target config.Target, remoteDir stri
         r.Remote[name] = Tool{fields[6+2*i], fields[7+2*i]}
     }
     r.GPU = fields[16]
+    if !minimal {
+        r.Resources = parseResourceObservation(fields[17:21])
+    }
     if r.OS != "Linux" {
         r.Issues = append(r.Issues, "REMOTE_OS_UNSUPPORTED")
     }
@@ -169,13 +173,17 @@ writable=no
 if [ -d "$existing" ] && [ -w "$existing" ] && [ -x "$existing" ]; then writable=yes; fi
 available=$(df -Pk "$existing" | awk 'END {print $4}')
 emit() { printf '%s\000' "$1"; }
-emit loaf-probe-1
+emit loaf-probe-2
 emit "$(uname -s)"; emit "$(uname -m)"; emit "$remote"; emit "$writable"; emit "$available"
 rsync=$(command -v rsync || true); emit "$rsync"; emit "$(if [ -n "$rsync" ]; then "$rsync" --version | head -n 1; fi)"
-if [ "${minimal:-no}" = yes ]; then i=0; while [ "$i" -lt 9 ]; do emit ""; i=$((i+1)); done; exit 0; fi
+if [ "${minimal:-no}" = yes ]; then i=0; while [ "$i" -lt 13 ]; do emit ""; i=$((i+1)); done; exit 0; fi
 python=$(command -v python3 || command -v python || true); emit "$python"; emit "$(if [ -n "$python" ]; then "$python" --version 2>&1 || true; fi)"
 uv=$(command -v uv || true); emit "$uv"; emit "$(if [ -n "$uv" ]; then "$uv" --version 2>&1 || true; fi)"
 gpu=$(command -v nvidia-smi || true); emit "$gpu"; emit "$(if [ -n "$gpu" ]; then "$gpu" --version 2>&1 | head -n 1 || true; fi)"
 cuda=$(command -v nvcc || true); emit "$cuda"; emit "$(if [ -n "$cuda" ]; then "$cuda" --version 2>&1 || true; fi)"
 emit "$(if [ -n "$gpu" ]; then "$gpu" --query-gpu=name,driver_version,memory.total --format=csv,noheader 2>&1 || true; fi)"
+emit "$(if command -v getconf >/dev/null 2>&1; then getconf _NPROCESSORS_ONLN 2>/dev/null || true; elif [ -r /proc/cpuinfo ]; then awk '/^processor[[:space:]]*:/ {n++} END {if (n>0) print n}' /proc/cpuinfo; fi)"
+emit "$(if [ -r /proc/meminfo ]; then awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo; fi)"
+emit "$(if [ -r /proc/meminfo ]; then awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo; fi)"
+emit "$(if [ -n "$gpu" ]; then "$gpu" --query-gpu=index,name,memory.total,memory.used,utilization.gpu --format=csv,noheader,nounits 2>/dev/null || true; fi)"
 `

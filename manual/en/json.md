@@ -21,7 +21,7 @@ absent, not filled with dummy values. Consumers must tolerate additional fields.
 | 0 | CLI operation succeeded, even if the observed experiment failed |
 | 1 | Other operation failure, including partial queries/downloads |
 | 2 | Invalid parameters or configuration |
-| 3 | Submission, stop, foreground execution, cleanup, or cloud mutation unconfirmed |
+| 3 | Submission, stop, foreground execution, cleanup, cloud mutation, queue mutation or Agent delivery unconfirmed |
 
 A task result has `run_id`, `version`, `target`, `remote_dir`, `status`,
 `created_at`, and nullable `exit_code`. Optional fields include `submission`,
@@ -62,6 +62,12 @@ per card. CLI memory floors use GiB; platform disk-expansion flags use GB.
 | `check` | One target report; batch uses `checks[]` and selected/completed/failed/unexamined counts |
 | `wait` | Every selected run and completed/pending/query_errors/state_errors/examined/unexamined/interrupted/timed_out coverage |
 | `clean` | `runs[]` with per-run cleanup results and codes; execution outcome remains separate |
+| `events list` | Source-bound `events`, `source_id`, `next_cursor` and `has_more`; events retain original source identity |
+| `notify destination list`, `notify subscriptions`, `notify deliveries` | Safe destination, subscription or delivery rows; delivery dispatch and SDK evidence remain separate |
+| `notify serve --once` | Received/attempted/accepted/unconfirmed/pending counts |
+| `queue submit` | Queue `request`, optional Run observation or offline `preview`; admission does not imply execution acceptance |
+| Other queue queries/control | Request(s), shared capacity `status`, or confirmed `cleaned` IDs |
+| `queue clean` | Explicit `dry_run`, `request_ids` and queue `result` |
 | `cloud search` | Frozen plan, matches, rejections, observation time and pagination coverage |
 | `cloud acquire/bind` | Stage-dependent plan/receipt/binding, retaining known request and instance IDs on failure |
 | `cloud list/info/requests` | Bounded instance page, one instance, receipt list or explicit receipt respectively |
@@ -110,6 +116,7 @@ No raw argv dump, source excerpt or secret value is included.
 | `logs ID -f --json` | `type: "chunk"` / `"end"`, task result in `run`; log text/cursor under `run.log` |
 | `exec --json -- PROGRAM` | Chunks carry `type`, `stream` (`stdout`/`stderr`), `offset`, `encoding`, `data`; final `end`/`error` carries target and execution result |
 | `cloud watch --wait 10m --json` | Change/heartbeat observations and a final `end` or error |
+| `notify serve --json` without `--once` | `type: "delivery"` with a `delivery` row; final end/error includes `result` |
 
 Each line has the same versioned envelope. An early stream error can be the only
 line; never assume a chunk arrives first. Errors carry `error` and a

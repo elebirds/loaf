@@ -22,6 +22,7 @@ func printClean(out io.Writer, batch cleanBatch, l *i18n.Localizer) {
     }
     if batch.DryRun {
         fmt.Fprintln(out, l.Text("clean_preview_note"))
+        fmt.Fprintln(out, l.Text("clean_payload_scope"))
     }
     fmt.Fprintln(out, l.Text("clean_retained"))
 }

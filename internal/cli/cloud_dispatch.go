@@ -90,7 +90,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
         if err != nil {
             return nil, err
         }
-        result, err := r.CloudAcquire(ctx, client.CloudAcquireInput{Select: selectInput, Plan: plan, Name: v.Name, Limit: v.Limit, CloneFrom: v.CloneFrom, Yes: v.Yes, AllowUnquoted: v.AllowUnquoted, RemoteBase: v.RemoteDir, ReadyTimeout: v.ReadyTimeout}, approval, func(event cloud.Event) error {
+        result, err := r.CloudAcquire(ctx, client.CloudAcquireInput{Select: selectInput, Plan: plan, Name: v.Name, Limit: v.Limit, CloneFrom: v.CloneFrom, Yes: v.Yes, AllowUnquoted: v.AllowUnquoted, RemoteBase: v.RemoteDir, ReadyTimeout: v.ReadyTimeout, Notify: v.Notify}, approval, func(event cloud.Event) error {
             if p.json {
                 return nil
             }

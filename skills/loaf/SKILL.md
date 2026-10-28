@@ -1,6 +1,6 @@
 ---
 name: loaf
-description: Use Loaf to run recoverable experiments on existing SSH machines, inspect results and retrieve outputs. Also handle explicitly authorized AutoDL operations and completed-task cleanup. No implicit rentals or scheduling.
+description: Use Loaf to run recoverable experiments on existing SSH machines, inspect results and retrieve outputs. Also handle explicitly authorized AutoDL operations, optional FIFO queues, result notifications and completed-task cleanup. No implicit rentals or queue enablement.
 ---
 
 # Run an experiment and keep its identity
@@ -84,6 +84,8 @@ submitting local project code. It has no sync, setup, run ID, or durability.
   partial/batch downloads and deletion of explicitly authorized terminal data.
 - [Recovery](references/recovery.md): offline inspection, labels, saved bindings,
   diagnostics, old state namespaces, matching CLI versions and stopping a task.
+- [Queues and notifications](references/async.md): explicit FIFO admission,
+  durable resource/Run facts, exact destinations and delivery evidence.
 
 Do not read credentials or internal state files to replace public commands.
 Never bypass host-key verification, replay an unconfirmed mutation, rent a

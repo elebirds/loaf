@@ -90,6 +90,7 @@ fields, streaming events, and recovery.
 ## Documentation
 
 - [Command reference](manual/en/commands.md) · [Usage guide](manual/en/guide.md)
+- [Notifications and shared-machine queues](manual/en/async.md)
 - [Configuration](manual/en/configuration.md) · [AutoDL resources](manual/en/cloud.md)
 - [Troubleshooting](manual/en/troubleshooting.md) · [Upgrading](manual/en/upgrading.md)
 - [Development](manual/en/development.md)

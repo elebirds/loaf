@@ -11,7 +11,13 @@ import (
 
 func printOutputs(out io.Writer, r execution.OutputListing, l *i18n.Localizer) {
     fmt.Fprintln(out, l.Text("outputs_heading", map[string]any{"ID": r.RunID}))
+    var observedBytes int64
+    observedFiles := 0
     for _, entry := range r.Entries {
+        if entry.Type == "file" {
+            observedBytes += entry.Size
+            observedFiles++
+        }
         kind := entry.Type
         switch kind {
         case "file", "directory", "symlink":
@@ -23,6 +29,7 @@ func printOutputs(out io.Writer, r execution.OutputListing, l *i18n.Localizer) {
         fmt.Fprintln(out, l.Text("output_missing_entry", map[string]any{"Path": strconv.Quote(name)}))
     }
     fmt.Fprintln(out, l.Text("outputs_coverage", map[string]any{"Count": r.Examined, "Matched": r.RootsExamined, "Total": r.RootsTotal, "Value": r.DepthLimited}))
+    fmt.Fprintln(out, l.Text("outputs_observed_bytes", map[string]any{"Count": observedFiles, "Bytes": observedBytes}))
     if r.Truncated {
         fmt.Fprintln(out, l.Text("outputs_truncated"))
     }

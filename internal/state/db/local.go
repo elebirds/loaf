@@ -17,6 +17,7 @@ import (
 )
 
 const applicationID = 0x4c4f4146
+const SchemaVersion = 2
 
 const localSchema = `
 CREATE TABLE projects (root TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE, target TEXT NOT NULL);
@@ -26,7 +27,7 @@ CREATE TABLE run_metadata (run_id TEXT PRIMARY KEY REFERENCES runs(id), project_
 CREATE TABLE observations (run_id TEXT PRIMARY KEY REFERENCES runs(id), project_id TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE cloud_requests (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, data BLOB NOT NULL);
 PRAGMA application_id=1280262470;
-PRAGMA user_version=1;
+PRAGMA user_version=2;
 `
 
 // Open opens an existing database read-only, or initializes the current schema
@@ -139,7 +140,7 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
             return fail(err)
         }
     }
-    if version != 1 || app != applicationID {
+    if version != SchemaVersion || app != applicationID {
         return fail(fmt.Errorf("unsupported state schema: %d", version))
     }
     if write {

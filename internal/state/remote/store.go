@@ -18,8 +18,8 @@ import (
     "modernc.org/sqlite"
 )
 
-const Namespace = ".loaf-control-v1"
-const SchemaVersion = 1
+const Namespace = ".loaf-control-v2"
+const SchemaVersion = 2
 const applicationID = 0x4c4f4152
 
 // Path returns the database path without touching the filesystem.
@@ -48,7 +48,7 @@ CREATE TABLE cleanup_receipts (
     cleaned_at TEXT, device TEXT NOT NULL, inode TEXT NOT NULL
 );
 PRAGMA application_id=1280262482;
-PRAGMA user_version=1;`
+PRAGMA user_version=2;`
 
 // Initialize claims an empty project directory. Existing projects are verified,
 // never imported or converted from another format.

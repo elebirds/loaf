@@ -2,7 +2,7 @@
 
 Loaf is a Go CLI for running local research projects on SSH machines, with optional explicitly authorized AutoDL acquisition. The core workflow is connect, sync, run in the background, inspect logs, stop, and retrieve outputs. Environment checks, English and Simplified Chinese, and structured JSON output are native features.
 
-Keep GPU workload scheduling, queues, experiment retries, central services, Web UI, and MCP out of scope. Cloud acquisition is explicit and foreground-only; it never starts training implicitly, releases instances or automatically shuts them down. Foreground machine operations and explicit completed-task cleanup complement, rather than replace, the durable experiment workflow.
+Optional event delivery and a single-target FIFO queue are in scope. Direct execution never requires a Coordinator, Bridge or Agent integration. Queue policy selects eligible requests; admission, capacity, durable dispatch and process supervision remain separate. Implement FIFO only; later policies may be externally supplied, not developed here. Keep experiment retries, preemption, DAGs, multi-node scheduling, central services and Web UI out of scope. An optional Claude Channel adapter may use MCP; Loaf is not a general MCP service platform. Cloud acquisition remains explicit and foreground-only; it never starts training implicitly, releases instances or automatically shuts them down.
 
 ## Start here
 
@@ -44,7 +44,7 @@ manual/           Public bilingual user manuals, command reference and JSON exam
 
 Keep command handlers thin. Compose dependencies at the entry point with constructors; use consumer-owned interfaces for remote control, source sync, and the run index. Cloud lifecycle and optional read-only inventory have a small provider boundary with two concrete AutoDL products. Plain values and pure helpers do not need interfaces. Do not introduce a DI container, generic Repository, plugin/provider framework, or backend registry.
 
-`run` and `remote` must not depend on CLI rendering or i18n. `remote` depends on shared wire types and system capabilities, not local configuration, Kong/Huh, the SSH client, or `bundle`. Keep Go support packages internal; this release does not expose a Go SDK.
+`run` and `remote` must not depend on CLI rendering or i18n. `remote` depends on shared wire types and system capabilities, not local configuration, Kong/Huh, the SSH client, `bundle`, or Agent adapters. Keep Loaf support packages internal. The standalone `sdk/agentdelivery` Go module is a narrow public delivery SDK, not a public Loaf control SDK; it must not depend on Loaf internals, SQLite or workload scheduling.
 
 ## Application and state boundaries
 
@@ -56,9 +56,15 @@ Use the pure `run.ResolveExecution` function for preview and submission command/
 
 The standalone depguard tool enforces a small set of forbidden dependency directions: use cases do not depend on CLI/i18n; remote code does not depend on local configuration or transport; CLI does not access SQL or AutoDL directly; lower-level packages do not call back into application services. Keep these deny-only rules focused rather than maintaining a package-wide allowlist.
 
-Use `database/sql` with `modernc.org/sqlite` and explicit short transactions. Local state is `<StateDir>/state-v1/state.db`; remote control state is `<project>/.loaf-control-v1/state.sqlite3`. Keep credentials and run payload files outside the databases. WAL, FULL synchronous, bounded lock waits and private permissions are required. SQL transactions never span network calls, copying or process runtime; existing OS lifetime/control/payload locks remain responsible for those operations.
+Use `database/sql` with `modernc.org/sqlite` and explicit short transactions. Current local state is `<StateDir>/state-v2/state.db`; project remote control state is `<project>/.loaf-control-v2/state.sqlite3`, both schema 2. New event metadata shares the owning state transaction; no cross-machine transaction is implied. Machine-level queue state is separate from project execution state and shared by aliases for the same managed host and remote user. Keep credentials and run payload files outside the databases. WAL, FULL synchronous, bounded lock waits and private permissions are required. SQL transactions never span network calls, copying or process runtime; existing OS lifetime/control/payload locks remain responsible for those operations.
 
-v0.5 starts new schema-1 stores without importing old JSON state. There is no migration, dual-write or fallback backend. Keep software, database schema and wire versions independent. A user must use the matching old CLI for old tasks and reconcile uncertain old cloud receipts before starting new acquisitions. Do not build an old-file preservation test matrix; test the current schema and actual recovery risks.
+v0.6 starts fresh schema-2 stores without importing old JSON or schema-1 state. There is no migration, dual-write or fallback backend, and no in-place upgrade of databases used by active Supervisors. Keep software, database schema, event, SDK and wire versions independent. A user must retain the matching old CLI for old tasks and reconcile uncertain old cloud receipts before starting new acquisitions. Test the current schema and actual recovery risks rather than building a historical preservation matrix.
+
+Events describe runs, queue requests and resource operations independently. Store confirmed state transitions and their events atomically in the owning database. Collectors commit inbox, deliveries and receive cursor together; duplicate reads are safe. Separate source persistence, local receipt, transport write, destination acceptance and Agent processing evidence. An unconfirmed external delivery must not automatically start a second Agent turn. Never include private execution values, credentials or raw logs in public events.
+
+Queued requests freeze an independent input and execution specification before queued acceptance. The Coordinator is an explicitly enabled remote dispatch owner; existing Supervisors retain execution ownership. Persist the fixed Run identity before launch, preserve uncertain dispatch and capacity until reconciled, and never infer safety from a lease timeout. Queued cancellation requires a durable no-start transition; existing direct Run cleanup eligibility is unchanged. New queue prerequisites apply only to queue callers, never to the existing Submit entry point.
+
+The root and standalone SDK modules are developed through the checked-in Go workspace. Shared checks include both modules; `scripts/build.sh` remains the only complete Loaf build owner. Keep SDK adapter capabilities and real compatibility evidence explicit; no GUI keystroke injection, private transcript editing, silent new-session fallback, or automatic permission bypass.
 
 ## Build and development commands
 

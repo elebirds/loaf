@@ -1,7 +1,12 @@
 // Package wire contains the small, language-independent client/runner contract.
 package wire
 
-import "time"
+import (
+    "time"
+
+    "github.com/elebirds/loaf/internal/event"
+    "github.com/elebirds/loaf/internal/queue"
+)
 
 // FormatVersion is the current internal request and record format.
 const FormatVersion = 1
@@ -17,6 +22,8 @@ var Version = "dev"
 
 // Request is one SSH stdin control document. Args are never interpreted as Shell code.
 type Request struct {
+    Events        *event.ReadInput  `json:"events,omitempty"`
+    Queue         *queue.Command    `json:"queue,omitempty"`
     FormatVersion int               `json:"format_version"`
     Version       string            `json:"version"`
     Action        string            `json:"action"`
@@ -62,6 +69,8 @@ type Error struct {
 
 // Response is the single control response on SSH stdout.
 type Response struct {
+    Events        *event.Page      `json:"events,omitempty"`
+    Queue         *queue.Result    `json:"queue,omitempty"`
     FormatVersion int              `json:"format_version"`
     Version       string           `json:"version"`
     OK            bool             `json:"ok"`

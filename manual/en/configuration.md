@@ -23,11 +23,11 @@ paths = ["outputs", "checkpoints"]
 
 Target selection follows `--target`, the current project's `loaf machine use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf machine add ... --remote-dir '~/projects'`.
 
-User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v1/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
+User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v2/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
 
-See [upgrading](upgrading.md) for the v0.5 state boundary and matching old CLIs.
+See [upgrading](upgrading.md) for the v0.6 state boundary and matching old CLIs.
 
-Each new remote project keeps its schema-1 control database in `<remote-project>/.loaf-control-v1/state.sqlite3`; sources, per-run working copies, logs and outputs remain ordinary files. Both databases use private permissions, WAL, FULL synchronization and bounded lock waits. Unknown schemas fail explicitly. Software, CLI schema, wire record and database schema versions are independent.
+Each new remote project keeps its schema-2 control database in `<remote-project>/.loaf-control-v2/state.sqlite3`; sources, per-run working copies, logs and outputs remain ordinary files. Both databases use private permissions, WAL, FULL synchronization and bounded lock waits. Unknown schemas fail explicitly. Software, CLI schema, wire record and database schema versions are independent.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 

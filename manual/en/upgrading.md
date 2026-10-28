@@ -35,15 +35,17 @@ task, use its matching CLI. A current helper missing from an otherwise current
 binding is a different issue: normal runner operations deploy and verify the
 bundled helper automatically. Read-only previews never deploy it.
 
-## The v0.5 state boundary
+## The v0.6 state boundary
 
-v0.5 starts fresh schema-1 SQLite stores and does not import older JSON indexes
-or cloud receipts. Re-select a project machine using `loaf machine use NAME`;
+v0.6 starts fresh schema-2 SQLite stores in `state-v2` and `.loaf-control-v2`.
+It does not import schema-1 stores, older JSON indexes or cloud receipts.
+Keep the v0.5 CLI for schema-1 tasks and do not upgrade an active Supervisor's
+database in place. Re-select a project machine using `loaf machine use NAME`;
 a new project identity gets a fresh managed directory under the default remote
 base. An explicit `remote_dir` must be suitable for the new format, not an
 existing incompatible project.
 
 Use the matching older CLI for old tasks and unresolved cloud requests. An empty
 new database does not prove an older paid request did not happen; reconcile it
-before acquiring again. Existing schema-1 data needs no migration for this
-command-layout change. Unknown formats fail without overwrite.
+before acquiring again. Unknown formats fail without overwrite. Software,
+database, wire, event and standalone delivery SDK versions are independent.

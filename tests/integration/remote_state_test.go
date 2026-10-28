@@ -23,7 +23,7 @@ func (f *fixture) managedRemote(root string) {
         f.t.Fatal(err)
     }
     database.Close()
-    f.shell(`mkdir -m 700 -p "$1/.loaf-control-v1" "$1/cache"`, root)
+    f.shell(`mkdir -m 700 -p "$1/.loaf-control-v2" "$1/cache"`, root)
     command(f.t, "docker", "cp", remotestate.Path(local), f.id+":"+remotestate.Path(root))
     command(f.t, "docker", "exec", f.id, "chown", "researcher:researcher", remotestate.Path(root))
     command(f.t, "docker", "exec", f.id, "chmod", "0600", remotestate.Path(root))
@@ -31,7 +31,7 @@ func (f *fixture) managedRemote(root string) {
 
 func (f *fixture) remoteSQL(root, query string) string {
     f.t.Helper()
-    return f.shell(`sqlite3 -readonly "$1/.loaf-control-v1/state.sqlite3" "$2"`, root, query)
+    return f.shell(`sqlite3 -readonly "$1/.loaf-control-v2/state.sqlite3" "$2"`, root, query)
 }
 
 func (f *fixture) remoteRecord(root, id string) string {

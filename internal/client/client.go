@@ -54,6 +54,9 @@ type MachineOperations interface {
 
 // Dependencies are assembled once by the executable. No service locator is used.
 type Dependencies struct {
+    Events     EventService
+    Notify     NotificationService
+    Queue      QueueService
     Config     *config.Store
     State      *local.Store
     Checker    Checker
@@ -107,6 +110,9 @@ type Resources struct {
 
 // App is only a composition facade; workflows live on focused services.
 type App struct {
+    Events    EventService
+    Notify    NotificationService
+    Queue     QueueService
     Projects  *Projects
     Machines  *Machines
     Resources *Resources
@@ -118,6 +124,9 @@ func New(d Dependencies, settings config.Global) *App {
         d.Trace = &ssh.Trace{}
     }
     return &App{
+        Events:    d.Events,
+        Notify:    d.Notify,
+        Queue:     d.Queue,
         Projects:  &Projects{Config: d.Config, State: d.State, Settings: settings, Runs: d.Runs, Syncer: d.Syncer, Cleaner: d.Cleaner, Outputs: d.Outputs, Puller: d.Puller, CWD: d.CWD},
         Machines:  &Machines{Config: d.Config, State: d.State, Settings: settings, Checker: d.Checker, Runner: d.Runner, Operations: d.Operations, Trace: d.Trace, CWD: d.CWD},
         Resources: &Resources{Config: d.Config, Settings: settings, Cloud: d.Cloud, Auth: d.Auth, Operations: d.Operations, CWD: d.CWD},

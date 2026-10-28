@@ -2,7 +2,7 @@
 
 ## State namespace
 
-v0.5 uses a new SQLite namespace (`$XDG_STATE_HOME/loaf/state-v1/state.db`, with the standard home fallback). It does not import old JSON history or cloud receipts. Re-select a target with `loaf machine use` for a new project identity; an explicit remote directory must be fresh. Use the matching older CLI for prior tasks and resolve its uncertain cloud requests before new acquisitions. Never infer that an empty new database means an old paid request did not happen.
+v0.6 uses schema-2 SQLite in a new namespace (`$XDG_STATE_HOME/loaf/state-v2/state.db`, with the standard home fallback). It does not import schema-1, old JSON history or cloud receipts. Retain the matching v0.5 CLI for schema-1 work; do not upgrade an active Supervisor's database in place. Re-select a target with `loaf machine use` for a new project identity; an explicit remote directory must be fresh. Resolve older uncertain cloud requests before new acquisitions. Never infer that an empty new database means an old paid request did not happen.
 
 ## Find saved tasks
 

@@ -12,7 +12,7 @@ import (
 
 func TestCloudRequestsRetainsReadableRecoveryIDs(t *testing.T) {
     ctx := context.Background()
-    store := cloud.Receipts{Dir: filepath.Join(t.TempDir(), "state-v1")}
+    store := cloud.Receipts{Dir: filepath.Join(t.TempDir(), "state-v2")}
     now := time.Now().UTC()
     good, err := store.New(cloud.Receipt{
         Operation: "acquire", Account: "demo", Status: "uncertain",

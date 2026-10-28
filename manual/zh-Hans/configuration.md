@@ -23,11 +23,11 @@ paths = ["outputs", "checkpoints"]
 
 目标选择顺序为 `--target`、当前项目的 `loaf machine use` 设置、TOML 中的 `target`。个人选择不会改写项目 TOML。未设置 `remote_dir` 时，各项目使用稳定 ID，在目标的远端基目录下拥有独立路径。可以通过 `loaf machine add ... --remote-dir '~/projects'` 设置基目录。
 
-用户配置位于 `~/.config/loaf/config.toml`。项目标识、个人选择、任务位置、标签、观察、清理摘要及云操作收据统一保存在 `~/.local/state/loaf/state-v1/state.db`。`XDG_CONFIG_HOME`、`XDG_STATE_HOME` 分别覆盖配置和状态根目录。凭据仍保存在选定的 keyring 或独立私有 `credentials/` 目录。
+用户配置位于 `~/.config/loaf/config.toml`。项目标识、个人选择、任务位置、标签、观察、清理摘要及云操作收据统一保存在 `~/.local/state/loaf/state-v2/state.db`。`XDG_CONFIG_HOME`、`XDG_STATE_HOME` 分别覆盖配置和状态根目录。凭据仍保存在选定的 keyring 或独立私有 `credentials/` 目录。
 
-v0.5 状态边界及匹配旧 CLI 的用法见[升级说明](upgrading.md)。
+v0.6 状态边界及匹配旧 CLI 的用法见[升级说明](upgrading.md)。
 
-每个新远端项目在 `<远端项目>/.loaf-control-v1/state.sqlite3` 保存 schema 1 控制库；源码、逐任务工作副本、日志和产物仍是普通文件。两端数据库使用私有权限、WAL、FULL 同步和有界锁等待，未知 schema 明确失败。软件、CLI schema、wire record 和数据库 schema 分别管理版本。
+每个新远端项目在 `<远端项目>/.loaf-control-v2/state.sqlite3` 保存 schema 2 控制库；源码、逐任务工作副本、日志和产物仍是普通文件。两端数据库使用私有权限、WAL、FULL 同步和有界锁等待，未知 schema 明确失败。软件、CLI schema、wire record 和数据库 schema 分别管理版本。
 
 在用户配置中增加 `[sync]` 可设置个人同步默认值，保留已有 `format_version` 和机器配置：
 

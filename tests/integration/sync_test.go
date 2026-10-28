@@ -244,7 +244,7 @@ func TestPackagedSyncPoliciesAndConnectionForms(t *testing.T) {
     if code != 1 || !strings.Contains(string(out), `"code":"PROJECT_UNOWNED"`) {
         t.Fatal(code, string(out))
     }
-    f.shell(`test "$(cat "$1/user-data")" = original; test ! -e "$1/.loaf-control-v1"`, foreign)
+    f.shell(`test "$(cat "$1/user-data")" = original; test ! -e "$1/.loaf-control-v2"`, foreign)
 }
 
 func TestInterruptedSyncKeepsCacheUnavailableAndReleasesLock(t *testing.T) {

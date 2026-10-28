@@ -14,6 +14,7 @@ import (
 
 // RunInput retains explicit overrides separately from configuration defaults.
 type RunInput struct {
+    Notify []string
     Target *string
     Wait   *string
     Args   []string

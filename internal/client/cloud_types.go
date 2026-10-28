@@ -50,6 +50,7 @@ type CloudSearchInput struct {
 
 // CloudAcquireInput requests at most one resource and subsequent explicit binding.
 type CloudAcquireInput struct {
+    Notify             []string
     Select             CloudSelect
     Plan               CloudPlanInput
     Name               string

@@ -33,12 +33,15 @@ Agent bindings address one exact session:
 loaf notify destination add assistant --kind codex --session THREAD_ID --endpoint ENDPOINT
 ```
 
-Use an endpoint supported by the installed adapter. `codex`, `claude-channel`
-and explicitly selected `claude-resume` are separate modes. A saved binding does
-not prove reachability or processing capability. Loaf does not choose the latest
+This version implements three adapters: `codex`, `claude-channel` and `webhook`.
+`claude-resume` is reserved but unsupported: Loaf rejects its registration with
+`DESTINATION_INVALID`, and the SDK returns `ErrUnsupported`. There is no
+headless/resume adapter or automatic fallback in this release.
+
+Use an endpoint supported by the selected adapter. A saved binding does not
+prove reachability or processing capability. Loaf does not choose the latest
 session, silently create a replacement, or bypass its workspace and approvals.
-Claude Channel delivery requires an open session and platform permission;
-headless resume is a separate, explicitly chosen execution mode.
+Claude Channel delivery requires an open session and platform permission.
 
 `notify destination list` shows safe metadata, not private connection details.
 The standalone Go delivery SDK addresses destinations and reports evidence; it

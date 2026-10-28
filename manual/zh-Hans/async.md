@@ -29,10 +29,14 @@ Agent 绑定一个明确会话：
 loaf notify destination add assistant --kind codex --session THREAD_ID --endpoint ENDPOINT
 ```
 
-使用所安装适配器支持的接入端。`codex`、`claude-channel`、显式选择的
-`claude-resume` 是不同模式。保存绑定不等于证明可连接或可处理。
+本版实际实现三种适配器：`codex`、`claude-channel` 和 `webhook`。
+`claude-resume` 是保留模式，当前不支持：Loaf 会以 `DESTINATION_INVALID`
+拒绝登记，SDK 返回 `ErrUnsupported`。本版没有 headless/resume 适配器，
+也不会自动回退到此模式。
+
+使用所选适配器支持的接入端。保存绑定不等于证明可连接或可处理。
 Loaf 不猜测最近会话、不静默新建替代会话，也不绕过原工作区和审批要求。
-Claude Channel 要求会话开启且平台允许；headless resume 是另一种需要明确选择的执行模式。
+Claude Channel 要求会话开启且平台允许。
 
 `notify destination list` 只显示安全信息，不显示私有连接详情。
 独立 Go 投递 SDK 负责明确目的地及投递证据，不负责 Run 调度或训练 Runtime。

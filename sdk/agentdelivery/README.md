@@ -24,7 +24,7 @@ entered the Agent's queue. The SDK itself never retries or opens another session
 See [compatibility evidence](COMPATIBILITY.md) for the tested native versions
 and the distinction between transport, acceptance and processing results.
 
-## Supported modes
+## Three adapters are implemented
 
 | Kind | Mechanism | Strongest automatic evidence |
 | --- | --- | --- |
@@ -32,9 +32,9 @@ and the distinction between transport, acceptance and processing results.
 | `claude-channel` | An explicitly installed MCP Channel helper receives a private Unix-socket message and pushes a channel notification | `written`; `processed` only after the Agent calls `ack_event` |
 | `webhook` | One JSON POST to the configured HTTP/HTTPS endpoint, without redirects | HTTP destination `accepted`, not Agent processing |
 
-`claude-resume` is deliberately not an automatic fallback. Existing desktop
-sessions, SDK-managed sessions and separate headless sessions have different
-ownership and permission contracts.
+`claude-resume` is a reserved kind with no adapter in this release. Selecting it
+returns `ErrUnsupported`; headless/resume delivery is unavailable and is never
+an automatic fallback.
 
 ### Codex
 

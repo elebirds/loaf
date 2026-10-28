@@ -56,10 +56,12 @@ Inspect application delivery state and SDK receipt independently. Transport
 retries may include a next-attempt time. Never interpret receipt of a completion
 fact as new authority to rent, stop a machine, delete data or launch experiments.
 
-Existing-session, managed-session and explicit headless/resume integrations have
-different capability guarantees. Respect the installed adapter and platform
-permissions; do not use GUI injection, private transcript edits or permission
-bypasses when a mode is unavailable.
+This version implements `codex`, `claude-channel` and `webhook` adapters only.
+`claude-resume` is reserved and unsupported: Loaf rejects its registration with
+`DESTINATION_INVALID`, and the SDK returns `ErrUnsupported`. Do not attempt a
+headless/resume fallback when a Channel is unavailable. Respect the selected
+adapter's exact session/workspace binding and platform permissions; do not use
+GUI injection, private transcript edits or permission bypasses.
 
 ## Bind a Claude Channel only when requested
 

@@ -26,7 +26,7 @@ entered the Agent's queue. The SDK itself never retries or opens another session
 
 | Kind | Mechanism | Strongest automatic evidence |
 | --- | --- | --- |
-| `codex` | The native `codex app-server proxy` connects to an already running local App Server; a standalone tool result targets the exact loaded thread | `accepted` with an App Server turn ID |
+| `codex` | A private Unix WebSocket connects to an already running local App Server; a standalone tool result targets the exact loaded thread | `accepted` with an App Server turn ID |
 | `claude-channel` | An explicitly installed MCP Channel helper receives a private Unix-socket message and pushes a channel notification | `written`; `processed` only after the Agent calls `ack_event` |
 | `webhook` | One JSON POST to the configured HTTP/HTTPS endpoint, without redirects | HTTP destination `accepted`, not Agent processing |
 
@@ -42,8 +42,10 @@ is Apache-2.0. Probe reads the selected thread only. Deliver uses the public
 standalone `toolOutput` contract; it does not steer an active turn, create a
 thread, change its workspace or override sandbox/approval settings.
 
-Set `Client.CodexBinary` when the native executable is not on PATH. An omitted
-endpoint selects the native proxy's default control socket, not a new server.
+The framing adapter uses `github.com/coder/websocket` at `v1.8.14` (ISC license)
+for the public WebSocket-over-Unix transport. It needs a running native server,
+not a separate model API key. An omitted endpoint selects the native default
+control socket under `CODEX_HOME` (or `~/.codex`), not a new server.
 The selected thread must already be loaded in that server. `Probe` does not
 start a model turn.
 

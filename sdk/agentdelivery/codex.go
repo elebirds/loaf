@@ -3,18 +3,16 @@ package agentdelivery
 import (
     "context"
     "encoding/json"
-    "io"
     "path/filepath"
 
     "github.com/pmenglund/codex-sdk-go/rpc"
 )
 
 // Codex delivers standalone tool results to an explicitly selected live thread.
-// It connects through a private proxy to an already running app-server; it never
+// It connects to a private Unix WebSocket on an already running app-server; it never
 // starts an app-server, creates a thread, edits transcripts or overrides policy.
 type Codex struct {
-    Binary string
-    open   func(context.Context, Destination) (rpc.Transport, error)
+    open func(context.Context, Destination) (rpc.Transport, error)
 }
 
 func (c Codex) connect(ctx context.Context, d Destination) (*rpc.Client, error) {
@@ -32,15 +30,7 @@ func (c Codex) connect(ctx context.Context, d Destination) (*rpc.Client, error) 
     if c.open != nil {
         transport, err = c.open(ctx, d)
     } else {
-        binary := c.Binary
-        if binary == "" {
-            binary = "codex"
-        }
-        args := []string{"app-server", "proxy"}
-        if d.Endpoint != "" {
-            args = append(args, "--sock", d.Endpoint)
-        }
-        transport, err = rpc.SpawnStdio(context.WithoutCancel(ctx), binary, args, io.Discard)
+        transport, err = openCodexSocket(ctx, d.Endpoint)
     }
     if err != nil {
         return nil, ErrUnavailable

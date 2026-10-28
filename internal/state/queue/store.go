@@ -293,25 +293,33 @@ func (s *Store) Run(ctx context.Context, id string) (Entry, error) {
     return entry(s.database.QueryRowContext(ctx, "SELECT public,execution,attempted FROM queue_requests WHERE run_id=?", id))
 }
 
-// List returns a bounded deterministic machine queue, across project aliases.
-func (s *Store) List(ctx context.Context, limit int) ([]Entry, error) {
+// List returns live work before history, across project aliases. Active and
+// queued requests retain FIFO order; preparations and history show recent work
+// first. The boolean reports omitted rows without implying complete coverage.
+func (s *Store) List(ctx context.Context, limit int) ([]Entry, bool, error) {
     if limit < 1 || limit > 1000 {
-        return nil, errors.New("QUEUE_BAD_REQUEST")
+        return nil, false, errors.New("QUEUE_BAD_REQUEST")
     }
-    rows, err := s.database.QueryContext(ctx, "SELECT public,execution,attempted FROM queue_requests ORDER BY CASE WHEN sequence=0 THEN 1 ELSE 0 END,sequence,id LIMIT ?", limit)
+    rows, err := s.database.QueryContext(ctx, `SELECT public,execution,attempted FROM queue_requests ORDER BY
+        CASE WHEN state IN('dispatching','unconfirmed','submitted') THEN 0 WHEN state='queued' THEN 1 WHEN state='preparing' THEN 2 ELSE 3 END,
+        CASE WHEN state IN('dispatching','unconfirmed','submitted','queued') THEN sequence ELSE 0 END,
+        julianday(json_extract(public,'$.updated_at')) DESC,id LIMIT ?`, limit+1)
     if err != nil {
-        return nil, err
+        return nil, false, err
     }
     defer rows.Close()
     result := []Entry{}
     for rows.Next() {
+        if len(result) == limit {
+            return result, true, nil
+        }
         e, err := entry(rows)
         if err != nil {
-            return result, err
+            return result, false, err
         }
         result = append(result, e)
     }
-    return result, rows.Err()
+    return result, false, rows.Err()
 }
 
 func saveEntry(ctx context.Context, tx *sql.Tx, e Entry) error {

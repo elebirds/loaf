@@ -91,8 +91,9 @@ func (r *queueRemote) QueueControl(ctx context.Context, target config.Target, _ 
         result.Request = &e.Request
         err = eErr
     case "list":
-        entries, eErr := r.store.List(ctx, c.Limit)
+        entries, more, eErr := r.store.List(ctx, c.Limit)
         err = eErr
+        result.HasMore = more
         for _, e := range entries {
             result.Requests = append(result.Requests, e.Request)
         }
@@ -192,6 +193,26 @@ func TestQueueSubmitFreezesInputAndRegistersBeforeSideEffects(t *testing.T) {
     data, _ := json.Marshal(result)
     if strings.Contains(string(data), "not-public") || strings.Contains(string(data), "TOKEN") {
         t.Fatalf("execution environment leaked: %s", data)
+    }
+}
+
+func TestQueueListPreservesBoundedCoverage(t *testing.T) {
+    q, _, _, _, _, _ := queueClientFixture(t)
+    ctx := context.Background()
+    first, err := q.Submit(ctx, QueueSubmitInput{}, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    second, err := q.Submit(ctx, QueueSubmitInput{}, nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err = q.Cancel(ctx, QueueIDInput{ID: first.Request.ID}); err != nil {
+        t.Fatal(err)
+    }
+    result, err := q.List(ctx, QueueListInput{Limit: 1})
+    if err != nil || !result.HasMore || len(result.Requests) != 1 || result.Requests[0].ID != second.Request.ID {
+        t.Fatalf("list lost live work or coverage: %+v %v", result, err)
     }
 }
 

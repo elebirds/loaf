@@ -157,11 +157,12 @@ func queueControlAt(ctx context.Context, req wire.Request, root string, identity
             return result, err
         }
     case "list":
-        entries, listErr := store.List(ctx, command.Limit)
+        entries, more, listErr := store.List(ctx, command.Limit)
         if listErr != nil {
             return result, listErr
         }
         result.Requests = []queue.Request{}
+        result.HasMore = more
         for _, e := range entries {
             result.Requests = append(result.Requests, e.Request)
         }

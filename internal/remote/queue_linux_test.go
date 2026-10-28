@@ -150,6 +150,26 @@ func TestQueueControlRejectsProtocolBeforeOpeningStorage(t *testing.T) {
     }
 }
 
+func TestQueueListReturnsCoverageWithoutHidingLiveWork(t *testing.T) {
+    ctx := context.Background()
+    directory, identity, store := queueFixture(t)
+    root := managedRoot(t)
+    for _, id := range []string{"q_old", "q_live"} {
+        _, err := store.Prepare(ctx, queue.Request{FormatVersion: queue.Version, ID: id, TargetID: store.TargetID, ProjectID: "project", RunID: "run_" + id, CreatedAt: time.Now().UTC()}, queue.Execution{Version: wire.Version, Root: root, Args: []string{"command"}})
+        if err != nil {
+            t.Fatal(err)
+        }
+    }
+    if _, err := store.Cancel(ctx, "q_old"); err != nil {
+        t.Fatal(err)
+    }
+    command := queue.Command{Action: "list", Limit: 1}
+    result, err := queueControlAt(ctx, wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Queue: &command}, directory, identity, func(string) error { return nil })
+    if err != nil || !result.HasMore || len(result.Requests) != 1 || result.Requests[0].ID != "q_live" {
+        t.Fatalf("list lost coverage: %+v %v", result, err)
+    }
+}
+
 func TestQueuedExecutionCarriesFrozenAdmissionMetadata(t *testing.T) {
     at := time.Now().UTC()
     e := queuestate.Entry{Request: queue.Request{ID: "q_example", ProjectID: "project", RunID: "run", AttemptedAt: &at}, Execution: queue.Execution{Version: wire.Version, Root: "/tmp/project", Args: []string{"command"}}}

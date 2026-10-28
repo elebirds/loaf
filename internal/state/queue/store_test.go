@@ -3,8 +3,10 @@ package queuestate
 import (
     "context"
     "database/sql"
+    "fmt"
     "os"
     "path/filepath"
+    "slices"
     "sync"
     "testing"
     "time"
@@ -191,5 +193,52 @@ func TestQueueDatabasePrivateAndUnknownSchemaUnchanged(t *testing.T) {
     database.QueryRow("PRAGMA user_version").Scan(&version)
     if version != 99 {
         t.Fatal("unknown schema overwritten")
+    }
+}
+
+func TestQueueListKeepsCurrentWorkAheadOfBoundedHistory(t *testing.T) {
+    ctx := context.Background()
+    s := newStore(t)
+    for i := 0; i < 25; i++ {
+        id := fmt.Sprintf("q_history_%02d", i)
+        prepare(t, s, id, "project")
+        if _, err := s.Admit(ctx, id); err != nil {
+            t.Fatal(err)
+        }
+        if _, err := s.Cancel(ctx, id); err != nil {
+            t.Fatal(err)
+        }
+    }
+    prepare(t, s, "q_active", "project")
+    if _, err := s.Admit(ctx, "q_active"); err != nil {
+        t.Fatal(err)
+    }
+    if _, err := s.Reserve(ctx, queue.FIFO{}); err != nil {
+        t.Fatal(err)
+    }
+    for _, id := range []string{"q_second", "q_first"} {
+        prepare(t, s, id, "project")
+        if _, err := s.Admit(ctx, id); err != nil {
+            t.Fatal(err)
+        }
+    }
+    prepare(t, s, "q_preparing", "project")
+    entries, more, err := s.List(ctx, 4)
+    if err != nil || !more {
+        t.Fatalf("coverage: more=%v error=%v", more, err)
+    }
+    ids := []string{}
+    for _, e := range entries {
+        ids = append(ids, e.Request.ID)
+    }
+    if !slices.Equal(ids, []string{"q_active", "q_second", "q_first", "q_preparing"}) {
+        t.Fatalf("current work buried or FIFO order lost: %v", ids)
+    }
+    entries, more, err = s.List(ctx, 29)
+    if err != nil || more || len(entries) != 29 {
+        t.Fatalf("exact coverage: count=%d more=%v error=%v", len(entries), more, err)
+    }
+    if _, _, err = s.List(ctx, 0); err == nil {
+        t.Fatal("unbounded list accepted")
     }
 }

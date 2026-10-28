@@ -6,6 +6,7 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     sources "github.com/elebirds/loaf/internal/sync"
@@ -101,12 +102,16 @@ func (c *Projects) planRun(ctx context.Context, in RunInput) (runPlan, error) {
 
 // Run plans locally, submits once, then optionally observes that same binding.
 func (c *Projects) Run(ctx context.Context, in RunInput, feedback RunFeedback) (RunResult, error) {
+    if err := validateNotificationNames(ctx, c.Notify, in.Notify); err != nil {
+        return RunResult{}, err
+    }
     p, err := c.planRun(ctx, in)
     if err != nil {
         return RunResult{}, err
     }
     if in.DryRun {
         preview := c.previewRun(in, p)
+        preview.Notifications = append([]string(nil), in.Notify...)
         return RunResult{Preview: &preview}, nil
     }
     if c.Runs == nil {
@@ -123,7 +128,14 @@ func (c *Projects) Run(ctx context.Context, in RunInput, feedback RunFeedback) (
     if p.source.Policy.Mode == "update" {
         progress(feedback.Progress, Progress{Stage: "sync_update"})
     }
-    submitted, err := c.Runs.Submit(ctx, execution.SubmitInput{Project: p.project, File: p.file, Target: p.target, Connection: p.machine, RemoteDir: remote, Plan: p.source, Args: in.Args, Metadata: p.metadata, Batch: in.Policy.Batch}, func(stage string) { progress(feedback.Progress, Progress{Stage: "run_" + stage}) })
+    var waiting func(context.Context, task.RunRef) error
+    if len(in.Notify) > 0 {
+        waiting = func(ctx context.Context, ref task.RunRef) error {
+            _, err := c.Notify.Subscribe(ctx, SubscribeInput{Subject: event.Subject{Kind: "run", ID: ref.ID}, Source: "project", Destinations: in.Notify, Replay: true, Policy: in.Policy})
+            return err
+        }
+    }
+    submitted, err := c.Runs.Submit(ctx, execution.SubmitInput{BeforeSync: waiting, Project: p.project, File: p.file, Target: p.target, Connection: p.machine, RemoteDir: remote, Plan: p.source, Args: in.Args, Metadata: p.metadata, Batch: in.Policy.Batch}, func(stage string) { progress(feedback.Progress, Progress{Stage: "run_" + stage}) })
     result := RunResult{}
     if submitted.ID != "" {
         result.Run = &submitted

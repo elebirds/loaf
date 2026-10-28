@@ -75,6 +75,7 @@ type Dependencies struct {
 
 // Projects owns project planning and durable run workflows.
 type Projects struct {
+    Notify   NotificationService
     Config   *config.Store
     State    *local.Store
     Settings config.Global
@@ -100,6 +101,7 @@ type Machines struct {
 
 // Resources owns cloud acquisition, binding and account authentication.
 type Resources struct {
+    Notify     NotificationService
     Config     *config.Store
     Settings   config.Global
     Cloud      *cloud.Service
@@ -127,9 +129,9 @@ func New(d Dependencies, settings config.Global) *App {
         Events:    d.Events,
         Notify:    d.Notify,
         Queue:     d.Queue,
-        Projects:  &Projects{Config: d.Config, State: d.State, Settings: settings, Runs: d.Runs, Syncer: d.Syncer, Cleaner: d.Cleaner, Outputs: d.Outputs, Puller: d.Puller, CWD: d.CWD},
+        Projects:  &Projects{Notify: d.Notify, Config: d.Config, State: d.State, Settings: settings, Runs: d.Runs, Syncer: d.Syncer, Cleaner: d.Cleaner, Outputs: d.Outputs, Puller: d.Puller, CWD: d.CWD},
         Machines:  &Machines{Config: d.Config, State: d.State, Settings: settings, Checker: d.Checker, Runner: d.Runner, Operations: d.Operations, Trace: d.Trace, CWD: d.CWD},
-        Resources: &Resources{Config: d.Config, Settings: settings, Cloud: d.Cloud, Auth: d.Auth, Operations: d.Operations, CWD: d.CWD},
+        Resources: &Resources{Notify: d.Notify, Config: d.Config, Settings: settings, Cloud: d.Cloud, Auth: d.Auth, Operations: d.Operations, CWD: d.CWD},
     }
 }
 

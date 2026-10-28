@@ -81,14 +81,15 @@ type Execution struct {
 
 // Command is the private machine-level control input carried over SSH.
 type Command struct {
-    Action    string     `json:"action"`
-    ID        string     `json:"request_id,omitempty"`
-    TargetID  string     `json:"target_id,omitempty"`
-    Slots     *int       `json:"slots,omitempty"`
-    Paused    *bool      `json:"paused,omitempty"`
-    Request   *Request   `json:"request,omitempty"`
-    Execution *Execution `json:"execution,omitempty"`
-    Limit     int        `json:"limit,omitempty"`
+    HostBinding string     `json:"host_binding,omitempty"`
+    Action      string     `json:"action"`
+    ID          string     `json:"request_id,omitempty"`
+    TargetID    string     `json:"target_id,omitempty"`
+    Slots       *int       `json:"slots,omitempty"`
+    Paused      *bool      `json:"paused,omitempty"`
+    Request     *Request   `json:"request,omitempty"`
+    Execution   *Execution `json:"execution,omitempty"`
+    Limit       int        `json:"limit,omitempty"`
 }
 
 // Result preserves selected identities and admission facts on partial failures.

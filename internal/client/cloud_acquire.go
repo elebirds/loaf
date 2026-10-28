@@ -6,6 +6,7 @@ import (
 
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
+    "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
 )
 
@@ -100,6 +101,9 @@ func (c *Resources) acquisitionPlan(ctx context.Context, in CloudAcquireInput) (
 // A failed readiness check keeps the same resource and receipt; it never allocates a replacement.
 func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, approve ApproveCloud, emit func(cloud.Event) error) (AcquisitionResult, error) {
     result := AcquisitionResult{}
+    if err := validateNotificationNames(ctx, c.Notify, in.Notify); err != nil {
+        return result, err
+    }
     if !config.ValidName(in.Name) || !config.ValidRemotePath(in.RemoteBase) || in.ReadyTimeout < 0 || in.ReadyTimeout > 10*time.Minute || in.Limit < 1 || in.Limit > 1000 {
         return result, cloudConfigError()
     }
@@ -134,7 +138,14 @@ func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, appr
         }
         return nil
     }
-    r, err := c.Cloud.Acquire(ctx, cloud.AcquireInput{Account: name, Settings: a, Target: in.Name, RemoteBase: in.RemoteBase, Plan: plan, Limit: in.Limit, AllowUnquoted: in.AllowUnquoted, CheckTarget: checkTarget}, observe)
+    var waiting func(context.Context, cloud.Receipt) error
+    if len(in.Notify) > 0 {
+        waiting = func(ctx context.Context, receipt cloud.Receipt) error {
+            _, err := c.Notify.Subscribe(ctx, SubscribeInput{Subject: event.Subject{Kind: "resource_operation", ID: receipt.ID}, Source: "resources", Destinations: in.Notify, Replay: true})
+            return err
+        }
+    }
+    r, err := c.Cloud.Acquire(ctx, cloud.AcquireInput{BeforeMutation: waiting, Account: name, Settings: a, Target: in.Name, RemoteBase: in.RemoteBase, Plan: plan, Limit: in.Limit, AllowUnquoted: in.AllowUnquoted, CheckTarget: checkTarget}, observe)
     result.Acquisition = &CloudAcquisition{Receipt: r, Observation: observation}
     if err != nil {
         return result, err

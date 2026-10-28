@@ -496,7 +496,11 @@ func (s *Store) outcome(ctx context.Context, id string, terminal bool, code stri
     }
     if code != "" {
         kind = "queue.attention_required"
-        e.Request.State = "unconfirmed"
+        if previousState == "submitted" {
+            e.Request.State = "submitted"
+        } else {
+            e.Request.State = "unconfirmed"
+        }
         e.Request.ReasonCode = code
     }
     if e.Request.State == previousState && e.Request.ReasonCode == previousCode {

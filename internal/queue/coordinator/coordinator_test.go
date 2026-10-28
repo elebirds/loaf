@@ -129,3 +129,41 @@ func TestPolicyMutationCannotRewriteTrustedEligibility(t *testing.T) {
         t.Fatalf("invalid policy changed admission: %+v %v", e, err)
     }
 }
+
+func TestObservationFailureDoesNotRevokeConfirmedAdmission(t *testing.T) {
+    ctx := context.Background()
+    s, err := queuestate.Open(ctx, filepath.Join(t.TempDir(), "queue", "state.sqlite3"), queuestate.Identity{Host: "host"}, true)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer s.Close()
+    for _, id := range []string{"q_1", "q_2"} {
+        now := time.Now().UTC()
+        _, err = s.Prepare(ctx, queue.Request{FormatVersion: 1, ID: id, RunID: "r_" + id, ProjectID: "project", TargetID: s.TargetID, CreatedAt: now}, queue.Execution{Version: "test", Root: "/tmp/project", Args: []string{"command"}})
+        if err != nil {
+            t.Fatal(err)
+        }
+        if _, err = s.Admit(ctx, id); err != nil {
+            t.Fatal(err)
+        }
+    }
+    adapter := &runs{outcome: map[string]Outcome{}}
+    c := Coordinator{Store: s, Policy: queue.FIFO{}, Runs: adapter}
+    if err = c.Tick(ctx); err != nil {
+        t.Fatal(err)
+    }
+    accepted, err := s.Entry(ctx, "q_1")
+    if err != nil || accepted.Request.State != "submitted" {
+        t.Fatalf("missing confirmed admission: %+v %v", accepted, err)
+    }
+    // A later unreachable/unknown observation must hold capacity and request
+    // attention without rewriting the already-confirmed dispatch as uncertain.
+    if err = c.Tick(ctx); err != nil {
+        t.Fatal(err)
+    }
+    observed, err := s.Entry(ctx, "q_1")
+    status, _ := s.Status(ctx)
+    if err != nil || observed.Request.State != "submitted" || observed.Request.ReasonCode != "QUEUE_EXECUTION_UNCONFIRMED" || status.Reserved != 1 || status.Queued != 1 || len(adapter.launches) != 1 || !observed.Request.AttemptedAt.Equal(*accepted.Request.AttemptedAt) {
+        t.Fatalf("confirmed fact lost: %+v %+v %v", observed, status, err)
+    }
+}

@@ -210,6 +210,7 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
     now := time.Now().UTC()
     r := queue.Request{FormatVersion: queue.Version, ID: "q_" + hex.EncodeToString(random[:12]), RunID: "r_" + hex.EncodeToString(random[12:]), ProjectID: p.project.ID, TargetID: status.Status.TargetID, State: "preparing", CreatedAt: now, UpdatedAt: now, Name: p.metadata.Name, Tags: p.metadata.Tags}
     ref := task.RunRef{ID: r.RunID, ProjectID: p.project.ID, Target: p.target, Connection: p.machine, RemoteDir: report.RemoteDir, Runner: runner, Version: wire.Version, Outputs: p.execution.Outputs, CreatedAt: now, Submission: "preparing", Name: p.metadata.Name, Tags: p.metadata.Tags}
+    ref.QueueRequestID = r.ID
     result.Request = &r
     result.Run = &execution.View{ID: ref.ID, Version: ref.Version, Target: ref.Target, RemoteDir: ref.RemoteDir, Status: "unknown", Submission: "preparing", CreatedAt: now, Ref: ref}
     if err = q.Projects.State.SaveRun(ctx, ref); err != nil {
@@ -286,7 +287,7 @@ func (q *Queues) binding(ctx context.Context, in QueueIDInput) (queueBinding, er
     }
     decoder := json.NewDecoder(bytes.NewReader(data))
     decoder.DisallowUnknownFields()
-    if decoder.Decode(&binding) != nil || binding.FormatVersion != 1 || binding.Request.ID != in.ID || binding.Request.ProjectID != project.ID || binding.Request.RunID != binding.Run.ID || !task.ValidRun(binding.Run) {
+    if decoder.Decode(&binding) != nil || binding.FormatVersion != 1 || binding.Request.ID != in.ID || binding.Request.ProjectID != project.ID || binding.Request.RunID != binding.Run.ID || binding.Request.ID != binding.Run.QueueRequestID || !task.ValidRun(binding.Run) {
         return queueBinding{}, queueFailure("QUEUE_BAD_REQUEST", nil)
     }
     return binding, nil

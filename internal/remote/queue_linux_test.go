@@ -148,3 +148,20 @@ func TestQueueControlRejectsProtocolBeforeOpeningStorage(t *testing.T) {
         t.Fatalf("invalid request created storage: %v", err)
     }
 }
+
+func TestQueuedExecutionCarriesFrozenAdmissionMetadata(t *testing.T) {
+    at := time.Now().UTC()
+    e := queuestate.Entry{Request: queue.Request{ID: "q_example", ProjectID: "project", RunID: "run", AttemptedAt: &at}, Execution: queue.Execution{Version: wire.Version, Root: "/tmp/project", Args: []string{"command"}}}
+    req := queuedExecution(e, "launch")
+    if req.QueueRequestID != e.Request.ID || req.AttemptedAt == nil || !req.AttemptedAt.Equal(at) {
+        t.Fatalf("missing admission metadata: %+v", req)
+    }
+    r := &wire.RunRecord{Request: req, Status: "running", SupervisorPID: 123}
+    if !queueOutcome(e, r).Accepted {
+        t.Fatal("matching accepted identity rejected")
+    }
+    r.Request.QueueRequestID = "other"
+    if queueOutcome(e, r).Accepted {
+        t.Fatal("foreign admission accepted as this Run")
+    }
+}

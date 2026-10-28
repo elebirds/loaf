@@ -185,6 +185,9 @@ func TestQueueSubmitFreezesInputAndRegistersBeforeSideEffects(t *testing.T) {
     if err != nil || saved.Submission != "preparing" || saved.AttemptedAt != nil {
         t.Fatalf("queued Run falsely marked submitted: %+v %v", saved, err)
     }
+    if saved.QueueRequestID != result.Request.ID {
+        t.Fatal("Run locator lost its frozen queue identity")
+    }
     data, _ := json.Marshal(result)
     if strings.Contains(string(data), "not-public") || strings.Contains(string(data), "TOKEN") {
         t.Fatalf("execution environment leaked: %s", data)

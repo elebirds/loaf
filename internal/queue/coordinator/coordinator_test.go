@@ -97,3 +97,35 @@ func TestPolicyCannotExecuteForeignRequest(t *testing.T) {
         t.Fatal("policy bypassed execution admission")
     }
 }
+
+type mutatingPolicy struct{}
+
+func (mutatingPolicy) Select(candidates []queue.Candidate, _ int) ([]string, error) {
+    candidates[0].ID = "foreign"
+    return []string{"foreign"}, nil
+}
+
+func TestPolicyMutationCannotRewriteTrustedEligibility(t *testing.T) {
+    ctx := context.Background()
+    s, err := queuestate.Open(ctx, filepath.Join(t.TempDir(), "queue", "state.sqlite3"), queuestate.Identity{Host: "host"}, true)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer s.Close()
+    now := time.Now().UTC()
+    _, err = s.Prepare(ctx, queue.Request{FormatVersion: 1, ID: "q_1", RunID: "r_1", ProjectID: "project", TargetID: s.TargetID, CreatedAt: now}, queue.Execution{Version: "test", Root: "/tmp/project", Args: []string{"command"}})
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err = s.Admit(ctx, "q_1"); err != nil {
+        t.Fatal(err)
+    }
+    adapter := &runs{outcome: map[string]Outcome{}}
+    if err = (Coordinator{Store: s, Policy: mutatingPolicy{}, Runs: adapter}).Tick(ctx); err == nil {
+        t.Fatal("policy rewrote trusted eligible IDs")
+    }
+    e, err := s.Entry(ctx, "q_1")
+    if err != nil || e.Request.State != "queued" || len(adapter.launches) != 0 {
+        t.Fatalf("invalid policy changed admission: %+v %v", e, err)
+    }
+}

@@ -396,7 +396,7 @@ func (s *Store) Reserve(ctx context.Context, policy queue.Policy) ([]Entry, erro
     if err != nil {
         return nil, err
     }
-    ids, err := policy.Select(candidates, slots-reserved)
+    ids, err := policy.Select(slices.Clone(candidates), slots-reserved)
     if err != nil {
         return nil, err
     }

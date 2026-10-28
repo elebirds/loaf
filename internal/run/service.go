@@ -260,10 +260,13 @@ func definiteRejection(code string) bool {
 }
 
 func matching(ref task.RunRef, r *wire.RunRecord) bool {
-    return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.Version == wire.Version && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir && (ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID)
+    if r == nil || r.FormatVersion != wire.FormatVersion || r.Request.Version != wire.Version || r.Request.RunID != ref.ID || r.Request.ProjectID != ref.ProjectID || r.Request.Root != ref.RemoteDir {
+        return false
+    }
+    return ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID || r.Request.QueueRequestID == "" && r.SupervisorPID == 0 && !wire.Terminal(r.Status) && (r.Phase == "copying" || r.Phase == "prepared")
 }
 func accepted(ref task.RunRef, r *wire.RunRecord) bool {
-    return matching(ref, r) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
+    return matching(ref, r) && (ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
 }
 
 // Select resolves an ID only within the current project. Ambiguity never falls

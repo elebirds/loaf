@@ -1,7 +1,7 @@
 # Compatibility evidence
 
-Checked on macOS on 2026-10-28. Version pins and exact modes matter; this is
-not a promise about other desktop versions or organization settings.
+Checked on macOS on 2026-10-28. Evidence covers these exact native versions and
+modes; other desktop versions and organization admission need separate checks.
 
 | Destination | Tested version and mode | Observed evidence |
 | --- | --- | --- |
@@ -15,8 +15,8 @@ never an existing user conversation. The Codex thread was `readOnly` with
 `on-request` approvals; its dedicated server and workspace were removed. Claude
 had no built-in tools and retained manual approvals. Its interrupted test
 session and project trust/history were removed with the native project-scoped
-`claude purge` command. No credentials were copied, global integration settings
-were changed, experiments were run, or resources were acquired.
+`claude purge` command. The checks copied no credentials, changed no global
+integration settings, ran no experiments and acquired no resources.
 
 Automated tests cover exact-session/workspace rejection, wrong identities,
 private Unix WebSocket framing, lost confirmation without replay, MCP protocol

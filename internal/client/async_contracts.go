@@ -52,11 +52,14 @@ type SubscribeInput struct {
 
 // Subscription is a durable waiting relationship, not execution authority.
 type Subscription struct {
-    ID           string        `json:"subscription_id"`
-    Subject      event.Subject `json:"subject"`
-    Source       string        `json:"source"`
-    Destinations []string      `json:"destinations"`
-    CreatedAt    time.Time     `json:"created_at"`
+    ID            string        `json:"subscription_id"`
+    Subject       event.Subject `json:"subject"`
+    Source        string        `json:"source"`
+    Destinations  []string      `json:"destinations"`
+    CreatedAt     time.Time     `json:"created_at"`
+    LastSyncedAt  *time.Time    `json:"last_synced_at,omitempty"`
+    SourceError   string        `json:"source_error,omitempty"`
+    SourceErrorAt *time.Time    `json:"source_error_at,omitempty"`
 }
 
 // Delivery retains per-destination evidence and safe failure classification.

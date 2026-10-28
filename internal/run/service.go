@@ -49,6 +49,9 @@ type Service struct {
 
 // SubmitInput freezes one project's explicit execution inputs.
 type SubmitInput struct {
+    // BeforeSync records optional waiting relationships after identity is saved
+    // and before any project transfer or execution side effect.
+    BeforeSync func(context.Context, task.RunRef) error
     Project    config.Project
     File       config.ProjectFile
     Target     string
@@ -165,6 +168,13 @@ func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(strin
             return result, err
         }
     }
+    if in.BeforeSync != nil {
+        if err := in.BeforeSync(ctx, ref); err != nil {
+            result := view(ref, nil)
+            result.StateError = "NOTIFY_FAILED"
+            return result, err
+        }
+    }
     input := ssh.SyncInput{Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Mode: in.Plan.Policy.Mode}
     for _, file := range in.Plan.Files {
         input.Paths = append(input.Paths, file.Path)
@@ -250,7 +260,7 @@ func definiteRejection(code string) bool {
 }
 
 func matching(ref task.RunRef, r *wire.RunRecord) bool {
-    return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.Version == wire.Version && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir
+    return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.Version == wire.Version && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir && (ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID)
 }
 func accepted(ref task.RunRef, r *wire.RunRecord) bool {
     return matching(ref, r) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
@@ -344,10 +354,15 @@ func (s Service) Observe(ctx context.Context, ref task.RunRef, wait time.Duratio
     }
     result.ObservedAt = time.Now().UTC()
     result.Log = &observed.Log
-    if ref.Submission == "uncertain" && result.Status != "unknown" && accepted(ref, observed.Record) {
+    queueAccepted := ref.QueueRequestID != "" && accepted(ref, observed.Record) && observed.Record.Request.AttemptedAt != nil && !observed.Record.Request.AttemptedAt.IsZero()
+    if (ref.Submission == "uncertain" || ref.Submission == "preparing" && queueAccepted) && result.Status != "unknown" && accepted(ref, observed.Record) {
         // Confirm the saved ID after a successful observation. This changes
         // only its local submission locator, never sends another start.
         bound.Submission = "submitted"
+        if queueAccepted {
+            attempted := observed.Record.Request.AttemptedAt.UTC()
+            bound.AttemptedAt = &attempted
+        }
         result.Ref = bound
         result.Submission = bound.Submission
         saved, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)

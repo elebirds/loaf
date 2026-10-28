@@ -273,11 +273,12 @@ type eventListCommand struct {
 }
 
 type notifyCommand struct {
-    Destination   destinationCommand  `cmd:"" help:"notify_destination_short" example:"loaf notify destination --help"`
-    Subscribe     subscribeCommand    `cmd:"" help:"notify_subscribe_short" example:"loaf notify subscribe run:r_example --destination research"`
-    Subscriptions struct{}            `cmd:"" help:"notify_subscriptions_short" example:"loaf notify subscriptions"`
-    Deliveries    deliveryListCommand `cmd:"" default:"1" help:"notify_deliveries_short" example:"loaf notify deliveries"`
-    Serve         notifyServeCommand  `cmd:"" help:"notify_serve_short" example:"loaf notify serve --once"`
+    Destination   destinationCommand   `cmd:"" help:"notify_destination_short" example:"loaf notify destination --help"`
+    Subscribe     subscribeCommand     `cmd:"" help:"notify_subscribe_short" example:"loaf notify subscribe run:r_example --destination research"`
+    Subscriptions struct{}             `cmd:"" help:"notify_subscriptions_short" example:"loaf notify subscriptions"`
+    Deliveries    deliveryListCommand  `cmd:"" default:"1" help:"notify_deliveries_short" example:"loaf notify deliveries"`
+    Serve         notifyServeCommand   `cmd:"" help:"notify_serve_short" example:"loaf notify serve --once"`
+    Channel       notifyChannelCommand `cmd:"" help:"notify_channel_short" example:"loaf notify channel --socket /private/channel.sock --session research"`
 }
 
 type destinationCommand struct {
@@ -308,6 +309,11 @@ type deliveryListCommand struct {
 type notifyServeCommand struct {
     Once     bool          `help:"flag_notify_once"`
     Interval time.Duration `default:"5s" help:"flag_notify_interval" value-type:"duration"`
+}
+
+type notifyChannelCommand struct {
+    Socket  string `required:"" help:"flag_channel_socket" value-type:"path"`
+    Session string `required:"" help:"flag_channel_session"`
 }
 
 type queueCommand struct {

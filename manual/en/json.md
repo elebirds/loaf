@@ -122,6 +122,9 @@ Each line has the same versioned envelope. An early stream error can be the only
 line; never assume a chunk arrives first. Errors carry `error` and a
 `data.type: "error"` marker. EOF without a final event does not prove success.
 `ssh` and `forward` reject JSON and keep native terminal/tunnel behavior.
+`notify channel` exclusively serves native MCP stdio, not Loaf envelopes or
+NDJSON. It rejects `--json`/`--trace` with exit 2 and diagnostics on stderr,
+leaving stdout empty. Structured `help notify channel --json` remains available.
 
 Log text is bounded to 256 KiB per chunk; `truncated` means preceding bytes were
 omitted. `offset` counts bytes in the source log, not Unicode characters. A

@@ -126,6 +126,9 @@ func helpData(node *kong.Node, l *i18n.Localizer) helpResult {
             if flag.Name == "json" && node.Path() == "forward" {
                 v.Description = l.Text("forward_json")
             }
+            if (flag.Name == "json" || flag.Name == "trace") && node.Path() == "notify channel" {
+                v.Description = l.Text("notify_channel_native")
+            }
             h.Flags = append(h.Flags, v)
         }
     }

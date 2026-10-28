@@ -1877,7 +1877,7 @@ other = "Maximum rows, from 1 to 1000."
 other = "Integration: codex, claude-channel, claude-resume, or webhook."
 
 [flag_destination_session]
-other = "Exact session ID; never selects the latest session."
+other = "Exact Agent session ID, or the unique label from notify channel --session; never selects the latest session."
 
 [flag_destination_endpoint]
 other = "Private local endpoint or Webhook URL, never a Shell command."
@@ -2166,3 +2166,24 @@ other = "Local queue state could not be saved ({{.Code}}); retain the confirmed 
 
 [cloud_binding_next]
 other = "Select this machine for your project with loaf machine use {{.Target}}, then use loaf run with your project command."
+
+[notify_channel_short]
+other = "Serve a Claude Channel on native MCP stdio; requires an open, platform-permitted session."
+
+[flag_channel_socket]
+other = "Absolute Unix socket path in an existing private directory (0700); the new socket is private (0600)."
+
+[flag_channel_session]
+other = "Unique label for this open Claude session; use the same label in its destination binding."
+
+[notify_channel_native]
+other = "Claude Channel uses native MCP stdin/stdout, not Loaf JSON or NDJSON. Omit --json and --trace; diagnostics go to stderr."
+
+[notify_source_synced]
+other = "Last source sync: {{.Value}}."
+
+[notify_source_error]
+other = "Last source query error: {{.Code}}."
+
+[notify_source_error_at]
+other = "Last source query error at {{.Value}}: {{.Code}}."

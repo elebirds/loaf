@@ -87,6 +87,10 @@ func Execute(ctx context.Context, args []string, o Options) int {
         l, langErr = i18n.New("auto", o.Env)
     }
     p := &presenter{json: early.json, out: o.Out, err: o.Err, locale: l, trace: o.Trace}
+    // Even input errors must not corrupt a native MCP protocol stream.
+    if early.nativeChannel && !early.help && !early.version {
+        p.json = false
+    }
     if early.languageSet && preferred == "" {
         langErr = fault.New("BAD_CONFIG", "language_invalid", map[string]any{"Languages": strings.Join(i18n.Supported(), ", ")})
     }
@@ -119,6 +123,10 @@ func Execute(ctx context.Context, args []string, o Options) int {
     if parsed.path == "version" {
         info, _ := debug.ReadBuildInfo()
         return p.finish(versionData(info), nil)
+    }
+    if parsed.path == "notify channel" && (model.JSON || model.Trace) {
+        p.json = false
+        return p.finish(nil, fault.New("BAD_CONFIG", "notify_channel_native", nil))
     }
     if o.InitError != nil {
         return p.finish(nil, o.InitError)

@@ -37,6 +37,55 @@ Claude Channel 要求会话开启且平台允许；headless resume 是另一种�
 `notify destination list` 只显示安全信息，不显示私有连接详情。
 独立 Go 投递 SDK 负责明确目的地及投递证据，不负责 Run 调度或训练 Runtime。
 
+## 使用发行版二进制绑定开启的 Claude 会话
+
+可选 Channel 适配器已包含在 `loaf` 中，不要求安装 Bun、Node 或另一个 helper。
+每个开启的 Claude 会话应使用独立 socket 和唯一标签。先创建权限为 `0700` 的
+socket 父目录；helper 新建 `0600` socket，拒绝占用已有 socket 路径。
+
+在该 Claude 项目的 `.mcp.json` 中配置，并替换绝对路径：
+
+```json
+{
+  "mcpServers": {
+    "loaf-events": {
+      "command": "/absolute/path/to/loaf",
+      "args": ["notify", "channel", "--socket", "/absolute/private/loaf-channels/research.sock", "--session", "research_1"]
+    }
+  }
+}
+```
+
+由 Claude 启动此子进程。标准输入/输出仅承载原生 MCP，不是 Loaf JSON 或 NDJSON；
+不接受 `--json`、`--trace`，诊断写入 stderr。标签是该 helper 的会话绑定，
+不是推测出的 Claude 内部会话 ID。
+
+### 预览期的本地开发验证
+
+当前自定义 Channel 需要 Claude 的交互式开发选择。仅在已审查此本地 helper，
+且明确选择测试后运行：
+
+```bash
+claude --dangerously-load-development-channels server:loaf-events
+```
+
+这是可选开发测试，不是普通启动方式，Loaf 不会自动添加此选项；它也不能覆盖组织
+`channelsEnabled` 或其他真实拒绝。普通使用仍以上游准入为前提，详见官方
+[Channel 预览要求](https://code.claude.com/docs/en/channels-reference#test-during-the-research-preview)。
+
+会话开启且平台允许后，用同一 socket 和标签登记目的地，再单独运行投递 Bridge：
+
+```bash
+loaf notify destination add claude-research --kind claude-channel --endpoint /absolute/private/loaf-channels/research.sock --session research_1
+loaf run --notify claude-research -- python3 train.py
+loaf notify serve
+```
+
+通知写入仅为 `written`。Claude 读到消息后，通过 helper 的 `ack_event` 工具传入
+该消息的 `{"message_id":"MESSAGE_ID"}`，才能提供 `processed` 证据。
+它表示会话确认已读，不表示后续任务已完成。没有 ACK 则保留未确认，不自动开启第二个 turn。
+适配器不提供审批中继；后续操作仍须遵守现有权限。
+
 ## 分别查看事实与投递证据
 
 ```bash
@@ -56,6 +105,10 @@ loaf notify subscriptions
 `resource_operation`、`resource`，资源事实不要求存在 Run ID。
 订阅默认来源为 `project`；云事实使用 `--source resources`，入队派发事实使用
 `--source queue`。默认包含保留的匹配事件；`--replay=false` 仅订阅之后的事实。
+
+`notify subscriptions` 分别保留最近成功同步时间、上次来源查询错误的稳定 code 和时间，
+之后同步成功也不会抹去旧错误；判断恢复时应比较两类时间。
+来源查询失败不是目的地拒绝，也不是 Agent 处理结果。
 
 投递记录分别保留应用派发状态和 SDK 证据。`written` 仅表示已写入传输，
 `accepted` 表示目的地明确接收，`processed` 需要处理证据。

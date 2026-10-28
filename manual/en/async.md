@@ -44,6 +44,60 @@ headless resume is a separate, explicitly chosen execution mode.
 The standalone Go delivery SDK addresses destinations and reports evidence; it
 does not schedule Runs or implement a training runtime.
 
+## Bind an open Claude session with the packaged binary
+
+The optional Channel adapter is part of `loaf`; it needs no Bun, Node or separate
+helper installation. Give each open Claude session its own socket and unique
+label. Create the socket's parent directory with mode `0700` first. The helper
+creates a `0600` socket and rejects an existing socket path.
+
+In that Claude project's `.mcp.json`, replace the absolute paths:
+
+```json
+{
+  "mcpServers": {
+    "loaf-events": {
+      "command": "/absolute/path/to/loaf",
+      "args": ["notify", "channel", "--socket", "/absolute/private/loaf-channels/research.sock", "--session", "research_1"]
+    }
+  }
+}
+```
+
+Claude starts this command as a subprocess. Its stdin/stdout carry native MCP,
+not Loaf JSON or NDJSON; `--json` and `--trace` are rejected. Diagnostics use
+stderr. The label is this helper's session binding, not an inferred Claude ID.
+
+### Local development validation during preview
+
+Custom Channels currently require Claude's interactive development opt-in. Only
+after reviewing this local helper and explicitly choosing to test it:
+
+```bash
+claude --dangerously-load-development-channels server:loaf-events
+```
+
+This is an optional development test, not normal startup; Loaf never adds the
+flag. It cannot override organization `channelsEnabled` or other real denials.
+Ordinary use remains subject to upstream admission. See the official
+[Channel preview requirements](https://code.claude.com/docs/en/channels-reference#test-during-the-research-preview).
+
+With the session open and permitted, bind exactly the configured socket/label,
+then run the separate delivery Bridge:
+
+```bash
+loaf notify destination add claude-research --kind claude-channel --endpoint /absolute/private/loaf-channels/research.sock --session research_1
+loaf run --notify claude-research -- python3 train.py
+loaf notify serve
+```
+
+A notification write is only `written`. After reading it, Claude calls the
+helper's `ack_event` tool with `{"message_id":"MESSAGE_ID"}` from that message;
+only this acknowledgment supplies `processed` evidence. It proves the session
+acknowledged reading, not completion of a follow-up task. No ACK leaves delivery
+unconfirmed, without an automatic second turn. The adapter exposes no approval
+relay; existing permissions still govern any continuation.
+
 ## Read facts and delivery evidence separately
 
 ```bash
@@ -64,6 +118,11 @@ its original source/database incarnation. There is no global cross-source order.
 default to `project`; select `--source resources` for cloud facts or `--source
 queue` for admission facts. Retained matches are included by default;
 `--replay=false` selects future facts only.
+
+`notify subscriptions` keeps the last successful source-sync time and the last
+source-query error code/time separately, including after a later successful
+sync. Compare those timestamps when checking recovery. A source-query failure
+is not a destination rejection or an Agent-processing result.
 
 Delivery records separate application dispatch state from SDK evidence.
 `written` means transport output, `accepted` means destination acknowledgment,

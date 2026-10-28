@@ -2,7 +2,7 @@
 
 [首页](../../README.zh-Hans.md) · [使用指南](guide.md) · [English](../en/commands.md)
 
-由 CLI 声明生成。示例中的别名、ID、主机与环境变量引用为占位值。云调用需已配置适用账号与资源条件，变更仍须明确授权和确认，详见[云资源前提](cloud.md)。添加 `--json` 获取非交互结构化结果；原生 `ssh`、`forward` 除外。Agent 后续操作应明确填写任务 ID。
+由 CLI 声明生成。示例中的别名、ID、主机与环境变量引用为占位值。云调用需已配置适用账号与资源条件，变更仍须明确授权和确认，详见[云资源前提](cloud.md)。添加 `--json` 获取非交互结构化结果；原生 `ssh`、`forward`、`notify channel` 除外。Agent 后续操作应明确填写任务 ID。
 
 ## 全局选项
 
@@ -92,6 +92,7 @@
 | `loaf notify subscriptions` | `loaf notify subscriptions` | 列出持久通知订阅。 |
 | `loaf notify deliveries` | `loaf notify deliveries` | 查看接收与处理证据。 |
 | `loaf notify serve` | `loaf notify serve --once` | 接收并投递事件，Ctrl-C 仅停止当前 Bridge。 |
+| `loaf notify channel` | `loaf notify channel --socket /private/channel.sock --session research` | 通过原生 MCP stdio 提供 Claude Channel；要求会话开启且平台允许。 |
 | `loaf help` | `loaf help run` | 显示命令帮助。 |
 
 ## 参数与条件

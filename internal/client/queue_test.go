@@ -10,6 +10,7 @@ import (
     "strings"
     "testing"
 
+    "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/queue"
@@ -312,5 +313,32 @@ func TestQueueCleanValidatesAllSelectedRequestsBeforeDeletion(t *testing.T) {
     result, err = q.Clean(ctx, QueueCleanInput{IDs: []string{first.Request.ID}})
     if err != nil || len(result.Cleaned) != 1 || len(transfer.snapshots) != 1 {
         t.Fatalf("eligible cancellation not reclaimed: %+v %v", result, err)
+    }
+}
+
+func TestQueueCloudIdentityIsIndependentOfLocalAccountAliases(t *testing.T) {
+    ctx := context.Background()
+    original := config.Target{Cloud: &cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "standard", Account: "old-alias", ID: "instance-1"}}}
+    alias := config.Target{Cloud: &cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "standard", Account: "new-alias", ID: "instance-1"}}}
+    clone := config.Target{Cloud: &cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "standard", Account: "old-alias", ID: "instance-2"}}}
+    if queueHostBinding(original) != queueHostBinding(alias) {
+        t.Fatal("local account aliases split machine identity")
+    }
+    path := filepath.Join(t.TempDir(), "queue", "state.sqlite3")
+    first, err := queuestate.Open(ctx, path, queuestate.Identity{Host: "same-host-uid", Binding: queueHostBinding(original)}, true)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer first.Close()
+    same, err := queuestate.Open(ctx, path, queuestate.Identity{Host: "same-host-uid", Binding: queueHostBinding(alias)}, false)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer same.Close()
+    if first.TargetID != same.TargetID {
+        t.Fatal("same instance split capacity ledger")
+    }
+    if _, err = queuestate.Open(ctx, path, queuestate.Identity{Host: "same-host-uid", Binding: queueHostBinding(clone)}, true); err == nil {
+        t.Fatal("cloned instance inherited donor ledger")
     }
 }

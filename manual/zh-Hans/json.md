@@ -60,6 +60,7 @@
 | `clean` | `runs[]` 的逐任务清理结果及错误码；执行结果另行保留 |
 | `events list` | 绑定来源的 events、source_id、next_cursor、has_more；事件保留原来源身份 |
 | `notify destination list`、`notify subscriptions`、`notify deliveries` | 安全的目的地、订阅或投递行；派发状态与 SDK 证据分开 |
+| `notify bind NAME --current` | 只读验证当前线程并保存后的安全 destination 信息，以及 verified_at 时间 |
 | `notify serve --once` | received/attempted/accepted/unconfirmed/pending 计数 |
 | `queue submit` | 队列 request、可选 Run 观察或离线 preview；入队不代表执行接受 |
 | 其他队列查询/控制 | request(s)、共享额度 status 或明确已删除的 cleaned ID |

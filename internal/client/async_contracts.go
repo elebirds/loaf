@@ -40,6 +40,23 @@ type DestinationRecord struct {
     CreatedAt time.Time `json:"created_at"`
 }
 
+// BindCurrentInput names the current, explicitly supplied desktop session.
+type BindCurrentInput struct {
+    Name    string
+    Replace bool
+}
+
+// CurrentBindingResult reports successful persistence after a read-only probe.
+type CurrentBindingResult struct {
+    Destination DestinationRecord `json:"destination"`
+    VerifiedAt  time.Time         `json:"verified_at"`
+}
+
+// CurrentBindingService optionally verifies and saves the calling session.
+type CurrentBindingService interface {
+    BindCurrent(context.Context, BindCurrentInput) (CurrentBindingResult, error)
+}
+
 // SubscribeInput freezes a safe subject and the selected destination names.
 type SubscribeInput struct {
     Subject      event.Subject

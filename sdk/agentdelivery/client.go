@@ -12,6 +12,8 @@ func (c Client) sender(d Destination) Sender {
     switch d.Kind {
     case "codex":
         return Codex{}
+    case "codex-desktop":
+        return CodexDesktop{}
     case "claude-channel":
         return ClaudeChannel{}
     case "webhook":

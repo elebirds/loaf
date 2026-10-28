@@ -6,6 +6,39 @@ Use a notification to deliver a saved result after a task finishes. Use a queue
 when cooperating projects share a machine. A direct Run or cloud operation can
 notify you without ever entering a queue.
 
+## Send notifications back to the current Codex desktop chat
+
+Ask the Agent in the intended Codex desktop chat to run once:
+
+```bash
+loaf notify bind here --current
+```
+
+Loaf reads that tool shell's exact `CODEX_THREAD_ID`, discovers its existing
+owner through local private desktop IPC, and saves the destination only after
+verification. No socket or thread ID needs copying. It does not start another
+App Server, create a thread, or resume a substitute. A normal terminal without
+current-session context fails explicitly.
+
+Later operations only need its name:
+
+```bash
+loaf run --notify here -- python3 train.py
+loaf cloud acquire gpu-a --profile train --notify here
+```
+
+Keep `loaf notify serve` running in another local terminal, or collect later
+with `--once`. Binding is read-only Agent discovery; actual delivery may cause
+Agent processing and consume service quota. Rebinding the same name to the same
+chat is idempotent. A name owned by another chat needs a new name or explicit
+`--replace`; existing subscriptions keep their frozen destination.
+
+The saved mode is `codex-desktop`, using experimental desktop peer IPC rather
+than the public App Server WebSocket. The exact local thread must still have a
+desktop owner that supports untrusted application input. Incompatible protocols
+fail instead of selecting a recent chat. The thread retains its own workspace,
+sandbox and approvals; this mode has no `--cwd` override.
+
 ## Send a result to an explicit destination
 
 Register a destination, then name it when submitting work. Replace this example
@@ -27,13 +60,14 @@ subscribes to acquisition, readiness and conditions requiring attention. An
 inventory match is not an acquisition; an instance being created does not prove
 SSH readiness. A notification does not authorize another purchase or a new task.
 
-Agent bindings address one exact session:
+For a manually configured public Codex App Server, address one exact session:
 
 ```bash
 loaf notify destination add assistant --kind codex --session THREAD_ID --endpoint ENDPOINT
 ```
 
-This version implements three adapters: `codex`, `claude-channel` and `webhook`.
+This version implements four adapters: `codex`, `codex-desktop`,
+`claude-channel` and `webhook`.
 `claude-resume` is reserved but unsupported: Loaf rejects its registration with
 `DESTINATION_INVALID`, and the SDK returns `ErrUnsupported`. There is no
 headless/resume adapter or automatic fallback in this release.

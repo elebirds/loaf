@@ -31,6 +31,9 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
         return true, nil
     case client.DestinationRecord:
         return true, printDestination(out, r, l)
+    case client.CurrentBindingResult:
+        _, err := fmt.Fprintln(out, l.Text("notify_current_bound", map[string]any{"Value": r.Destination.Name, "ID": r.Destination.SessionID}))
+        return true, err
     case []client.DestinationRecord:
         if len(r) == 0 {
             _, err := fmt.Fprintln(out, l.Text("notify_destinations_empty"))

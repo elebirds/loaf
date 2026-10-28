@@ -1837,6 +1837,27 @@ other = "Read a bounded event page with an optional cursor."
 [notify_short]
 other = "Manage explicit destinations and event delivery."
 
+[notify_bind_short]
+other = "Verify and bind the current Codex desktop chat without starting a turn."
+
+[flag_notify_current]
+other = "Use this Codex desktop tool shell's exact thread identity."
+
+[notify_current_required]
+other = "Use --current to bind the calling Codex desktop chat."
+
+[notify_current_context_required]
+other = "Run loaf notify bind NAME --current from the Codex desktop chat you want to notify."
+
+[notify_current_unavailable]
+other = "The current Codex desktop chat could not be verified. Keep that chat open and check its private desktop IPC connection."
+
+[notify_current_exists]
+other = "Destination {{.Value}} targets another session. Choose another name or explicitly use --replace; existing subscriptions retain their frozen destination."
+
+[notify_current_bound]
+other = "Bound {{.Value}} to the verified current Codex desktop chat {{.ID}}. Use --notify {{.Value}} on later operations."
+
 [notify_destination_short]
 other = "Manage private bindings to exact destinations."
 
@@ -1874,7 +1895,7 @@ other = "Continue from this source-bound event cursor."
 other = "Maximum rows, from 1 to 1000."
 
 [flag_destination_kind]
-other = "Integration: codex, claude-channel, claude-resume, or webhook."
+other = "Integration: codex, codex-desktop, claude-channel, claude-resume, or webhook."
 
 [flag_destination_session]
 other = "Exact Agent session ID, or the unique label from notify channel --session; never selects the latest session."

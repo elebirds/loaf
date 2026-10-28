@@ -5,6 +5,34 @@
 任务结束后需要交付结果，使用通知；协作项目需要共享机器，使用队列。
 直接 Run 和云资源操作不需要经过队列，也能发送通知。
 
+## 将通知送回当前 Codex 桌面会话
+
+在希望接收通知的 Codex 桌面会话中，让 Agent 执行一次：
+
+```bash
+loaf notify bind here --current
+```
+
+Loaf 从该工具 Shell 的 `CODEX_THREAD_ID` 取得精确身份，通过本机桌面的私有 IPC
+查询该线程的现有 owner，验证成功后才保存目的地。不需要手填 socket 或线程 ID，
+也不会启动另一个 App Server、新建或恢复替代会话。普通终端没有当前会话身份时会明确失败。
+
+以后只引用这个名称：
+
+```bash
+loaf run --notify here -- python3 train.py
+loaf cloud acquire gpu-a --profile train --notify here
+```
+
+在本机另一个终端保持 `loaf notify serve` 运行，或之后执行 `--once` 补取。
+绑定命令只做只读验证；真正交付事件可能使目标 Agent 继续处理，并消耗其服务额度。
+同一会话重复绑定同名目的地不会重写它；名称已属于其他会话时须换名或明确加 `--replace`，
+已有订阅仍保留原冻结目的地。
+
+该模式保存为 `codex-desktop`，使用桌面的实验性 peer IPC，而不是公开 App Server
+WebSocket。要求本机目标会话仍由桌面持有，且支持不可信应用输入；协议不兼容时失败，
+不会猜最近会话。它保留目标线程自己的工作区、sandbox 和审批设置，不提供 `--cwd` 覆盖。
+
 ## 将结果交给明确的目的地
 
 先登记目的地，再在提交时引用名称。请把示例 URL 换成自己的接收端：
@@ -23,13 +51,13 @@ loaf notify serve
 连接就绪及需要处理的情况。库存匹配不是已经获取实例，实例已创建也不一定可以 SSH 连接。
 通知不会扩大为再次购买资源或提交新任务的授权。
 
-Agent 绑定一个明确会话：
+手工接入公开 Codex App Server 时，可登记明确会话：
 
 ```bash
 loaf notify destination add assistant --kind codex --session THREAD_ID --endpoint ENDPOINT
 ```
 
-本版实际实现三种适配器：`codex`、`claude-channel` 和 `webhook`。
+本版实际实现四种适配器：`codex`、`codex-desktop`、`claude-channel` 和 `webhook`。
 `claude-resume` 是保留模式，当前不支持：Loaf 会以 `DESTINATION_INVALID`
 拒绝登记，SDK 返回 `ErrUnsupported`。本版没有 headless/resume 适配器，
 也不会自动回退到此模式。

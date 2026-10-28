@@ -24,11 +24,12 @@ entered the Agent's queue. The SDK itself never retries or opens another session
 See [compatibility evidence](COMPATIBILITY.md) for the tested native versions
 and the distinction between transport, acceptance and processing results.
 
-## Three adapters are implemented
+## Four adapters are implemented
 
 | Kind | Mechanism | Strongest automatic evidence |
 | --- | --- | --- |
 | `codex` | A private Unix WebSocket connects to an already running local App Server; a standalone tool result targets the exact loaded thread | `accepted` with an App Server turn ID |
+| `codex-desktop` | Private desktop peer IPC discovers the existing owner of the exact thread, then forwards one standalone tool result | `accepted` with the existing thread's turn ID |
 | `claude-channel` | An explicitly installed MCP Channel helper receives a private Unix-socket message and pushes a channel notification | `written`; `processed` only after the Agent calls `ack_event` |
 | `webhook` | One JSON POST to the configured HTTP/HTTPS endpoint, without redirects | HTTP destination `accepted`, not Agent processing |
 
@@ -54,6 +55,27 @@ start a model turn.
 The public protocol is documented in
 [OpenAI's App Server reference](https://learn.chatgpt.com/docs/app-server).
 Real desktop versions must be accepted separately from SDK-owned test sessions.
+
+### Current Codex desktop chat
+
+`codex-desktop` is an explicit experimental adapter for the installed desktop
+peer protocol, not an alternative framing of the public App Server API. Supply
+the intended `SessionID` and an absolute `Endpoint` such as
+`/Users/you/.codex/ipc/ipc.sock`. Loaf's `notify bind NAME --current` resolves
+these from the calling tool environment and verifies them before persistence.
+
+The SDK checks current-user ownership and private permissions on the socket and
+its parent. A read-only owner-discovery request must confirm the exact local
+thread and support for untrusted application input. Delivery targets that owner
+with one `toolOutput`; no ordinary user input, thread creation/resume, active
+steer, model, workspace or permission override is sent. `CWD` must be empty for
+this mode: the destination thread retains its own workspace and settings.
+
+Peer frames are bounded, context-cancellable and versioned. Unrelated bus
+messages are ignored, not exposed to the caller. Unsupported owners and protocol
+versions fail closed; a possible send never automatically repeats or falls back
+to a different server/session. An accepted response is destination evidence,
+not an automatic processing acknowledgement.
 
 ### Claude Channel
 

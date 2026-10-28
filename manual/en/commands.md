@@ -85,6 +85,7 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | `loaf events` | `loaf events` | Read saved run, queue and resource facts. |
 | `loaf events list` | `loaf events list` | Read a bounded event page with an optional cursor. |
 | `loaf notify` | `loaf notify` | Manage explicit destinations and event delivery. |
+| `loaf notify bind` | `loaf notify bind here --current` | Verify and bind the current Codex desktop chat without starting a turn. |
 | `loaf notify destination` | `loaf notify destination --help` | Manage private bindings to exact destinations. |
 | `loaf notify destination list` | `loaf notify destination list` | List destinations without private connection details. |
 | `loaf notify destination add` | `loaf notify destination add research --kind codex --session thread-id` | Save an explicit Agent session or Webhook destination. |

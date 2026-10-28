@@ -56,12 +56,33 @@ Inspect application delivery state and SDK receipt independently. Transport
 retries may include a next-attempt time. Never interpret receipt of a completion
 fact as new authority to rent, stop a machine, delete data or launch experiments.
 
-This version implements `codex`, `claude-channel` and `webhook` adapters only.
+This version implements `codex`, `codex-desktop`, `claude-channel` and `webhook` adapters.
 `claude-resume` is reserved and unsupported: Loaf rejects its registration with
 `DESTINATION_INVALID`, and the SDK returns `ErrUnsupported`. Do not attempt a
 headless/resume fallback when a Channel is unavailable. Respect the selected
 adapter's exact session/workspace binding and platform permissions; do not use
 GUI injection, private transcript edits or permission bypasses.
+
+## Bind the current Codex desktop chat
+
+When the user authorizes delivery to the current desktop chat, run from its
+tool shell:
+
+```bash
+loaf notify bind here --current --json
+```
+
+This uses the exact `CODEX_THREAD_ID` and verifies the existing local desktop
+owner before saving. It does not create/resume a replacement or start inference.
+Then use `--notify here`; run the Bridge separately. If binding fails, preserve
+the error rather than guessing a recent thread, starting a daemon, or silently
+changing modes. Another chat already using the name requires a different name
+or authorized explicit `--replace`; frozen subscriptions are not redirected.
+
+The `codex-desktop` adapter uses version-sensitive peer IPC and preserves the
+target thread's current workspace/sandbox/approvals, with no `--cwd` override.
+Actual event delivery can consume model quota. The receipt may prove acceptance
+but not processing; never resend an unconfirmed turn.
 
 ## Bind a Claude Channel only when requested
 

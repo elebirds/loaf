@@ -64,6 +64,7 @@ per card. CLI memory floors use GiB; platform disk-expansion flags use GB.
 | `clean` | `runs[]` with per-run cleanup results and codes; execution outcome remains separate |
 | `events list` | Source-bound `events`, `source_id`, `next_cursor` and `has_more`; events retain original source identity |
 | `notify destination list`, `notify subscriptions`, `notify deliveries` | Safe destination, subscription or delivery rows; delivery dispatch and SDK evidence remain separate |
+| `notify bind NAME --current` | Safe `destination` metadata and a `verified_at` timestamp after read-only current-thread verification and persistence |
 | `notify serve --once` | Received/attempted/accepted/unconfirmed/pending counts |
 | `queue submit` | Queue `request`, optional Run observation or offline `preview`; admission does not imply execution acceptance |
 | Other queue queries/control | Request(s), shared capacity `status`, or confirmed `cleaned` IDs |

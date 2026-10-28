@@ -1837,6 +1837,27 @@ other = "使用可选游标读取有界事件页。"
 [notify_short]
 other = "管理明确的目的地和事件投递。"
 
+[notify_bind_short]
+other = "验证并绑定当前 Codex 桌面会话，不启动新 turn。"
+
+[flag_notify_current]
+other = "使用当前 Codex 桌面工具 Shell 提供的精确线程身份。"
+
+[notify_current_required]
+other = "使用 --current 绑定调用此命令的 Codex 桌面会话。"
+
+[notify_current_context_required]
+other = "请在希望接收通知的 Codex 桌面会话中执行 loaf notify bind NAME --current。"
+
+[notify_current_unavailable]
+other = "无法验证当前 Codex 桌面会话。请保持该会话开启，并检查其私有桌面 IPC 连接。"
+
+[notify_current_exists]
+other = "目的地 {{.Value}} 已绑定其他会话。请选择其他名称，或显式使用 --replace；已有订阅仍保留原冻结目的地。"
+
+[notify_current_bound]
+other = "已将 {{.Value}} 绑定到验证过的当前 Codex 桌面会话 {{.ID}}。后续操作使用 --notify {{.Value}}。"
+
 [notify_destination_short]
 other = "管理指向明确目的地的私有绑定。"
 
@@ -1874,7 +1895,7 @@ other = "从绑定此来源的事件游标继续。"
 other = "最多读取条数，范围为 1 至 1000。"
 
 [flag_destination_kind]
-other = "接入类型：codex、claude-channel、claude-resume 或 webhook。"
+other = "接入类型：codex、codex-desktop、claude-channel、claude-resume 或 webhook。"
 
 [flag_destination_session]
 other = "明确 Agent 会话 ID，或 notify channel --session 的唯一标签；不会选择最近会话。"

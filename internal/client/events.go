@@ -34,12 +34,13 @@ type EventRemote interface {
 
 // EventDependencies compose concrete state with narrow source/delivery seams.
 type EventDependencies struct {
-    State    *local.Store
-    Settings config.Global
-    CWD      string
-    Runs     *execution.Service
-    Remote   EventRemote
-    Sender   agentdelivery.Sender
+    State        *local.Store
+    Settings     config.Global
+    CWD          string
+    Runs         *execution.Service
+    Remote       EventRemote
+    Sender       agentdelivery.Sender
+    CurrentCodex agentdelivery.Destination
 }
 
 type eventServices struct {
@@ -281,6 +282,44 @@ func (s *eventServices) PutDestination(ctx context.Context, in DestinationInput)
         return DestinationRecord{}, asyncError("NOTIFY_FAILED", err)
     }
     return destinationRecord(destination), nil
+}
+
+// BindCurrent verifies the exact entry-point session before writing its binding.
+// It does not infer a session from cwd, recency, or a different live server.
+func (s *eventServices) BindCurrent(ctx context.Context, in BindCurrentInput) (CurrentBindingResult, error) {
+    result := CurrentBindingResult{}
+    if !config.ValidName(in.Name) {
+        return result, asyncError("DESTINATION_INVALID", nil)
+    }
+    destination := s.dependencies.CurrentCodex
+    if destination.Kind != "codex-desktop" || destination.Validate() != nil {
+        return result, fault.New("CURRENT_SESSION_UNAVAILABLE", "notify_current_context_required", nil)
+    }
+    capabilities, err := s.dependencies.Sender.Probe(ctx, destination)
+    if err != nil || !capabilities.Available || !capabilities.ExistingSession {
+        return result, fault.Wrap("CURRENT_SESSION_UNAVAILABLE", "notify_current_unavailable", err)
+    }
+    verified := time.Now().UTC()
+    existing, err := s.store.Destinations(ctx)
+    if err != nil {
+        return result, asyncError("NOTIFY_FAILED", err)
+    }
+    for _, saved := range existing {
+        if saved.Name != in.Name {
+            continue
+        }
+        if saved.Address == destination {
+            return CurrentBindingResult{Destination: destinationRecord(saved), VerifiedAt: verified}, nil
+        }
+        if !in.Replace {
+            return result, fault.New("DESTINATION_EXISTS", "notify_current_exists", map[string]any{"Value": in.Name})
+        }
+    }
+    saved, err := s.PutDestination(ctx, DestinationInput{Name: in.Name, Destination: destination, Replace: in.Replace})
+    if err != nil {
+        return result, err
+    }
+    return CurrentBindingResult{Destination: saved, VerifiedAt: verified}, nil
 }
 
 func destinationRecord(d notifications.Destination) DestinationRecord {

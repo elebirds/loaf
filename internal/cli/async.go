@@ -64,6 +64,15 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
     }
     service := c.app.Notify
     switch path {
+    case "notify bind":
+        if !g.Notify.Bind.Current {
+            return nil, fault.Invalid("--current", "missing_argument", "notify_current_required")
+        }
+        binder, ok := service.(client.CurrentBindingService)
+        if !ok {
+            return nil, asyncUnavailable("notify bind")
+        }
+        return binder.BindCurrent(ctx, client.BindCurrentInput{Name: g.Notify.Bind.Name, Replace: g.Notify.Bind.Replace})
     case "notify channel":
         channel, ok := service.(client.ChannelService)
         if !ok {

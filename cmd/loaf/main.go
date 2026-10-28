@@ -19,6 +19,7 @@ import (
     "github.com/elebirds/loaf/internal/ssh"
     "github.com/elebirds/loaf/internal/state/local"
     sources "github.com/elebirds/loaf/internal/sync"
+    "github.com/elebirds/loaf/sdk/agentdelivery"
     "golang.org/x/term"
 )
 
@@ -98,8 +99,13 @@ func main() {
     }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
+    codexHome := os.Getenv("CODEX_HOME")
+    if codexHome == "" {
+        codexHome = filepath.Join(home, ".codex")
+    }
     events, notifications := application.NewEventServices(application.EventDependencies{
         State: state, Settings: settings, CWD: cwd, Runs: runs, Remote: eventRemote,
+        CurrentCodex: agentdelivery.Destination{Kind: "codex-desktop", SessionID: os.Getenv("CODEX_THREAD_ID"), Endpoint: filepath.Join(codexHome, "ipc", "ipc.sock")},
     })
     app := application.New(application.Dependencies{
         Events: events, Notify: notifications,

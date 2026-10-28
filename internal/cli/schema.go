@@ -273,12 +273,19 @@ type eventListCommand struct {
 }
 
 type notifyCommand struct {
+    Bind          notifyBindCommand    `cmd:"" help:"notify_bind_short" example:"loaf notify bind here --current"`
     Destination   destinationCommand   `cmd:"" help:"notify_destination_short" example:"loaf notify destination --help"`
     Subscribe     subscribeCommand     `cmd:"" help:"notify_subscribe_short" example:"loaf notify subscribe run:r_example --destination research"`
     Subscriptions struct{}             `cmd:"" help:"notify_subscriptions_short" example:"loaf notify subscriptions"`
     Deliveries    deliveryListCommand  `cmd:"" default:"1" help:"notify_deliveries_short" example:"loaf notify deliveries"`
     Serve         notifyServeCommand   `cmd:"" help:"notify_serve_short" example:"loaf notify serve --once"`
     Channel       notifyChannelCommand `cmd:"" help:"notify_channel_short" example:"loaf notify channel --socket /private/channel.sock --session research"`
+}
+
+type notifyBindCommand struct {
+    Name    string `arg:"" help:"name_arg" value-type:"name"`
+    Current bool   `help:"flag_notify_current"`
+    Replace bool   `help:"flag_destination_replace"`
 }
 
 type destinationCommand struct {
@@ -288,7 +295,7 @@ type destinationCommand struct {
 
 type destinationAddCommand struct {
     Name     string `arg:"" help:"name_arg" value-type:"name"`
-    Kind     string `required:"" enum:"codex,claude-channel,claude-resume,webhook" help:"flag_destination_kind"`
+    Kind     string `required:"" enum:"codex,codex-desktop,claude-channel,claude-resume,webhook" help:"flag_destination_kind"`
     Session  string `help:"flag_destination_session"`
     Endpoint string `help:"flag_destination_endpoint"`
     CWD      string `name:"cwd" help:"flag_destination_cwd" value-type:"path"`

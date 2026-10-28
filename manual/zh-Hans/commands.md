@@ -85,6 +85,7 @@
 | `loaf events` | `loaf events` | 读取运行、队列与资源的持久事件。 |
 | `loaf events list` | `loaf events list` | 使用可选游标读取有界事件页。 |
 | `loaf notify` | `loaf notify` | 管理明确的目的地和事件投递。 |
+| `loaf notify bind` | `loaf notify bind here --current` | 验证并绑定当前 Codex 桌面会话，不启动新 turn。 |
 | `loaf notify destination` | `loaf notify destination --help` | 管理指向明确目的地的私有绑定。 |
 | `loaf notify destination list` | `loaf notify destination list` | 列出目的地，不显示私有连接详情。 |
 | `loaf notify destination add` | `loaf notify destination add research --kind codex --session thread-id` | 保存明确的 Agent 会话或 Webhook 目的地。 |

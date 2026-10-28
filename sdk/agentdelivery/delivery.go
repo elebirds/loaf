@@ -31,6 +31,10 @@ type Destination struct {
 // Validate rejects ambiguous destinations before transport or agent activity.
 func (d Destination) Validate() error {
     switch d.Kind {
+    case "codex-desktop":
+        if !validID(d.SessionID) || !filepath.IsAbs(d.Endpoint) || d.CWD != "" {
+            return ErrDestination
+        }
     case "codex", "claude-channel", "claude-resume":
         if !validID(d.SessionID) {
             return ErrDestination

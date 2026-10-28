@@ -35,11 +35,41 @@ func (f *fakeEvents) List(_ context.Context, in client.EventListInput) (event.Pa
 }
 
 type fakeNotify struct {
+    binding       client.BindCurrentInput
+    bindingCalls  int
     destination   client.DestinationInput
     subscription  client.SubscribeInput
     serveInput    client.NotifyServeInput
     serveCalls    int
     subscriptions []client.Subscription
+}
+
+func (f *fakeNotify) BindCurrent(_ context.Context, in client.BindCurrentInput) (client.CurrentBindingResult, error) {
+    f.binding, f.bindingCalls = in, f.bindingCalls+1
+    return client.CurrentBindingResult{Destination: client.DestinationRecord{Name: in.Name, Kind: "codex-desktop", SessionID: "current_thread"}, VerifiedAt: time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)}, nil
+}
+
+func TestNotifyBindCurrentGrammarAndRendering(t *testing.T) {
+    for _, language := range []string{"en", "zh-Hans"} {
+        options := fixture(t)
+        notify := &fakeNotify{}
+        options.Notify = notify
+        code, out, stderr := run(t, options, "--lang", language, "notify", "bind", "here", "--current", "--replace", "--json")
+        if code != 0 || stderr != "" || !json.Valid([]byte(out)) || notify.binding.Name != "here" || !notify.binding.Replace || !strings.Contains(out, `"session_id":"current_thread"`) || !strings.Contains(out, `"verified_at"`) {
+            t.Fatal(code, out, stderr, notify.binding)
+        }
+        code, out, stderr = run(t, options, "--lang", language, "notify", "bind", "here", "--current")
+        if code != 0 || stderr != "" || !strings.Contains(out, "here") || !strings.Contains(out, "current_thread") {
+            t.Fatal(code, out, stderr)
+        }
+        for _, args := range [][]string{{"notify", "bind", "here"}, {"notify", "bind", "here", "--current=false"}, {"notify", "bind", "here", "--current", "--target", "another"}} {
+            before := notify.bindingCalls
+            code, out, _ := run(t, options, append(args, "--json")...)
+            if code != 2 || notify.bindingCalls != before || !json.Valid([]byte(out)) {
+                t.Fatal(args, code, out)
+            }
+        }
+    }
 }
 
 func (f *fakeNotify) PutDestination(_ context.Context, in client.DestinationInput) (client.DestinationRecord, error) {

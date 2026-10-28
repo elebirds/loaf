@@ -12,6 +12,7 @@ import (
     "syscall"
     "time"
 
+    "github.com/elebirds/loaf/internal/state/eventlog"
     "golang.org/x/sys/unix"
     "modernc.org/sqlite"
 )
@@ -26,6 +27,8 @@ CREATE INDEX runs_project ON runs(project_id, attempted_at DESC, id);
 CREATE TABLE run_metadata (run_id TEXT PRIMARY KEY REFERENCES runs(id), project_id TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE observations (run_id TEXT PRIMARY KEY REFERENCES runs(id), project_id TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE cloud_requests (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, data BLOB NOT NULL);
+CREATE TABLE queue_bindings (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, data BLOB NOT NULL);
+` + eventlog.Schema + `
 PRAGMA application_id=1280262470;
 PRAGMA user_version=2;
 `

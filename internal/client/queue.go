@@ -88,7 +88,7 @@ func queueHostBinding(machine config.Target) string {
         return ""
     }
     ref := machine.Cloud.Ref
-    return strings.Join([]string{ref.Provider, ref.Product, ref.Account, ref.ID}, ":")
+    return strings.Join([]string{ref.Provider, ref.Product, ref.ID}, ":")
 }
 
 func (q *Queues) call(ctx context.Context, ref task.RunRef, command queue.Command, batch bool) (queue.Result, error) {

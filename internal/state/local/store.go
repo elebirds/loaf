@@ -119,7 +119,7 @@ func scanRun(scan func(...any) error) (task.RunRef, error) {
 }
 
 func sameBinding(a, b task.RunRef) bool {
-    return a.ProjectID == b.ProjectID && a.RemoteDir == b.RemoteDir && a.Runner == b.Runner && a.Target == b.Target && a.Version == b.Version && reflect.DeepEqual(a.Connection, b.Connection) && slices.Equal(a.Outputs, b.Outputs)
+    return a.ProjectID == b.ProjectID && a.RemoteDir == b.RemoteDir && a.Runner == b.Runner && a.Target == b.Target && a.Version == b.Version && a.QueueRequestID == b.QueueRequestID && reflect.DeepEqual(a.Connection, b.Connection) && slices.Equal(a.Outputs, b.Outputs)
 }
 
 // SaveRun commits the locator and submission intent before remote side effects.

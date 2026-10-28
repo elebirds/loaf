@@ -238,3 +238,24 @@ func TestQueueCanceledPreparationReclaimsMissingAndPartialCopies(t *testing.T) {
         t.Fatal("cleanup erased no-start identity")
     }
 }
+
+func TestQueueCancelBeforePrepareDurablyBlocksDelayedCopyAndLaunch(t *testing.T) {
+    ctx := context.Background()
+    directory, identity, store := queueFixture(t)
+    root := managedRoot(t)
+    r := queue.Request{FormatVersion: 1, ID: "q_cancel_first", RunID: "r_cancel_first", ProjectID: "project", TargetID: store.TargetID, CreatedAt: time.Now().UTC()}
+    req := wire.Request{FormatVersion: 1, Version: wire.Version, Root: root, ProjectID: r.ProjectID, RunID: r.RunID, Queue: &queue.Command{Action: "cancel", ID: r.ID, TargetID: r.TargetID, Request: &r}}
+    result, err := queueControlAt(ctx, req, directory, identity, func(string) error { t.Fatal("cancel started Coordinator"); return nil })
+    if err != nil || result.Request == nil || result.Request.State != "canceled" {
+        t.Fatal(result, err)
+    }
+    for _, launching := range []bool{false, true} {
+        if err = QueueRunGuard(wire.Request{Root: root, ProjectID: r.ProjectID, RunID: r.RunID}, launching); err == nil {
+            t.Fatal("delayed queue side effect allowed", launching)
+        }
+    }
+    req.Queue = &queue.Command{Action: "prepare", TargetID: r.TargetID, Request: &r, Execution: &queue.Execution{Version: wire.Version, Root: root, Args: []string{"/bin/true"}, Outputs: []string{}}}
+    if _, err = queueControlAt(ctx, req, directory, identity, func(string) error { return nil }); err == nil {
+        t.Fatal("late preparation replaced no-start tombstone")
+    }
+}

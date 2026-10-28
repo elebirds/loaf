@@ -242,3 +242,25 @@ func TestQueueListKeepsCurrentWorkAheadOfBoundedHistory(t *testing.T) {
         t.Fatal("unbounded list accepted")
     }
 }
+
+func TestCancelBeforePrepareRetainsNoStartIdentity(t *testing.T) {
+    s := newStore(t)
+    ctx := context.Background()
+    r := queue.Request{FormatVersion: 1, ID: "q_never_prepared", RunID: "r_never_prepared", ProjectID: "project", TargetID: s.TargetID, CreatedAt: time.Now().UTC()}
+    e := queue.Execution{Version: "test", Root: "/private/project"}
+    canceled, err := s.CancelUnprepared(ctx, r, e)
+    if err != nil || canceled.Request.State != "canceled" {
+        t.Fatal(canceled, err)
+    }
+    again, err := s.CancelUnprepared(ctx, r, e)
+    if err != nil || again.Request.ID != r.ID {
+        t.Fatal(again, err)
+    }
+    delayed, err := s.Prepare(ctx, r, e)
+    if err != nil || delayed.Request.State != "canceled" {
+        t.Fatal("delayed prepare lost cancellation", delayed, err)
+    }
+    if _, err = s.Admit(ctx, r.ID); err == nil {
+        t.Fatal("canceled input admitted")
+    }
+}

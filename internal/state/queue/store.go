@@ -526,15 +526,37 @@ func (s *Store) outcome(ctx context.Context, id string, terminal bool, code stri
 }
 
 // Cancel is the durable no-start transition serialized with reservation.
-func (s *Store) Cancel(ctx context.Context, id string) (Entry, error) {
+func (s *Store) Cancel(ctx context.Context, id string) (Entry, error) { return s.cancel(ctx, id, nil) }
+
+// CancelUnprepared creates a no-start tombstone even if the first prepare never arrived.
+func (s *Store) CancelUnprepared(ctx context.Context, r queue.Request, e queue.Execution) (Entry, error) {
+    if r.FormatVersion != queue.Version || !idPattern.MatchString(r.ID) || !idPattern.MatchString(r.RunID) || !idPattern.MatchString(r.ProjectID) || r.TargetID != s.TargetID || r.CreatedAt.IsZero() || !filepath.IsAbs(e.Root) || e.Version == "" {
+        return Entry{}, errors.New("QUEUE_BAD_REQUEST")
+    }
+    return s.cancel(ctx, r.ID, &Entry{Request: r, Execution: e})
+}
+func (s *Store) cancel(ctx context.Context, id string, fallback *Entry) (Entry, error) {
     tx, err := s.database.BeginTx(ctx, nil)
     if err != nil {
         return Entry{}, err
     }
     defer tx.Rollback()
     e, err := entry(tx.QueryRowContext(ctx, "SELECT public,execution,attempted FROM queue_requests WHERE id=?", id))
+    if errors.Is(err, sql.ErrNoRows) && fallback != nil {
+        e = *fallback
+        e.Request.State = "preparing"
+        e.Request.Sequence = 0
+        e.Request.AttemptedAt = nil
+        e.Attempted = false
+        public, _ := json.Marshal(e.Request)
+        execution, _ := json.Marshal(e.Execution)
+        _, err = tx.ExecContext(ctx, "INSERT INTO queue_requests VALUES(?,?,?,?,?,?,0)", e.Request.ID, e.Request.RunID, "preparing", 0, public, execution)
+    }
     if err != nil {
         return e, err
+    }
+    if fallback != nil && (e.Request.RunID != fallback.Request.RunID || e.Request.ProjectID != fallback.Request.ProjectID || e.Execution.Root != fallback.Execution.Root) {
+        return e, errors.New("QUEUE_IDENTITY_MISMATCH")
     }
     if e.Request.State == "canceled" {
         return e, nil

@@ -7,12 +7,18 @@ import (
     "io"
     "net/http"
     "net/url"
+    "strings"
     "time"
 )
 
 // Webhook delivers JSON to one explicitly configured HTTP endpoint.
 // HTTP acceptance is receiver evidence, never proof of Agent processing.
-type Webhook struct{ Transport http.RoundTripper }
+type Webhook struct {
+    Transport http.RoundTripper
+    // ResolveBearer obtains a transient token for an opaque caller-owned reference.
+    // The SDK never reads credential stores or persists the returned token.
+    ResolveBearer func(context.Context, string) (string, error)
+}
 
 func webhookURL(d Destination) bool {
     if d.Kind != "webhook" || d.Validate() != nil {
@@ -48,6 +54,20 @@ func (w Webhook) Deliver(ctx context.Context, d Destination, m Message) (Receipt
     if err != nil {
         return receipt, ErrDestination
     }
+    if d.BearerRef != "" {
+        if w.ResolveBearer == nil {
+            receipt.RetrySafe = true
+            receipt.ReasonCode = "WEBHOOK_CREDENTIAL_UNAVAILABLE"
+            return receipt, ErrUnavailable
+        }
+        token, err := w.ResolveBearer(ctx, d.BearerRef)
+        if err != nil || token == "" || len(token) > 16<<10 || strings.ContainsAny(token, "\x00\r\n") {
+            receipt.RetrySafe = true
+            receipt.ReasonCode = "WEBHOOK_CREDENTIAL_UNAVAILABLE"
+            return receipt, ErrUnavailable
+        }
+        request.Header.Set("Authorization", "Bearer "+token)
+    }
     request.Header.Set("Content-Type", "application/json")
     request.Header.Set("Idempotency-Key", m.ID)
     // The key is correlation metadata, not evidence that this receiver dedupes.
@@ -67,7 +87,7 @@ func (w Webhook) Deliver(ctx context.Context, d Destination, m Message) (Receipt
         return receipt, nil
     }
     receipt.ReasonCode = "WEBHOOK_REJECTED"
-    receipt.RetrySafe = response.StatusCode == http.StatusTooManyRequests
+    receipt.RetrySafe = false
     if response.StatusCode >= 500 {
         receipt.State = "unconfirmed"
         receipt.RetrySafe = false

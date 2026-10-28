@@ -85,9 +85,21 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | `loaf events` | `loaf events` | Read saved run, queue and resource facts. |
 | `loaf events list` | `loaf events list` | Read a bounded event page with an optional cursor. |
 | `loaf notify` | `loaf notify` | Manage explicit destinations and event delivery. |
-| `loaf notify bind` | `loaf notify bind here --current` | Verify and bind the current Codex desktop chat without starting a turn. |
+| `loaf notify delivery` | `loaf notify delivery --help` | Inspect and recover one delivery |
+| `loaf notify delivery show` | `loaf notify delivery show d_example` | Inspect evidence, attempts and lineage |
+| `loaf notify delivery reconcile` | `loaf notify delivery reconcile d_example` | Query explicit acknowledgements without resending |
+| `loaf notify delivery resolve` | `loaf notify delivery resolve d_example --as abandoned` | Record a user confirmation or abandonment |
+| `loaf notify delivery resend` | `loaf notify delivery resend d_example --allow-duplicate --yes` | Queue one explicitly authorized successor |
+| `loaf notify subscription` | `loaf notify subscription --help` | Manage one notification intent |
+| `loaf notify subscription show` | `loaf notify subscription show sub_example` | Show a subscription and its sources |
+| `loaf notify subscription disable` | `loaf notify subscription disable sub_example` | Pause collection and new sends |
+| `loaf notify subscription enable` | `loaf notify subscription enable sub_example` | Resume from saved cursors |
+| `loaf notify subscription remove` | `loaf notify subscription remove sub_example` | Archive a subscription and close unsent work |
+| `loaf notify prune` | `loaf notify prune --before 2026-01-01T00:00:00Z --dry-run` | Prune settled local notification history |
+| `loaf notify bind` | `loaf notify bind here --current` | Verify and bind the current experimental Codex desktop chat |
 | `loaf notify destination` | `loaf notify destination --help` | Manage private bindings to exact destinations. |
 | `loaf notify destination list` | `loaf notify destination list` | List destinations without private connection details. |
+| `loaf notify destination remove` | `loaf notify destination remove research` | Remove an unreferenced destination |
 | `loaf notify destination add` | `loaf notify destination add research --kind codex --session thread-id` | Save an explicit Agent session or Webhook destination. |
 | `loaf notify subscribe` | `loaf notify subscribe run:r_example --destination research` | Subscribe one subject to named destinations. |
 | `loaf notify subscriptions` | `loaf notify subscriptions` | List durable notification subscriptions. |

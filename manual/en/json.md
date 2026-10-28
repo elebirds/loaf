@@ -149,3 +149,9 @@ results. The files are decoded by contract tests:
 - [Accepted task, observation failure](../examples/accepted-unreachable.json): operation exit 1; keep the ID.
 - [Partial history](../examples/partial-history.json): operation exit 1; keep both rows.
 - [Verified result, local save failure](../examples/state-error.json): operation exit 2; keep the verified outcome.
+
+Notification subscriptions expose `status` and per-binding `sources`. Delivery show adds frozen safe content, attempts, recipient metadata and parent/resolution lineage; no private endpoint or credential value is returned. Manual resolution never rewrites the SDK receipt.
+
+`notify subscriptions` returns a page object: `subscriptions`, `has_more`, and
+optional `next_after`. Use `--after` and `--limit` for continuation. Combined
+subscriptions expose per-source diagnostics instead of a cross-source aggregate.

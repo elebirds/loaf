@@ -1838,7 +1838,7 @@ other = "Read a bounded event page with an optional cursor."
 other = "Manage explicit destinations and event delivery."
 
 [notify_bind_short]
-other = "Verify and bind the current Codex desktop chat without starting a turn."
+other = "Verify and bind the current experimental Codex desktop chat"
 
 [flag_notify_current]
 other = "Use this Codex desktop tool shell's exact thread identity."
@@ -1982,7 +1982,7 @@ other = "No saved notification subscriptions."
 other = "No saved deliveries."
 
 [notify_summary]
-other = "Received {{.Count}}; attempted {{.Total}}; accepted {{.Matched}}; unconfirmed {{.Value}}; pending {{.Bytes}}."
+other = "Received {{.Count}}; attempted {{.Total}}; accepted {{.Matched}}; unconfirmed {{.Value}}; pending {{.Bytes}}; rejected {{.Code}}."
 
 [delivery_state_pending]
 other = "pending"
@@ -2211,3 +2211,174 @@ other = "Last source query error: {{.Code}}."
 
 [notify_source_error_at]
 other = "Last source query error at {{.Value}}: {{.Code}}."
+
+[notify_delivery_short]
+other = "Inspect and recover one delivery"
+
+[notify_subscription_short]
+other = "Manage one notification intent"
+
+[notify_prune_short]
+other = "Prune settled local notification history"
+
+[notify_delivery_show_short]
+other = "Inspect evidence, attempts and lineage"
+
+[notify_delivery_reconcile_short]
+other = "Query explicit acknowledgements without resending"
+
+[notify_delivery_resolve_short]
+other = "Record a user confirmation or abandonment"
+
+[notify_delivery_resend_short]
+other = "Queue one explicitly authorized successor"
+
+[notify_subscription_show_short]
+other = "Show a subscription and its sources"
+
+[notify_subscription_disable_short]
+other = "Pause collection and new sends"
+
+[notify_subscription_enable_short]
+other = "Resume from saved cursors"
+
+[notify_subscription_remove_short]
+other = "Archive a subscription and close unsent work"
+
+[notify_destination_remove_short]
+other = "Remove an unreferenced destination"
+
+[notify_id_arg]
+other = "Explicit notification record ID"
+
+[flag_bearer_env]
+other = "Environment variable containing a Bearer token; HTTPS only"
+
+[flag_allow_insecure_http]
+other = "Explicitly permit non-loopback HTTP without Bearer authentication"
+
+[flag_notify_resolution]
+other = "User decision; never changes SDK evidence"
+
+[flag_allow_duplicate]
+other = "Accept possible duplicate delivery and another Agent turn"
+
+[flag_notify_resend_yes]
+other = "Confirm the risk of one explicit resend"
+
+[flag_notify_before]
+other = "Prune settled history before this RFC3339 time"
+
+[flag_notify_prune_dry_run]
+other = "Preview local history deletion only"
+
+[flag_notify_prune_yes]
+other = "Confirm local history deletion"
+
+[notify_duplicate_required]
+other = "Resend requires --allow-duplicate; it may trigger another Agent turn."
+
+[notify_resend_yes_required]
+other = "Noninteractive resend also requires --yes."
+
+[notify_prune_yes_required]
+other = "Noninteractive pruning requires --yes or --dry-run."
+
+[notify_resend_confirm]
+other = "Resend {{.ID}} to {{.Value}}? The original may already have arrived; this can trigger another Agent turn."
+
+[notify_prune_confirm]
+other = "Delete {{.Count}} settled deliveries and {{.Total}} unreferenced inbox entries? Deduplication markers stay."
+
+[notify_before_invalid]
+other = "--before must be an RFC3339 timestamp."
+
+[notify_canceled]
+other = "Notification operation canceled."
+
+[notify_destination_in_use]
+other = "Destination {{.Value}} is still referenced by subscriptions: {{.Paths}}. Remove those subscriptions first."
+
+[notify_destination_removed]
+other = "Removed destination {{.Value}}."
+
+[notify_subscription_changed]
+other = "{{.ID}}: {{.Value}}; {{.Count}} sends were already in flight and cannot be recalled."
+
+[notify_status_enabled]
+other = "enabled"
+
+[notify_status_disabled]
+other = "disabled"
+
+[notify_status_removed]
+other = "removed"
+
+[notify_prune_preview]
+other = "Would delete {{.Count}} settled deliveries and {{.Total}} unreferenced inbox entries."
+
+[notify_pruned]
+other = "Deleted {{.Count}} settled deliveries and {{.Total}} unreferenced inbox entries. Deduplication markers retained."
+
+[notify_attempt_detail]
+other = "Attempt {{.Count}}: {{.Value}} {{.Code}}"
+
+[notify_experimental]
+other = "{{.Value}} is an experimental adapter."
+
+[delivery_dispatch_resolved]
+other = "user resolved"
+
+[notify_resolution_detail]
+other = "User decision: {{.Value}} {{.ID}}; SDK evidence is unchanged."
+
+[notify_resolution_confirmed]
+other = "confirmed received"
+
+[notify_resolution_abandoned]
+other = "abandoned"
+
+[notify_resolution_resent]
+other = "explicit successor queued"
+
+[notify_parent_detail]
+other = "Resend of {{.ID}}."
+
+[type_time]
+other = "RFC3339 time"
+
+[queue_submission_stage]
+other = "Submission stage: {{.Value}}"
+
+[queue_submit_stage_planning]
+other = "local planning"
+
+[queue_submit_stage_saving_identity]
+other = "saving frozen identities"
+
+[queue_submit_stage_registering_notifications]
+other = "registering the notification intent"
+
+[queue_submit_stage_preparing_remote]
+other = "remote input preparation"
+
+[queue_submit_stage_syncing]
+other = "source transfer"
+
+[queue_submit_stage_enqueueing]
+other = "queue admission"
+
+[queue_submit_stage_admitted]
+other = "queue admitted"
+
+[queue_submit_next_inspect_original_request]
+other = "Inspect the original request ID; cancel it if preparation cannot continue. Do not submit a replacement for an uncertain dispatch."
+
+[queue_submit_next_repair_local_state]
+other = "Repair the local state write failure before continuing; no remote prepare or launch was requested."
+
+[flag_subscription_after]
+other = "Continue subscription listing after this subscription ID"
+
+[notify_subscriptions_more]
+other = "More subscriptions: use --after {{.ID}}."

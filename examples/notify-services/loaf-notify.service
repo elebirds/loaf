@@ -1,0 +1,13 @@
+[Unit]
+Description=Loaf local notification Bridge
+
+[Service]
+Type=simple
+ExecStart=/absolute/path/to/loaf notify serve --json
+WorkingDirectory=%h
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+
+[Install]
+WantedBy=default.target

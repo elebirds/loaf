@@ -5,6 +5,7 @@ package agentdelivery
 import (
     "context"
     "errors"
+    "net"
     "net/url"
     "path/filepath"
     "strings"
@@ -22,10 +23,12 @@ var (
 // Destination addresses one explicit integration mode and session.
 // Endpoint is private connection configuration, not public delivery evidence.
 type Destination struct {
-    Kind      string `json:"kind"`
-    Endpoint  string `json:"endpoint,omitempty"`
-    SessionID string `json:"session_id,omitempty"`
-    CWD       string `json:"cwd,omitempty"`
+    Kind              string `json:"kind"`
+    Endpoint          string `json:"endpoint,omitempty"`
+    SessionID         string `json:"session_id,omitempty"`
+    CWD               string `json:"cwd,omitempty"`
+    BearerRef         string `json:"bearer_ref,omitempty"`
+    AllowInsecureHTTP bool   `json:"allow_insecure_http,omitempty"`
 }
 
 // Validate rejects ambiguous destinations before transport or agent activity.
@@ -50,10 +53,20 @@ func (d Destination) Validate() error {
         if err != nil || address.Host == "" || address.Scheme != "https" && address.Scheme != "http" || address.User != nil || address.Fragment != "" {
             return ErrDestination
         }
+        loopback := address.Hostname() == "localhost"
+        if ip := net.ParseIP(address.Hostname()); ip != nil {
+            loopback = ip.IsLoopback()
+        }
+        if address.Scheme == "http" && (!loopback && !d.AllowInsecureHTTP || d.BearerRef != "") {
+            return ErrDestination
+        }
     default:
         return ErrDestination
     }
-    if strings.ContainsAny(d.Endpoint+d.CWD, "\x00\r\n") {
+    if d.Kind != "webhook" && (d.BearerRef != "" || d.AllowInsecureHTTP) {
+        return ErrDestination
+    }
+    if strings.ContainsAny(d.Endpoint+d.CWD+d.BearerRef, "\x00\r\n") {
         return ErrDestination
     }
     if d.CWD != "" && !filepath.IsAbs(d.CWD) {
@@ -64,6 +77,7 @@ func (d Destination) Validate() error {
 
 // Capabilities reports evidence a particular destination can actually provide.
 type Capabilities struct {
+    Experimental              bool   `json:"experimental"`
     ExistingSession           bool   `json:"existing_session"`
     Idempotent                bool   `json:"idempotent"`
     ReceiptQueryable          bool   `json:"receipt_queryable"`

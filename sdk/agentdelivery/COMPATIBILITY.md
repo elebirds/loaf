@@ -45,3 +45,17 @@ the adapter therefore connects using the pinned WebSocket library directly.
 Protocol references:
 [Codex App Server](https://learn.chatgpt.com/docs/app-server),
 [Claude Channels reference](https://code.claude.com/docs/en/channels-reference).
+
+## Current development hardening
+
+The newer development implementation adds consistent private Unix target/parent
+ownership checks, explicit Webhook HTTPS/Bearer policy, 429 no-replay handling and
+processed-first Claude cache eviction. Isolated tests cover these behaviors.
+The native protocol payloads and target-selection contracts above are unchanged;
+no additional native inference message has been sent for this repair. The old
+acceptance rows establish only their recorded native version/mode evidence, not
+a processing ACK feature or compatibility with arbitrary future app versions.
+
+The pinned MCP Go SDK v1.6.1 LICENSE describes an Apache-2.0/MIT licensing
+transition and CC-BY-4.0 documentation. The package collector includes the full
+upstream LICENSE text rather than replacing it with an abbreviated label.

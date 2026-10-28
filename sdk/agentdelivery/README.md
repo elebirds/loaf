@@ -131,3 +131,27 @@ GOWORK=off go build -o agentdelivery-channel ./examples/channel
 `examples/send` is an ordinary Go consumer of this SDK. It imports no Loaf
 package and leaves retry/persistence decisions to its caller. No example runs
 an experiment, acquires a machine, or changes an Agent's permissions.
+
+## Explicit Webhook credentials and endpoint policy
+
+`Destination.BearerRef` is an opaque caller-owned reference, not a token. Supply
+`Client.Webhook.ResolveBearer` (or `Webhook.ResolveBearer`) to resolve it at send
+time. The callback receives context and the reference and returns a transient
+token; this SDK does not read environment variables, keyrings, databases or Loaf
+configuration for Webhook authentication. Missing/invalid credentials are rejected
+before an HTTP send. Never put tokens into a Destination or Message.
+
+HTTPS is the default. HTTP loopback is allowed; other HTTP endpoints require
+`AllowInsecureHTTP: true`. Bearer authentication always requires HTTPS. A 429
+response is rejected without automatic replay permission, just like other
+unproven receiver rejection contracts. Network/5xx ambiguity remains unconfirmed.
+
+All Unix adapters check current-user ownership, private socket and actual parent
+directory permissions. Only public Codex transport allows its native short-path
+symlink, with the resolved target checked too. Desktop/Claude reject that exception.
+`Capabilities.Experimental` identifies desktop peer IPC. The existing-session
+and no-policy-override contracts remain unchanged.
+
+Claude's bounded process-local cache evicts processed entries first when full;
+it never silently evicts written/unconfirmed evidence. An evicted or restarted
+receipt is unknown, not safely replayable. Idempotency is not advertised.

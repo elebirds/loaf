@@ -195,3 +195,89 @@ loaf queue clean QUEUE_REQUEST_ID --yes --json
 
 远端磁盘仍保留时，本地断线不会删除远端状态。机器关机时不能运行或派发；
 销毁磁盘会失去同盘队列及事件状态，需要保留的事实应在销毁前交付或导出。
+
+## 一个队列订阅关联两个来源
+
+`queue submit --notify results` 在传输源码前，原子登记一个通知订阅，内部同时关联
+机器队列与冻结 Run 的项目来源。每个来源分别保存游标；任何一个来源登记失败都会
+回滚整个订阅。`notify subscriptions --json` 的 `sources` 展示各来源的同步与错误信息。
+准备失败保留原 Queue／Run ID、`stage` 和 `next_action`；未确认派发只查询原身份。
+尚未完成准备的请求也可以用原 ID 取消，持久 no-start 记录会阻止延迟准备或启动。
+
+## 处理未确认的投递
+
+先查看事实、冻结接收方、尝试和回执：
+
+```bash
+loaf notify delivery show DELIVERY_ID --json
+loaf notify delivery reconcile DELIVERY_ID --json
+```
+
+`reconcile` 只读核对；当前只有 Claude Channel 提供 Lookup，其他适配器明确报告不支持。
+人工确认已接收或决定放弃时：
+
+```bash
+loaf notify delivery resolve DELIVERY_ID --as confirmed --json
+loaf notify delivery resolve DELIVERY_ID --as abandoned --json
+```
+
+人工决定单独保存在 `resolution`，原 SDK 回执不会改写为 processed。
+如果确认要承担重复通知、再次触发 Agent 推理及额度消耗的风险，可以逐条授权重发：
+
+```bash
+loaf notify delivery resend DELIVERY_ID --allow-duplicate --yes --json
+```
+
+该命令只登记一个新 message ID，保留原事实、正文和冻结目的地，并关联原投递。
+Bridge 之后才发送。对同一原 ID 重复执行只返回同一个后继，不增加第二条重发。
+交互模式省略 `--yes` 会再次确认；非交互必须同时提供两个确认标志。不提供批量重发。
+
+## 暂停、移除与清理通知
+
+```bash
+loaf notify subscription show SUBSCRIPTION_ID --json
+loaf notify subscription disable SUBSCRIPTION_ID --json
+loaf notify subscription enable SUBSCRIPTION_ID --json
+loaf notify subscription remove SUBSCRIPTION_ID --json
+loaf notify destination remove results --json
+```
+
+暂停阻止新采集和新发送；已经 in-flight 的发送无法撤回，结果会给出数量。
+恢复沿原游标补取。移除会归档订阅并关闭未发送项，不停止计算，也不抹去未确认的发送。
+仍被未移除订阅引用的目的地不能删除，错误会列出引用 ID。
+
+```bash
+loaf notify prune --before 2026-10-01T00:00:00Z --dry-run --json
+loaf notify prune --before 2026-10-01T00:00:00Z --yes --json
+```
+
+默认不自动清理。仅删除指定时间前已结案的投递历史和无引用旧 inbox；去重标记保留，
+补取不会重新投递已清理的原消息。不删除 pending、in-flight、未处置 unconfirmed、
+云收据、Run 位置或远端事件。
+
+## Webhook 认证与长期运行
+
+```bash
+loaf notify destination add results --kind webhook --endpoint https://receiver.example/loaf --bearer-env LOAF_HOOK_TOKEN
+```
+
+`LOAF_HOOK_TOKEN` 是由你的现有秘密管理方式提供给 Bridge 的环境变量名。
+Loaf 只保存变量名；不保存 token，不从项目配置自动导入目的地。缺失凭据会在发送前失败。
+Bearer 必须使用 HTTPS。非 loopback HTTP 需要明确 `--allow-insecure-http`；429 不再视为
+可以自动重放的证据。所有 Webhook 都不跟随跳转。
+
+持续 Bridge 没有订阅也保持运行，之后新建的订阅无需重启即可接收。采集、派发和 ACK
+核对独立运行，慢来源不阻止已接收消息发送。`--once` 每批有界，可能需要多轮处理积压；
+其结果增加 `rejected` 数量，已确认拒绝返回退出 1，未确认投递返回退出 3。
+
+可选 [launchd／systemd 用户服务模板](../../examples/notify-services/README.md) 随包提供，
+需自行审查路径并明确安装；Loaf 不自动安装服务。服务重启后继续读取持久状态，Mac 睡眠
+时仍无法本地交付；远端磁盘销毁后的事实恢复不在本版保证内。
+
+订阅列表按 ID 分页，默认 100 项；JSON 返回 `subscriptions`、`has_more` 和 `next_after`。
+下一页使用 `loaf notify subscriptions --after SUBSCRIPTION_ID --limit 100 --json`。
+多来源订阅只在 `sources` 内分别报告成功与错误时间，不能拿一个来源的成功时间解释另一个来源的失败。
+
+`rejected` 统计启用订阅中最后一次被拒绝的投递，包含等待安全重试的项，因此可能与
+`pending` 重叠。Bearer 凭据缺失时，一轮命令明确失败且不发 HTTP 请求。
+环境变量读取由 CLI 入口显式注入。

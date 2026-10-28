@@ -87,7 +87,13 @@ func (r *queueRemote) QueueControl(ctx context.Context, target config.Target, _ 
             r.onShow()
         }
     case "cancel":
-        e, eErr := r.store.Cancel(ctx, c.ID)
+        var e queuestate.Entry
+        var eErr error
+        if c.Request != nil {
+            e, eErr = r.store.CancelUnprepared(ctx, *c.Request, queue.Execution{Version: wire.Version, Root: req.Root})
+        } else {
+            e, eErr = r.store.Cancel(ctx, c.ID)
+        }
         result.Request = &e.Request
         err = eErr
     case "list":
@@ -128,11 +134,18 @@ func (n *queueNotifications) PutDestination(context.Context, DestinationInput) (
     return DestinationRecord{}, nil
 }
 func (n *queueNotifications) Destinations(context.Context) ([]DestinationRecord, error) {
-    return nil, nil
+    return []DestinationRecord{{Name: "agent"}}, nil
+}
+func (n *queueNotifications) RegisterQueuedRun(_ context.Context, in QueuedNotificationInput) (Subscription, error) {
+    *n.order = append(*n.order, "notify:queued")
+    return Subscription{}, n.err
 }
 func (n *queueNotifications) Subscribe(_ context.Context, in SubscribeInput) (Subscription, error) {
     *n.order = append(*n.order, "notify:"+in.Source)
     return Subscription{}, n.err
+}
+func (n *queueNotifications) ListSubscriptions(context.Context, SubscriptionListInput) (SubscriptionPage, error) {
+    return SubscriptionPage{}, nil
 }
 func (n *queueNotifications) Subscriptions(context.Context) ([]Subscription, error) { return nil, nil }
 func (n *queueNotifications) Deliveries(context.Context, int) ([]Delivery, error)   { return nil, nil }
@@ -176,7 +189,7 @@ func TestQueueSubmitFreezesInputAndRegistersBeforeSideEffects(t *testing.T) {
     if result.Request == nil || result.Request.State != "queued" || result.Run.Submission != "preparing" {
         t.Fatalf("admission confused with execution: %+v", result)
     }
-    if !slices.Equal(*remote.order, []string{"status", "notify:queue", "notify:project", "prepare", "sync", "enqueue"}) {
+    if !slices.Equal(*remote.order, []string{"status", "notify:queued", "prepare", "sync", "enqueue"}) {
         t.Fatalf("unsafe order: %v", *remote.order)
     }
     os.WriteFile(filepath.Join(root, "input.txt"), []byte("changed"), 0600)

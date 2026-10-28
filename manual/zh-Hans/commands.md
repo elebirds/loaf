@@ -85,9 +85,21 @@
 | `loaf events` | `loaf events` | 读取运行、队列与资源的持久事件。 |
 | `loaf events list` | `loaf events list` | 使用可选游标读取有界事件页。 |
 | `loaf notify` | `loaf notify` | 管理明确的目的地和事件投递。 |
-| `loaf notify bind` | `loaf notify bind here --current` | 验证并绑定当前 Codex 桌面会话，不启动新 turn。 |
+| `loaf notify delivery` | `loaf notify delivery --help` | 查看和处置单条投递 |
+| `loaf notify delivery show` | `loaf notify delivery show d_example` | 查看证据、尝试与重发关联 |
+| `loaf notify delivery reconcile` | `loaf notify delivery reconcile d_example` | 只读核对确认，不重新发送 |
+| `loaf notify delivery resolve` | `loaf notify delivery resolve d_example --as abandoned` | 记录人工确认或放弃 |
+| `loaf notify delivery resend` | `loaf notify delivery resend d_example --allow-duplicate --yes` | 明确授权后登记一条关联重发 |
+| `loaf notify subscription` | `loaf notify subscription --help` | 管理一个通知订阅 |
+| `loaf notify subscription show` | `loaf notify subscription show sub_example` | 查看订阅及各个来源 |
+| `loaf notify subscription disable` | `loaf notify subscription disable sub_example` | 暂停采集和新的投递 |
+| `loaf notify subscription enable` | `loaf notify subscription enable sub_example` | 从保存的游标继续 |
+| `loaf notify subscription remove` | `loaf notify subscription remove sub_example` | 归档订阅并关闭未发送项 |
+| `loaf notify prune` | `loaf notify prune --before 2026-01-01T00:00:00Z --dry-run` | 清理已结案的本地通知历史 |
+| `loaf notify bind` | `loaf notify bind here --current` | 验证并绑定当前实验性 Codex 桌面会话 |
 | `loaf notify destination` | `loaf notify destination --help` | 管理指向明确目的地的私有绑定。 |
 | `loaf notify destination list` | `loaf notify destination list` | 列出目的地，不显示私有连接详情。 |
+| `loaf notify destination remove` | `loaf notify destination remove research` | 移除没有订阅引用的目的地 |
 | `loaf notify destination add` | `loaf notify destination add research --kind codex --session thread-id` | 保存明确的 Agent 会话或 Webhook 目的地。 |
 | `loaf notify subscribe` | `loaf notify subscribe run:r_example --destination research` | 为指定主体登记通知目的地。 |
 | `loaf notify subscriptions` | `loaf notify subscriptions` | 列出持久通知订阅。 |

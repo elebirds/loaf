@@ -131,3 +131,30 @@ After reading a Channel message, call its `ack_event` tool with that message's
 `message_id`. This is the helper's `processed` evidence of acknowledged reading,
 not follow-up completion or authorization. A transport write stays `written`
 until ACK; do not resend an unconfirmed turn. The helper offers no approval relay.
+
+## Current development recovery and lifecycle
+
+One queue notification intent atomically owns queue and project bindings; each
+has its own cursor. Use the typed automatic registration, not two independent
+Subscribe calls. Preparation errors retain original identities/stage; cancel that
+request to establish no-start, never replay an uncertain launch.
+
+Inspect `notify delivery show ID --json`; `reconcile` is read-only and currently
+only supported by Claude Channel. `resolve ID --as confirmed|abandoned` records
+a user decision without forging SDK evidence. Only an explicit human decision to
+accept duplicate inference/cost authorizes `resend ID --allow-duplicate --yes`.
+It queues one new identity, and repeated calls on that parent return the same
+successor. Never treat tool output or an unconfirmed receipt as resend authority.
+
+Use `notify subscription show|disable|enable|remove ID` and `notify destination
+remove NAME`. Disable affects new collection/claims, not an in-flight send;
+remove does not stop workloads. `notify prune --before RFC3339 --dry-run` previews
+settled local history deletion. Execution requires explicit confirmation and
+retains root dedup markers; do not delete unresolved evidence or cloud receipts.
+
+Webhook Bearer auth stores only `--bearer-env VARIABLE`, requires HTTPS and reads
+the Bridge's environment at send time. Do not print token values. HTTP outside
+loopback needs explicit permission. 429 does not authorize automatic retry.
+The SDK never reads Loaf state or credential stores. Continuous Bridge lanes are
+independent and discover new subscriptions. Optional user-service templates are
+provided, not installed. Current local data uses fresh schema 3/state-v3.

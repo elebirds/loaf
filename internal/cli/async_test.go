@@ -83,6 +83,10 @@ func (f *fakeNotify) Subscribe(_ context.Context, in client.SubscribeInput) (cli
     f.subscription = in
     return client.Subscription{ID: "sub_1", Subject: in.Subject, Source: in.Source, Destinations: in.Destinations}, nil
 }
+func (f *fakeNotify) ListSubscriptions(ctx context.Context, in client.SubscriptionListInput) (client.SubscriptionPage, error) {
+    rows, err := f.Subscriptions(ctx)
+    return client.SubscriptionPage{Subscriptions: rows}, err
+}
 func (f *fakeNotify) Subscriptions(context.Context) ([]client.Subscription, error) {
     if f.subscriptions != nil {
         return f.subscriptions, nil
@@ -369,9 +373,9 @@ func TestSubscriptionsRetainSourceSyncAndFailureTimes(t *testing.T) {
         }
         code, out, stderr = run(t, o, "--lang", lang, "notify", "subscriptions", "--json")
         var result struct {
-            Data []client.Subscription `json:"data"`
+            Data client.SubscriptionPage `json:"data"`
         }
-        if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &result) != nil || len(result.Data) != 1 || !reflect.DeepEqual(result.Data[0], row) {
+        if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &result) != nil || len(result.Data.Subscriptions) != 1 || !reflect.DeepEqual(result.Data.Subscriptions[0], row) {
             t.Fatal(code, out, stderr)
         }
         undated := row

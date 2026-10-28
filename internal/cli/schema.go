@@ -273,13 +273,16 @@ type eventListCommand struct {
 }
 
 type notifyCommand struct {
-    Bind          notifyBindCommand    `cmd:"" help:"notify_bind_short" example:"loaf notify bind here --current"`
-    Destination   destinationCommand   `cmd:"" help:"notify_destination_short" example:"loaf notify destination --help"`
-    Subscribe     subscribeCommand     `cmd:"" help:"notify_subscribe_short" example:"loaf notify subscribe run:r_example --destination research"`
-    Subscriptions struct{}             `cmd:"" help:"notify_subscriptions_short" example:"loaf notify subscriptions"`
-    Deliveries    deliveryListCommand  `cmd:"" default:"1" help:"notify_deliveries_short" example:"loaf notify deliveries"`
-    Serve         notifyServeCommand   `cmd:"" help:"notify_serve_short" example:"loaf notify serve --once"`
-    Channel       notifyChannelCommand `cmd:"" help:"notify_channel_short" example:"loaf notify channel --socket /private/channel.sock --session research"`
+    Delivery      notifyDeliveryCommand     `cmd:"" help:"notify_delivery_short" example:"loaf notify delivery --help"`
+    Subscription  notifySubscriptionCommand `cmd:"" help:"notify_subscription_short" example:"loaf notify subscription --help"`
+    Prune         notifyPruneCommand        `cmd:"" help:"notify_prune_short" example:"loaf notify prune --before 2026-01-01T00:00:00Z --dry-run"`
+    Bind          notifyBindCommand         `cmd:"" help:"notify_bind_short" example:"loaf notify bind here --current"`
+    Destination   destinationCommand        `cmd:"" help:"notify_destination_short" example:"loaf notify destination --help"`
+    Subscribe     subscribeCommand          `cmd:"" help:"notify_subscribe_short" example:"loaf notify subscribe run:r_example --destination research"`
+    Subscriptions subscriptionListCommand   `cmd:"" help:"notify_subscriptions_short" example:"loaf notify subscriptions"`
+    Deliveries    deliveryListCommand       `cmd:"" default:"1" help:"notify_deliveries_short" example:"loaf notify deliveries"`
+    Serve         notifyServeCommand        `cmd:"" help:"notify_serve_short" example:"loaf notify serve --once"`
+    Channel       notifyChannelCommand      `cmd:"" help:"notify_channel_short" example:"loaf notify channel --socket /private/channel.sock --session research"`
 }
 
 type notifyBindCommand struct {
@@ -289,17 +292,20 @@ type notifyBindCommand struct {
 }
 
 type destinationCommand struct {
-    List struct{}              `cmd:"" default:"1" help:"notify_destination_list_short" example:"loaf notify destination list"`
-    Add  destinationAddCommand `cmd:"" help:"notify_destination_add_short" example:"loaf notify destination add research --kind codex --session thread-id"`
+    List   struct{}              `cmd:"" default:"1" help:"notify_destination_list_short" example:"loaf notify destination list"`
+    Remove notifyNameCommand     `cmd:"" help:"notify_destination_remove_short" example:"loaf notify destination remove research"`
+    Add    destinationAddCommand `cmd:"" help:"notify_destination_add_short" example:"loaf notify destination add research --kind codex --session thread-id"`
 }
 
 type destinationAddCommand struct {
-    Name     string `arg:"" help:"name_arg" value-type:"name"`
-    Kind     string `required:"" enum:"codex,codex-desktop,claude-channel,claude-resume,webhook" help:"flag_destination_kind"`
-    Session  string `help:"flag_destination_session"`
-    Endpoint string `help:"flag_destination_endpoint"`
-    CWD      string `name:"cwd" help:"flag_destination_cwd" value-type:"path"`
-    Replace  bool   `help:"flag_destination_replace"`
+    Name              string `arg:"" help:"name_arg" value-type:"name"`
+    Kind              string `required:"" enum:"codex,codex-desktop,claude-channel,claude-resume,webhook" help:"flag_destination_kind"`
+    Session           string `help:"flag_destination_session"`
+    Endpoint          string `help:"flag_destination_endpoint"`
+    CWD               string `name:"cwd" help:"flag_destination_cwd" value-type:"path"`
+    BearerEnv         string `help:"flag_bearer_env"`
+    AllowInsecureHTTP bool   `name:"allow-insecure-http" help:"flag_allow_insecure_http"`
+    Replace           bool   `help:"flag_destination_replace"`
 }
 
 type subscribeCommand struct {
@@ -384,4 +390,43 @@ func (v *csvList) Decode(ctx *kong.DecodeContext) error {
     }
     v.Values = append(v.Values, items...)
     return nil
+}
+
+// Notification management is explicit and single-object; it never controls workloads.
+type notifyNameCommand struct {
+    Name string `arg:"" help:"name_arg" value-type:"name"`
+}
+type notifyIDCommand struct {
+    ID string `arg:"" help:"notify_id_arg"`
+}
+type notifyDeliveryCommand struct {
+    Show      notifyIDCommand      `cmd:"" help:"notify_delivery_show_short" example:"loaf notify delivery show d_example"`
+    Reconcile notifyIDCommand      `cmd:"" help:"notify_delivery_reconcile_short" example:"loaf notify delivery reconcile d_example"`
+    Resolve   notifyResolveCommand `cmd:"" help:"notify_delivery_resolve_short" example:"loaf notify delivery resolve d_example --as abandoned"`
+    Resend    notifyResendCommand  `cmd:"" help:"notify_delivery_resend_short" example:"loaf notify delivery resend d_example --allow-duplicate --yes"`
+}
+type notifyResolveCommand struct {
+    ID  string `arg:"" help:"notify_id_arg"`
+    As  string `required:"" enum:"confirmed,abandoned" help:"flag_notify_resolution"`
+}
+type notifyResendCommand struct {
+    ID             string `arg:"" help:"notify_id_arg"`
+    AllowDuplicate bool   `help:"flag_allow_duplicate"`
+    Yes            bool   `help:"flag_notify_resend_yes"`
+}
+type notifySubscriptionCommand struct {
+    Show    notifyIDCommand `cmd:"" help:"notify_subscription_show_short" example:"loaf notify subscription show sub_example"`
+    Disable notifyIDCommand `cmd:"" help:"notify_subscription_disable_short" example:"loaf notify subscription disable sub_example"`
+    Enable  notifyIDCommand `cmd:"" help:"notify_subscription_enable_short" example:"loaf notify subscription enable sub_example"`
+    Remove  notifyIDCommand `cmd:"" help:"notify_subscription_remove_short" example:"loaf notify subscription remove sub_example"`
+}
+type notifyPruneCommand struct {
+    Before string `required:"" help:"flag_notify_before" value-type:"time"`
+    DryRun bool   `help:"flag_notify_prune_dry_run"`
+    Yes    bool   `help:"flag_notify_prune_yes"`
+}
+
+type subscriptionListCommand struct {
+    After string `help:"flag_subscription_after"`
+    Limit int    `default:"100" help:"flag_event_limit"`
 }

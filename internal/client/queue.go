@@ -12,7 +12,6 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/config"
-    "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/queue"
     execution "github.com/elebirds/loaf/internal/run"
@@ -161,6 +160,16 @@ func (q *Queues) Enable(ctx context.Context, in QueueEnableInput) (queue.Result,
 }
 
 func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressFunc) (result QueueSubmitResult, err error) {
+    result.Stage = "planning"
+    identitySaved := false
+    defer func() {
+        if err != nil && result.Request != nil {
+            result.NextAction = "repair_local_state"
+            if identitySaved {
+                result.NextAction = "inspect_original_request"
+            }
+        }
+    }()
     // Planning and preview stay entirely local, even when queue/notify are absent.
     if q.Projects == nil {
         return result, fault.New("BAD_CONFIG", "run_command", nil)
@@ -175,6 +184,9 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
         preview.Provenance["wait"] = []string{"default"}
         result.Preview = &preview
         return result, nil
+    }
+    if err = validateNotificationNames(ctx, q.Notify, in.Notify); err != nil {
+        return result, err
     }
     if err = q.services(); err != nil {
         return result, err
@@ -213,6 +225,7 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
     ref.QueueRequestID = r.ID
     result.Request = &r
     result.Run = &execution.View{ID: ref.ID, Version: ref.Version, Target: ref.Target, RemoteDir: ref.RemoteDir, Status: "unknown", Submission: "preparing", CreatedAt: now, Ref: ref}
+    result.Stage = "saving_identity"
     if err = q.Projects.State.SaveRun(ctx, ref); err != nil {
         return result, err
     }
@@ -223,6 +236,7 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
     if err = q.Projects.State.SaveQueueBinding(ctx, r.ID, p.project.ID, binding); err != nil {
         return result, err
     }
+    identitySaved = true
     if p.metadata.Name != "" || len(p.metadata.Tags) > 0 {
         if err = q.Projects.State.SaveRunMetadata(ctx, p.project.ID, ref.ID, p.metadata); err != nil {
             return result, err
@@ -232,17 +246,17 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
         if q.Notify == nil {
             return result, queueFailure("NOTIFY_UNAVAILABLE", nil)
         }
-        for _, subject := range []struct {
-            source string
-            value  event.Subject
-        }{{"queue", event.Subject{Kind: "queue_request", ID: r.ID}}, {"project", event.Subject{Kind: "run", ID: r.RunID}}} {
-            _, err = q.Notify.Subscribe(ctx, SubscribeInput{Subject: subject.value, Source: subject.source, Target: &p.target, Destinations: in.Notify, Replay: true, Policy: in.Policy})
-            if err != nil {
-                return result, err
-            }
+        registrar, ok := q.Notify.(QueuedNotificationRegistrar)
+        if !ok {
+            return result, queueFailure("NOTIFY_UNAVAILABLE", nil)
+        }
+        result.Stage = "registering_notifications"
+        if _, err = registrar.RegisterQueuedRun(ctx, QueuedNotificationInput{Request: r, Run: ref, Destinations: in.Notify}); err != nil {
+            return result, err
         }
     }
     private := queue.Execution{Version: wire.Version, Root: ref.RemoteDir, Args: p.execution.Args, Setup: p.execution.Setup, Env: p.execution.Env, Outputs: p.execution.Outputs}
+    result.Stage = "preparing_remote"
     prepared, err := q.call(ctx, ref, queue.Command{Action: "prepare", TargetID: r.TargetID, Request: &r, Execution: &private}, in.Policy.Batch)
     if prepared.Request != nil {
         result.Request = prepared.Request
@@ -254,13 +268,18 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
     for _, file := range p.source.Files {
         input.Paths = append(input.Paths, file.Path)
     }
+    result.Stage = "syncing"
     progress(emit, Progress{Stage: "queue_syncing", Target: p.target, RunID: ref.ID, Count: len(input.Paths)})
     if _, err = q.Projects.Runs.Send.Sync(ctx, p.machine, runner, p.source.Root, input, in.Policy.Batch); err != nil {
         return result, err
     }
+    result.Stage = "enqueueing"
     admitted, err := q.call(ctx, ref, queue.Command{Action: "enqueue", ID: r.ID, TargetID: r.TargetID}, in.Policy.Batch)
     if admitted.Request != nil {
         result.Request = admitted.Request
+    }
+    if err == nil {
+        result.Stage = "admitted"
     }
     return result, err
 }
@@ -333,7 +352,11 @@ func (q *Queues) byID(ctx context.Context, in QueueIDInput, action string) (queu
         return queue.Result{}, queueFailure("QUEUE_IDENTITY_MISMATCH", nil)
     }
     binding.Run.Runner = runner
-    result, err := q.call(ctx, binding.Run, queue.Command{Action: action, ID: binding.Request.ID, TargetID: binding.Request.TargetID}, in.Policy.Batch)
+    command := queue.Command{Action: action, ID: binding.Request.ID, TargetID: binding.Request.TargetID}
+    if action == "cancel" {
+        command.Request = &binding.Request
+    }
+    result, err := q.call(ctx, binding.Run, command, in.Policy.Batch)
     if result.Request != nil && (result.Request.State == "submitted" || result.Request.State == "completed") {
         if result.Request.AttemptedAt == nil {
             return result, queueFailure("QUEUE_RESPONSE_MISMATCH", err)

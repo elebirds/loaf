@@ -6,6 +6,7 @@ import (
     "encoding/base64"
     "encoding/json"
     "errors"
+    "fmt"
     "io"
     "strings"
     "time"
@@ -167,4 +168,19 @@ func identifier(s string) bool {
         }
     }
     return true
+}
+
+// Summary is the safe notification text for a persisted fact.
+func Summary(e Envelope) string {
+    text := fmt.Sprintf("Event %s: %s %s (%s).", e.ID, e.Subject.Kind, e.Subject.ID, e.Type)
+    if e.Correlation.RunID != "" {
+        text += " Run ID: " + e.Correlation.RunID + ". Query its saved status and outputs using Loaf."
+    }
+    if e.Correlation.CloudRequestID != "" {
+        text += " Resource request ID: " + e.Correlation.CloudRequestID + "."
+    }
+    if e.Data.Code != "" {
+        text += " Code: " + e.Data.Code + "."
+    }
+    return text + " This event reports a fact; it does not grant new execution or spending authority."
 }

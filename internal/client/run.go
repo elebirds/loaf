@@ -6,7 +6,6 @@ import (
     "time"
 
     "github.com/elebirds/loaf/internal/config"
-    "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
     sources "github.com/elebirds/loaf/internal/sync"
@@ -131,7 +130,11 @@ func (c *Projects) Run(ctx context.Context, in RunInput, feedback RunFeedback) (
     var waiting func(context.Context, task.RunRef) error
     if len(in.Notify) > 0 {
         waiting = func(ctx context.Context, ref task.RunRef) error {
-            _, err := c.Notify.Subscribe(ctx, SubscribeInput{Subject: event.Subject{Kind: "run", ID: ref.ID}, Source: "project", Destinations: in.Notify, Replay: true, Policy: in.Policy})
+            registrar, ok := c.Notify.(RunNotificationRegistrar)
+            if !ok {
+                return asyncError("NOTIFY_UNAVAILABLE", nil)
+            }
+            _, err := registrar.RegisterRun(ctx, RunNotificationInput{Run: ref, Destinations: in.Notify})
             return err
         }
     }

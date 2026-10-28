@@ -37,7 +37,7 @@ func TestCurrentBindingVerifiesPersistsAndIsIdempotent(t *testing.T) {
         t.Fatal(result, err, sender.calls)
     }
     saved, err := (notifications.Store{Path: state.Path}).Destinations(context.Background())
-    if err != nil || len(saved) != 1 || saved[0].Address != destination {
+    if err != nil || len(saved) != 1 || saved[0].Address != savedAddress(destination) {
         t.Fatal(saved, err)
     }
     again, err := binder.BindCurrent(context.Background(), BindCurrentInput{Name: "here"})
@@ -90,7 +90,7 @@ func TestCurrentBindingCannotSilentlyReplaceAnotherSession(t *testing.T) {
         t.Fatal(err)
     }
     saved, _ := (notifications.Store{Path: state.Path}).Destinations(context.Background())
-    if len(saved) != 1 || saved[0].Address != old {
+    if len(saved) != 1 || saved[0].Address != savedAddress(old) {
         t.Fatal("old session redirected", saved)
     }
     if _, err := binder.BindCurrent(context.Background(), BindCurrentInput{Name: "here", Replace: true}); err != nil {

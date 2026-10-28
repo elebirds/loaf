@@ -26,7 +26,7 @@ type Store struct{ Dir, Path string }
 
 // New chooses the current state namespace without creating any files.
 func New(dir string) *Store {
-    return &Store{Dir: dir, Path: filepath.Join(dir, "state-v2", "state.db")}
+    return &Store{Dir: dir, Path: filepath.Join(dir, "state-v3", "state.db")}
 }
 
 // Existing reads a saved personal project choice, or an empty choice.

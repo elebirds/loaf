@@ -37,15 +37,11 @@ bundled helper automatically. Read-only previews never deploy it.
 
 ## The v0.6 state boundary
 
-v0.6 starts fresh schema-2 SQLite stores in `state-v2` and `.loaf-control-v2`.
-It does not import schema-1 stores, older JSON indexes or cloud receipts.
-Keep the v0.5 CLI for schema-1 tasks and do not upgrade an active Supervisor's
-database in place. Re-select a project machine using `loaf machine use NAME`;
-a new project identity gets a fresh managed directory under the default remote
-base. An explicit `remote_dir` must be suitable for the new format, not an
-existing incompatible project.
-
-Use the matching older CLI for old tasks and unresolved cloud requests. An empty
-new database does not prove an older paid request did not happen; reconcile it
-before acquiring again. Unknown formats fail without overwrite. Software,
-database, wire, event and standalone delivery SDK versions are independent.
+This development build starts fresh local schema-3 state in `state-v3`.
+It does not import historical locators, subscriptions, receipts or destinations;
+bind `here` again from the intended Codex chat. Prior stores and credentials are
+not deleted. Remote project control remains schema 2 in `.loaf-control-v2`;
+never hot-upgrade an active Supervisor. Historical formats and interfaces are
+not supported by this development build. A fresh local store does not establish
+that an older uncertain cloud allocation did not happen. Reconcile real paid
+operations before any new explicitly authorized acquisition.

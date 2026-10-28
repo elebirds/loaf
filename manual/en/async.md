@@ -223,3 +223,96 @@ Ordinary `loaf clean RUN_ID` keeps its confirmed-terminal-Run contract.
 Remote state survives local disconnection while the remote disk remains intact.
 A powered-off machine cannot execute or dispatch. Destroying that disk removes
 same-disk queue/event state; deliver or export required facts beforehand.
+
+## One queue intent, two independent streams
+
+`queue submit --notify results` atomically registers one subscription containing
+both the machine queue and the frozen Run's project source before source transfer.
+Each binding has its own cursor and diagnostics in `sources`. A failure to create
+either binding rolls back the whole registration. Preparation failures retain the
+original Queue/Run IDs, `stage` and `next_action`; uncertain dispatch is observed,
+never launched again. Canceling the original request before its first remote
+prepare also records a durable no-start tombstone against delayed work.
+
+## Recover one delivery
+
+```bash
+loaf notify delivery show DELIVERY_ID --json
+loaf notify delivery reconcile DELIVERY_ID --json
+loaf notify delivery resolve DELIVERY_ID --as confirmed --json
+loaf notify delivery resolve DELIVERY_ID --as abandoned --json
+```
+
+Show includes frozen content, a safe recipient view, attempts, SDK evidence and
+user resolution. Reconcile is read-only; only Claude Channel currently supports
+Lookup. User confirmation never changes an SDK receipt into `processed`.
+
+If you explicitly accept possible duplication, another Agent turn and service
+cost, authorize one successor:
+
+```bash
+loaf notify delivery resend DELIVERY_ID --allow-duplicate --yes --json
+```
+
+It queues a new message identity with the same frozen fact, text and recipient;
+the Bridge sends it later. Repeating this command for the same parent returns
+the same successor. Interactive use without `--yes` asks for confirmation;
+noninteractive use requires both flags. There is no bulk resend or automatic
+resend of an unconfirmed message.
+
+## Manage subscriptions and retained history
+
+```bash
+loaf notify subscription show SUBSCRIPTION_ID --json
+loaf notify subscription disable SUBSCRIPTION_ID --json
+loaf notify subscription enable SUBSCRIPTION_ID --json
+loaf notify subscription remove SUBSCRIPTION_ID --json
+loaf notify destination remove results --json
+loaf notify prune --before 2026-10-01T00:00:00Z --dry-run --json
+loaf notify prune --before 2026-10-01T00:00:00Z --yes --json
+```
+
+Disable stops new collection and claims; in-flight sends cannot be recalled and
+are counted in the response. Enable continues saved cursors. Remove archives the
+intent and closes unsent work, without stopping computation or erasing ambiguous
+sends. Destination removal refuses references from subscriptions not yet removed.
+
+Pruning is explicit, never automatic. It deletes settled history and unreferenced
+old inbox payloads before the selected time, retaining compact deduplication
+markers. It never deletes pending, in-flight, unresolved unconfirmed work, cloud
+receipts, Run locators or remote events. Re-reading retained facts cannot recreate
+already pruned root deliveries.
+
+## Authenticate Webhooks and keep the Bridge running
+
+```bash
+loaf notify destination add results --kind webhook --endpoint https://receiver.example/loaf --bearer-env LOAF_HOOK_TOKEN
+```
+
+Supply the named variable to the Bridge using your existing secret-management
+mechanism. Only its name is persisted; token values are not stored or accepted
+through argv/project configuration. Missing credentials fail before HTTP sends.
+Bearer requires HTTPS. Non-loopback HTTP requires `--allow-insecure-http`;
+429 is not treated as proof of safe replay. Redirects remain disabled.
+
+A continuous Bridge stays alive with no subscriptions and discovers newly created
+ones. Collection, sending and ACK lookup have independent bounded lanes; slow
+sources cannot block already-received deliveries. `--once` handles a bounded
+batch, not necessarily the whole backlog. Its summary includes `rejected`;
+confirmed rejection exits 1, and unconfirmed delivery exits 3.
+
+Optional [launchd/systemd user-service templates](../../examples/notify-services/README.md)
+are included in archives. Review paths and install them explicitly; Loaf does not
+install services itself. Restarts recover persistent state. Sleep still prevents
+local delivery, and facts cannot be recovered after their source disk is destroyed.
+
+Subscription listing is ID-paginated, with 100 rows by default. JSON returns
+`subscriptions`, `has_more` and `next_after`; continue with
+`loaf notify subscriptions --after SUBSCRIPTION_ID --limit 100 --json`.
+For multi-source intents, compare success/failure times within each `sources`
+entry, never across different streams.
+
+`rejected` counts last observed rejections on enabled intents, including items
+waiting for a proven-safe retry; it can overlap `pending`. Missing Bearer
+credentials therefore make a one-round command fail without an HTTP request.
+Environment lookup is explicitly supplied by the CLI entry point.

@@ -88,7 +88,12 @@ func queueControlAt(ctx context.Context, req wire.Request, root string, identity
     if command.TargetID != "" && command.TargetID != store.TargetID {
         return result, errors.New("QUEUE_IDENTITY_MISMATCH")
     }
-    request := func(e queuestate.Entry) { q := e.Request; result.Request = &q }
+    request := func(e queuestate.Entry) {
+        if e.Request.ID != "" {
+            q := e.Request
+            result.Request = &q
+        }
+    }
     switch command.Action {
     case "enable":
         slots := 1
@@ -173,7 +178,20 @@ func queueControlAt(ctx context.Context, req wire.Request, root string, identity
         }
         request(e)
     case "cancel":
-        e, cancelErr := store.Cancel(ctx, command.ID)
+        var e queuestate.Entry
+        var cancelErr error
+        if command.Request != nil {
+            r := *command.Request
+            if r.ID != command.ID || r.RunID != req.RunID || r.ProjectID != req.ProjectID || r.TargetID != store.TargetID || r.FormatVersion != queue.Version || r.CreatedAt.IsZero() || !identifier.MatchString(r.ID) || !identifier.MatchString(r.RunID) || !identifier.MatchString(r.ProjectID) || !filepath.IsAbs(req.Root) {
+                return result, errors.New("QUEUE_BAD_REQUEST")
+            }
+            if err = claimQueuedRun(root, r.RunID); err != nil {
+                return result, err
+            }
+            e, cancelErr = store.CancelUnprepared(ctx, r, queue.Execution{Version: wire.Version, Root: req.Root})
+        } else {
+            e, cancelErr = store.Cancel(ctx, command.ID)
+        }
         request(e)
         if cancelErr != nil {
             return result, cancelErr

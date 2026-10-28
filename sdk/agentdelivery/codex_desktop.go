@@ -171,13 +171,13 @@ func (c *desktopIPC) owner(ctx context.Context, d Destination) (string, error) {
 func (CodexDesktop) Probe(ctx context.Context, d Destination) (Capabilities, error) {
     c, err := openDesktopIPC(ctx, d)
     if err != nil {
-        return Capabilities{ReasonCode: "CODEX_DESKTOP_UNAVAILABLE"}, err
+        return Capabilities{Experimental: true, ReasonCode: "CODEX_DESKTOP_UNAVAILABLE"}, err
     }
     defer c.connection.Close()
     if _, err := c.owner(ctx, d); err != nil {
-        return Capabilities{ReasonCode: "CODEX_DESKTOP_THREAD_UNAVAILABLE"}, err
+        return Capabilities{Experimental: true, ReasonCode: "CODEX_DESKTOP_THREAD_UNAVAILABLE"}, err
     }
-    return Capabilities{ExistingSession: true, Available: true}, nil
+    return Capabilities{Experimental: true, ExistingSession: true, Available: true}, nil
 }
 
 // Deliver supplies one standalone tool output to the existing desktop owner.

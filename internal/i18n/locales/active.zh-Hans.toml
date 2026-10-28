@@ -1838,7 +1838,7 @@ other = "使用可选游标读取有界事件页。"
 other = "管理明确的目的地和事件投递。"
 
 [notify_bind_short]
-other = "验证并绑定当前 Codex 桌面会话，不启动新 turn。"
+other = "验证并绑定当前实验性 Codex 桌面会话"
 
 [flag_notify_current]
 other = "使用当前 Codex 桌面工具 Shell 提供的精确线程身份。"
@@ -1982,7 +1982,7 @@ other = "尚无已保存的通知订阅。"
 other = "尚无已保存的投递记录。"
 
 [notify_summary]
-other = "已接收 {{.Count}}；尝试投递 {{.Total}}；明确接收 {{.Matched}}；未确认 {{.Value}}；待投递 {{.Bytes}}。"
+other = "已接收 {{.Count}}；尝试投递 {{.Total}}；明确接收 {{.Matched}}；未确认 {{.Value}}；待投递 {{.Bytes}}；拒绝 {{.Code}}。"
 
 [delivery_state_pending]
 other = "待投递"
@@ -2211,3 +2211,174 @@ other = "上次来源查询错误：{{.Code}}。"
 
 [notify_source_error_at]
 other = "上次来源查询错误（{{.Value}}）：{{.Code}}。"
+
+[notify_delivery_short]
+other = "查看和处置单条投递"
+
+[notify_subscription_short]
+other = "管理一个通知订阅"
+
+[notify_prune_short]
+other = "清理已结案的本地通知历史"
+
+[notify_delivery_show_short]
+other = "查看证据、尝试与重发关联"
+
+[notify_delivery_reconcile_short]
+other = "只读核对确认，不重新发送"
+
+[notify_delivery_resolve_short]
+other = "记录人工确认或放弃"
+
+[notify_delivery_resend_short]
+other = "明确授权后登记一条关联重发"
+
+[notify_subscription_show_short]
+other = "查看订阅及各个来源"
+
+[notify_subscription_disable_short]
+other = "暂停采集和新的投递"
+
+[notify_subscription_enable_short]
+other = "从保存的游标继续"
+
+[notify_subscription_remove_short]
+other = "归档订阅并关闭未发送项"
+
+[notify_destination_remove_short]
+other = "移除没有订阅引用的目的地"
+
+[notify_id_arg]
+other = "明确的通知记录 ID"
+
+[flag_bearer_env]
+other = "Bearer token 所在的环境变量名；仅限 HTTPS"
+
+[flag_allow_insecure_http]
+other = "明确允许不带 Bearer 认证的非 loopback HTTP"
+
+[flag_notify_resolution]
+other = "人工决定；不改变 SDK 证据"
+
+[flag_allow_duplicate]
+other = "接受可能重复投递及再次触发 Agent 的风险"
+
+[flag_notify_resend_yes]
+other = "确认一次明确重发的风险"
+
+[flag_notify_before]
+other = "清理此 RFC3339 时间之前的已结案历史"
+
+[flag_notify_prune_dry_run]
+other = "仅预览本地历史清理"
+
+[flag_notify_prune_yes]
+other = "确认清理本地历史"
+
+[notify_duplicate_required]
+other = "重发必须带 --allow-duplicate，可能再次触发 Agent。"
+
+[notify_resend_yes_required]
+other = "非交互重发还必须带 --yes。"
+
+[notify_prune_yes_required]
+other = "非交互清理必须带 --yes 或 --dry-run。"
+
+[notify_resend_confirm]
+other = "将 {{.ID}} 重发到 {{.Value}}？原消息可能已经送达，此操作可能再次触发 Agent。"
+
+[notify_prune_confirm]
+other = "删除 {{.Count}} 条已结案投递和 {{.Total}} 条无引用 inbox？去重标记继续保留。"
+
+[notify_before_invalid]
+other = "--before 必须为 RFC3339 时间。"
+
+[notify_canceled]
+other = "通知操作已取消。"
+
+[notify_destination_in_use]
+other = "目的地 {{.Value}} 仍被这些订阅引用：{{.Paths}}。请先移除相关订阅。"
+
+[notify_destination_removed]
+other = "已移除目的地 {{.Value}}。"
+
+[notify_subscription_changed]
+other = "{{.ID}}：{{.Value}}；已有 {{.Count}} 条投递在途，无法撤回。"
+
+[notify_status_enabled]
+other = "已启用"
+
+[notify_status_disabled]
+other = "已暂停"
+
+[notify_status_removed]
+other = "已移除"
+
+[notify_prune_preview]
+other = "将删除 {{.Count}} 条已结案投递和 {{.Total}} 条无引用 inbox。"
+
+[notify_pruned]
+other = "已删除 {{.Count}} 条已结案投递和 {{.Total}} 条无引用 inbox；去重标记已保留。"
+
+[notify_attempt_detail]
+other = "尝试 {{.Count}}：{{.Value}} {{.Code}}"
+
+[notify_experimental]
+other = "{{.Value}} 为实验性适配器。"
+
+[delivery_dispatch_resolved]
+other = "已人工处置"
+
+[notify_resolution_detail]
+other = "人工处置：{{.Value}} {{.ID}}；SDK 证据未改写。"
+
+[notify_resolution_confirmed]
+other = "人工确认已接收"
+
+[notify_resolution_abandoned]
+other = "已放弃"
+
+[notify_resolution_resent]
+other = "已登记明确重发"
+
+[notify_parent_detail]
+other = "重发关联原记录 {{.ID}}。"
+
+[type_time]
+other = "RFC3339 时间"
+
+[queue_submission_stage]
+other = "提交阶段：{{.Value}}"
+
+[queue_submit_stage_planning]
+other = "本地计划"
+
+[queue_submit_stage_saving_identity]
+other = "保存冻结身份"
+
+[queue_submit_stage_registering_notifications]
+other = "登记通知订阅"
+
+[queue_submit_stage_preparing_remote]
+other = "远端输入准备"
+
+[queue_submit_stage_syncing]
+other = "源码传输"
+
+[queue_submit_stage_enqueueing]
+other = "确认入队"
+
+[queue_submit_stage_admitted]
+other = "已确认入队"
+
+[queue_submit_next_inspect_original_request]
+other = "核对原请求 ID；准备无法继续时取消该请求。派发未确认时不要创建替代执行。"
+
+[queue_submit_next_repair_local_state]
+other = "请先修复本地状态写入失败；尚未请求远端准备或启动。"
+
+[flag_subscription_after]
+other = "从此订阅 ID 后继续列出"
+
+[notify_subscriptions_more]
+other = "还有更多订阅，请使用 --after {{.ID}}。"

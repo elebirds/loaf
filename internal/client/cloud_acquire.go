@@ -141,7 +141,11 @@ func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, appr
     var waiting func(context.Context, cloud.Receipt) error
     if len(in.Notify) > 0 {
         waiting = func(ctx context.Context, receipt cloud.Receipt) error {
-            _, err := c.Notify.Subscribe(ctx, SubscribeInput{Subject: event.Subject{Kind: "resource_operation", ID: receipt.ID}, Source: "resources", Destinations: in.Notify, Replay: true})
+            registrar, ok := c.Notify.(ResourceNotificationRegistrar)
+            if !ok {
+                return asyncError("NOTIFY_UNAVAILABLE", nil)
+            }
+            _, err := registrar.RegisterResource(ctx, ResourceNotificationInput{Subject: event.Subject{Kind: "resource_operation", ID: receipt.ID}, Destinations: in.Notify})
             return err
         }
     }

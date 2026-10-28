@@ -29,6 +29,34 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
             return true, err
         }
         return true, nil
+    case client.Delivery:
+        return true, printDelivery(out, r, l)
+    case client.DeliveryDetail:
+        if err := printDelivery(out, r.Delivery, l); err != nil {
+            return true, err
+        }
+        if _, err := fmt.Fprintln(out, r.Message.Text); err != nil {
+            return true, err
+        }
+        for _, a := range r.Attempts {
+            if _, err := fmt.Fprintln(out, l.Text("notify_attempt_detail", map[string]any{"Count": a.Number, "Value": a.Receipt.State, "Code": a.ErrorCode})); err != nil {
+                return true, err
+            }
+        }
+        return true, nil
+    case client.SubscriptionChange:
+        _, err := fmt.Fprintln(out, l.Text("notify_subscription_changed", map[string]any{"ID": r.SubscriptionID, "Value": l.Text("notify_status_" + r.Status), "Count": r.InFlight}))
+        return true, err
+    case client.PruneResult:
+        mode := "notify_pruned"
+        if r.DryRun {
+            mode = "notify_prune_preview"
+        }
+        _, err := fmt.Fprintln(out, l.Text(mode, map[string]any{"Count": r.Deliveries, "Total": r.Inbox}))
+        return true, err
+    case destinationRemoval:
+        _, err := fmt.Fprintln(out, l.Text("notify_destination_removed", map[string]any{"Value": r.Name}))
+        return true, err
     case client.DestinationRecord:
         return true, printDestination(out, r, l)
     case client.CurrentBindingResult:
@@ -47,6 +75,21 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
         return true, nil
     case client.Subscription:
         return true, printSubscription(out, r, l)
+    case client.SubscriptionPage:
+        for _, sub := range r.Subscriptions {
+            if err := printSubscription(out, sub, l); err != nil {
+                return true, err
+            }
+        }
+        if len(r.Subscriptions) == 0 {
+            _, err := fmt.Fprintln(out, l.Text("notify_subscriptions_empty"))
+            return true, err
+        }
+        if r.HasMore {
+            _, err := fmt.Fprintln(out, l.Text("notify_subscriptions_more", map[string]any{"ID": r.NextAfter}))
+            return true, err
+        }
+        return true, nil
     case []client.Subscription:
         if len(r) == 0 {
             _, err := fmt.Fprintln(out, l.Text("notify_subscriptions_empty"))
@@ -85,6 +128,16 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
         }
         return true, nil
     case client.QueueSubmitResult:
+        if r.Stage != "" {
+            if _, err := fmt.Fprintln(out, l.Text("queue_submission_stage", map[string]any{"Value": l.Text("queue_submit_stage_" + r.Stage)})); err != nil {
+                return true, err
+            }
+        }
+        if r.NextAction != "" {
+            if _, err := fmt.Fprintln(out, l.Text("queue_submit_next_"+r.NextAction)); err != nil {
+                return true, err
+            }
+        }
         if r.Preview != nil {
             printPreview(out, *r.Preview, l)
             return true, nil
@@ -114,11 +167,21 @@ func eventTypeText(kind string, l *i18n.Localizer) string {
 }
 
 func printDestination(out io.Writer, r client.DestinationRecord, l *i18n.Localizer) error {
+    if r.Experimental {
+        if _, err := fmt.Fprintln(out, l.Text("notify_experimental", map[string]any{"Value": r.Kind})); err != nil {
+            return err
+        }
+    }
     _, err := fmt.Fprintf(out, "%s  %s  %s\n", r.Name, r.Kind, r.SessionID)
     return err
 }
 
 func printSubscription(out io.Writer, r client.Subscription, l *i18n.Localizer) error {
+    if r.Status != "" {
+        if _, err := fmt.Fprintln(out, l.Text("notify_status_"+r.Status)); err != nil {
+            return err
+        }
+    }
     _, err := fmt.Fprintf(out, "%s  %s:%s  %s  %s\n", r.ID, r.Subject.Kind, r.Subject.ID, r.Source, strings.Join(r.Destinations, ", "))
     if err != nil {
         return err
@@ -136,7 +199,17 @@ func printSubscription(out io.Writer, r client.Subscription, l *i18n.Localizer) 
         }
         _, err = fmt.Fprintln(out, "  "+l.Text(id, params))
     }
-    return err
+    if err != nil {
+        return err
+    }
+    if len(r.Sources) > 1 {
+        for _, src := range r.Sources {
+            if err = printSubscription(out, client.Subscription{ID: src.ID, Source: src.Source, Subject: src.Subject, LastSyncedAt: src.LastSyncedAt, SourceError: src.SourceError, SourceErrorAt: src.SourceErrorAt}, l); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
 }
 
 func printDelivery(out io.Writer, r client.Delivery, l *i18n.Localizer) error {
@@ -145,7 +218,7 @@ func printDelivery(out io.Writer, r client.Delivery, l *i18n.Localizer) error {
         state = "pending"
     }
     switch state {
-    case "pending", "in_flight", "accepted", "processed", "unconfirmed", "rejected":
+    case "pending", "in_flight", "accepted", "processed", "unconfirmed", "rejected", "resolved":
         state = l.Text("delivery_dispatch_" + state)
     }
     _, err := fmt.Fprintf(out, "%s  %s  %s  %s", r.ID, r.EventID, r.Destination, state)
@@ -159,6 +232,16 @@ func printDelivery(out io.Writer, r client.Delivery, l *i18n.Localizer) error {
     }
     if _, err = fmt.Fprintln(out); err != nil {
         return err
+    }
+    if r.Resolution != nil {
+        if _, err := fmt.Fprintln(out, l.Text("notify_resolution_detail", map[string]any{"Value": l.Text("notify_resolution_" + r.Resolution.Kind), "ID": r.Resolution.SuccessorID})); err != nil {
+            return err
+        }
+    }
+    if r.ParentID != "" {
+        if _, err := fmt.Fprintln(out, l.Text("notify_parent_detail", map[string]any{"ID": r.ParentID})); err != nil {
+            return err
+        }
     }
     if r.Receipt.State != "" {
         evidence := r.Receipt.State
@@ -177,7 +260,7 @@ func printDelivery(out io.Writer, r client.Delivery, l *i18n.Localizer) error {
 }
 
 func printNotifySummary(out io.Writer, r client.NotifyServeResult, l *i18n.Localizer) error {
-    _, err := fmt.Fprintln(out, l.Text("notify_summary", map[string]any{"Count": r.Received, "Total": r.Attempted, "Matched": r.Accepted, "Value": r.Unconfirmed, "Bytes": r.Pending}))
+    _, err := fmt.Fprintln(out, l.Text("notify_summary", map[string]any{"Count": r.Received, "Total": r.Attempted, "Matched": r.Accepted, "Value": r.Unconfirmed, "Bytes": r.Pending, "Code": r.Rejected}))
     return err
 }
 

@@ -10,14 +10,13 @@ import (
     "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/state/db"
     "github.com/elebirds/loaf/internal/state/eventlog"
-    "github.com/elebirds/loaf/sdk/agentdelivery"
 )
 
 func fixture(t *testing.T) (Store, Subscription, event.Page) {
     t.Helper()
     ctx := context.Background()
     store := Store{Path: filepath.Join(t.TempDir(), "local", "state.db")}
-    destination := Destination{Name: "agent", Address: agentdelivery.Destination{Kind: "codex", SessionID: "thread_1"}, CreatedAt: time.Now().UTC()}
+    destination := Destination{Name: "agent", Address: Address{Kind: "codex", SessionID: "thread_1"}, CreatedAt: time.Now().UTC()}
     if err := store.PutDestination(ctx, destination, false); err != nil {
         t.Fatal(err)
     }

@@ -7,6 +7,7 @@ import (
     "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/queue"
     execution "github.com/elebirds/loaf/internal/run"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/sdk/agentdelivery"
 )
 
@@ -34,10 +35,11 @@ type DestinationInput struct {
 
 // DestinationRecord is public destination metadata, never its private endpoint.
 type DestinationRecord struct {
-    Name      string    `json:"name"`
-    Kind      string    `json:"kind"`
-    SessionID string    `json:"session_id,omitempty"`
-    CreatedAt time.Time `json:"created_at"`
+    Name         string    `json:"name"`
+    Kind         string    `json:"kind"`
+    SessionID    string    `json:"session_id,omitempty"`
+    CreatedAt    time.Time `json:"created_at"`
+    Experimental bool      `json:"experimental"`
 }
 
 // BindCurrentInput names the current, explicitly supplied desktop session.
@@ -67,20 +69,139 @@ type SubscribeInput struct {
     Policy       CallPolicy
 }
 
+// SubscriptionListInput pages logical intents, including disabled/removed history.
+type SubscriptionListInput struct {
+    After string
+    Limit int
+}
+
+// SubscriptionPage reports explicit coverage and the next subscription ID.
+type SubscriptionPage struct {
+    Subscriptions []Subscription `json:"subscriptions"`
+    HasMore       bool           `json:"has_more"`
+    NextAfter     string         `json:"next_after,omitempty"`
+}
+
 // Subscription is a durable waiting relationship, not execution authority.
-type Subscription struct {
-    ID            string        `json:"subscription_id"`
-    Subject       event.Subject `json:"subject"`
+// SubscriptionSource exposes one frozen stream's independent observation evidence.
+type SubscriptionSource struct {
+    ID            string        `json:"binding_id"`
     Source        string        `json:"source"`
-    Destinations  []string      `json:"destinations"`
-    CreatedAt     time.Time     `json:"created_at"`
+    Subject       event.Subject `json:"subject"`
     LastSyncedAt  *time.Time    `json:"last_synced_at,omitempty"`
     SourceError   string        `json:"source_error,omitempty"`
     SourceErrorAt *time.Time    `json:"source_error_at,omitempty"`
 }
 
+// RunNotificationInput cannot redirect an already frozen Run.
+type RunNotificationInput struct {
+    Run          task.RunRef
+    Destinations []string
+}
+
+// QueuedNotificationInput registers both sources of one fixed queue submission.
+type QueuedNotificationInput struct {
+    Request      queue.Request
+    Run          task.RunRef
+    Destinations []string
+}
+
+// ResourceNotificationInput observes a resource or operation without requiring a Run.
+type ResourceNotificationInput struct {
+    Subject      event.Subject
+    Destinations []string
+}
+
+// Typed registration seams are owned by their callers, not a generic target-bearing request.
+type RunNotificationRegistrar interface {
+    RegisterRun(context.Context, RunNotificationInput) (Subscription, error)
+}
+
+// QueuedNotificationRegistrar is the queue caller's atomic registration seam.
+type QueuedNotificationRegistrar interface {
+    RegisterQueuedRun(context.Context, QueuedNotificationInput) (Subscription, error)
+}
+
+// ResourceNotificationRegistrar records waiting before a resource mutation.
+type ResourceNotificationRegistrar interface {
+    RegisterResource(context.Context, ResourceNotificationInput) (Subscription, error)
+}
+
+type Subscription struct {
+    Status        string               `json:"status"`
+    Sources       []SubscriptionSource `json:"sources"`
+    ID            string               `json:"subscription_id"`
+    Subject       event.Subject        `json:"subject"`
+    Source        string               `json:"source"`
+    Destinations  []string             `json:"destinations"`
+    CreatedAt     time.Time            `json:"created_at"`
+    LastSyncedAt  *time.Time           `json:"last_synced_at,omitempty"`
+    SourceError   string               `json:"source_error,omitempty"`
+    SourceErrorAt *time.Time           `json:"source_error_at,omitempty"`
+}
+
+// UserResolution is an explicit human decision, not a transport observation.
+type UserResolution struct {
+    Kind        string    `json:"kind"`
+    At          time.Time `json:"at"`
+    SuccessorID string    `json:"successor_id,omitempty"`
+}
+
+// DeliveryAttempt exposes a persisted possible-send boundary.
+type DeliveryAttempt struct {
+    Number      int                   `json:"number"`
+    StartedAt   time.Time             `json:"started_at"`
+    CompletedAt *time.Time            `json:"completed_at,omitempty"`
+    Receipt     agentdelivery.Receipt `json:"receipt"`
+    ErrorCode   string                `json:"error_code,omitempty"`
+}
+
+// DeliveryDetail is a safe single-delivery inspection, with no private endpoint.
+type DeliveryDetail struct {
+    Recipient DestinationRecord     `json:"recipient"`
+    Delivery  Delivery              `json:"delivery"`
+    Event     event.Envelope        `json:"event"`
+    Message   agentdelivery.Message `json:"message"`
+    Attempts  []DeliveryAttempt     `json:"attempts"`
+}
+
+// SubscriptionChange reports state and already claimed sends that cannot be recalled.
+type SubscriptionChange struct {
+    SubscriptionID string `json:"subscription_id"`
+    Status         string `json:"status"`
+    InFlight       int    `json:"in_flight"`
+}
+
+// PruneInput selects a settled local history cutoff; no default deletion is implied.
+type PruneInput struct {
+    Before time.Time
+    DryRun bool
+}
+
+// PruneResult reports exact deletion or preview counts.
+type PruneResult struct {
+    Before     time.Time `json:"before"`
+    DryRun     bool      `json:"dry_run"`
+    Deliveries int       `json:"deliveries"`
+    Inbox      int       `json:"inbox"`
+}
+
+// NotificationControlService manages delivery evidence and intent lifecycle, never workloads.
+type NotificationControlService interface {
+    ShowDelivery(context.Context, string) (DeliveryDetail, error)
+    ReconcileDelivery(context.Context, string) (Delivery, error)
+    ResolveDelivery(context.Context, string, string) (Delivery, error)
+    ResendDelivery(context.Context, string) (Delivery, error)
+    ShowSubscription(context.Context, string) (Subscription, error)
+    ChangeSubscription(context.Context, string, string) (SubscriptionChange, error)
+    RemoveDestination(context.Context, string) error
+    Prune(context.Context, PruneInput) (PruneResult, error)
+}
+
 // Delivery retains per-destination evidence and safe failure classification.
 type Delivery struct {
+    ParentID       string                `json:"parent_id,omitempty"`
+    Resolution     *UserResolution       `json:"resolution,omitempty"`
     ID             string                `json:"delivery_id"`
     EventID        string                `json:"event_id"`
     SubscriptionID string                `json:"subscription_id"`
@@ -107,6 +228,7 @@ type NotifyServeResult struct {
     Accepted    int `json:"accepted"`
     Unconfirmed int `json:"unconfirmed"`
     Pending     int `json:"pending"`
+    Rejected    int `json:"rejected"`
 }
 
 // NotificationService owns durable waiting and delivery, not Run supervision.
@@ -115,6 +237,7 @@ type NotificationService interface {
     Destinations(context.Context) ([]DestinationRecord, error)
     Subscribe(context.Context, SubscribeInput) (Subscription, error)
     Subscriptions(context.Context) ([]Subscription, error)
+    ListSubscriptions(context.Context, SubscriptionListInput) (SubscriptionPage, error)
     Deliveries(context.Context, int) ([]Delivery, error)
     Serve(context.Context, NotifyServeInput, func(Delivery) error) (NotifyServeResult, error)
 }
@@ -151,9 +274,11 @@ type QueueSubmitInput struct {
 
 // QueueSubmitResult separates admission from execution and offline preview.
 type QueueSubmitResult struct {
-    Request *queue.Request        `json:"request,omitempty"`
-    Run     *execution.View       `json:"run,omitempty"`
-    Preview *execution.RunPreview `json:"preview,omitempty"`
+    Stage      string                `json:"stage,omitempty"`
+    NextAction string                `json:"next_action,omitempty"`
+    Request    *queue.Request        `json:"request,omitempty"`
+    Run        *execution.View       `json:"run,omitempty"`
+    Preview    *execution.RunPreview `json:"preview,omitempty"`
 }
 
 // QueueListInput bounds a machine queue observation.

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.elebirds.loaf.notify</string>
+  <key>ProgramArguments</key>
+  <array><string>/absolute/path/to/loaf</string><string>notify</string><string>serve</string><string>--json</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/absolute/private/logs/loaf-notify.log</string>
+  <key>StandardErrorPath</key><string>/absolute/private/logs/loaf-notify-error.log</string>
+</dict>
+</plist>

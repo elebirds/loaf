@@ -17,6 +17,7 @@ import (
     "github.com/elebirds/loaf/internal/queue"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/sdk/agentdelivery"
 )
 
 func asyncCLIData[T any](t *testing.T, project string, args ...string) T {
@@ -141,16 +142,36 @@ func TestPackagedFIFOSharedTargetFrozenInputAndCancellation(t *testing.T) {
     if code, out := cli(t, second, "machine", "use", "same-host", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
+    var deliveredMu sync.Mutex
+    messages := map[string]agentdelivery.Message{}
+    receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var m agentdelivery.Message
+        if json.NewDecoder(io.LimitReader(r.Body, 128<<10)).Decode(&m) != nil {
+            http.Error(w, "invalid", 400)
+            return
+        }
+        deliveredMu.Lock()
+        if _, exists := messages[m.ID]; exists {
+            t.Error("duplicate packaged delivery", m.ID)
+        }
+        messages[m.ID] = m
+        deliveredMu.Unlock()
+        w.WriteHeader(202)
+    }))
+    defer receiver.Close()
+    for _, project := range []string{first, second} {
+        asyncCLIData[client.DestinationRecord](t, project, "notify", "destination", "add", "results", "--kind", "webhook", "--endpoint", receiver.URL, "--json")
+    }
     enabled := asyncCLIData[queue.Result](t, first, "queue", "enable", "--slots", "1", "--json")
     if enabled.Status == nil || enabled.Status.Slots != 1 {
         t.Fatal("missing shared queue status", enabled)
     }
-    a := asyncCLIData[client.QueueSubmitResult](t, first, "queue", "submit", "--json", "--", "/bin/sh", "-c", `mkdir -p outputs; printf A >outputs/result.txt; while [ ! -f /tmp/loaf-queue-release ]; do sleep .03; done`)
+    a := asyncCLIData[client.QueueSubmitResult](t, first, "queue", "submit", "--notify", "results", "--json", "--", "/bin/sh", "-c", `mkdir -p outputs; printf A >outputs/result.txt; while [ ! -f /tmp/loaf-queue-release ]; do sleep .03; done`)
     if a.Request == nil || a.Request.RunID == "" {
         t.Fatal("queue lost frozen Run identity", a)
     }
     sourceFile(t, second, "input.txt", "before")
-    b := asyncCLIData[client.QueueSubmitResult](t, second, "queue", "submit", "--json", "--", "/bin/sh", "-c", `mkdir -p outputs; cat input.txt >outputs/result.txt`)
+    b := asyncCLIData[client.QueueSubmitResult](t, second, "queue", "submit", "--notify", "results", "--json", "--", "/bin/sh", "-c", `mkdir -p outputs; cat input.txt >outputs/result.txt`)
     if b.Request == nil || b.Request.RunID == "" || b.Request.TargetID != a.Request.TargetID || b.Request.Sequence <= a.Request.Sequence {
         t.Fatal("projects/aliases did not share FIFO admission", a, b)
     }
@@ -162,7 +183,7 @@ func TestPackagedFIFOSharedTargetFrozenInputAndCancellation(t *testing.T) {
     if code, out := cli(t, second, "sync", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
-    c := asyncCLIData[client.QueueSubmitResult](t, second, "queue", "submit", "--json", "--", "/bin/sh", "-c", `touch /tmp/loaf-canceled-was-started`)
+    c := asyncCLIData[client.QueueSubmitResult](t, second, "queue", "submit", "--notify", "results", "--json", "--", "/bin/sh", "-c", `touch /tmp/loaf-canceled-was-started`)
     if c.Request == nil {
         t.Fatal("missing cancelable request", c)
     }
@@ -204,4 +225,34 @@ func TestPackagedFIFOSharedTargetFrozenInputAndCancellation(t *testing.T) {
         t.Fatal("queued input changed after sync", string(data), err)
     }
     f.shell(`test ! -e /tmp/loaf-canceled-was-started`)
+    for _, project := range []string{first, second} {
+        served := asyncCLIData[client.NotifyServeResult](t, project, "notify", "serve", "--once", "--json")
+        if served.Accepted == 0 || served.Unconfirmed != 0 {
+            t.Fatal("queue notifications not wired", served)
+        }
+        subscriptions := asyncCLIData[client.SubscriptionPage](t, project, "notify", "subscriptions", "--json").Subscriptions
+        for _, sub := range subscriptions {
+            if len(sub.Sources) != 2 {
+                t.Fatal("not one multi-source intent", sub)
+            }
+        }
+        replay := asyncCLIData[client.NotifyServeResult](t, project, "notify", "serve", "--once", "--json")
+        if replay.Attempted != 0 {
+            t.Fatal("queue fact resent", replay)
+        }
+    }
+    deliveredMu.Lock()
+    defer deliveredMu.Unlock()
+    succeeded, canceledEvent := 0, 0
+    for _, m := range messages {
+        if m.Subject == "run.succeeded" {
+            succeeded++
+        }
+        if m.Subject == "queue.canceled" {
+            canceledEvent++
+        }
+    }
+    if succeeded != 2 || canceledEvent != 1 {
+        t.Fatal("missing terminal/cancel delivery", messages)
+    }
 }

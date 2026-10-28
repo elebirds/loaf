@@ -23,7 +23,7 @@ paths = ["outputs", "checkpoints"]
 
 Target selection follows `--target`, the current project's `loaf machine use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf machine add ... --remote-dir '~/projects'`.
 
-User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v2/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
+User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v3/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
 
 See [upgrading](upgrading.md) for the v0.6 state boundary and matching old CLIs.
 

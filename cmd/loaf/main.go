@@ -104,7 +104,7 @@ func main() {
         codexHome = filepath.Join(home, ".codex")
     }
     events, notifications := application.NewEventServices(application.EventDependencies{
-        State: state, Settings: settings, CWD: cwd, Runs: runs, Remote: eventRemote,
+        State: state, Settings: settings, CWD: cwd, Runs: runs, Remote: eventRemote, LookupEnv: os.LookupEnv,
         CurrentCodex: agentdelivery.Destination{Kind: "codex-desktop", SessionID: os.Getenv("CODEX_THREAD_ID"), Endpoint: filepath.Join(codexHome, "ipc", "ipc.sock")},
     })
     app := application.New(application.Dependencies{

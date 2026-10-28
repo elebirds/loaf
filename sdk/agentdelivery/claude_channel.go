@@ -37,9 +37,8 @@ func channelCall(ctx context.Context, d Destination, request channelRequest) (ch
     if d.Validate() != nil || d.Kind != "claude-channel" || !filepath.IsAbs(d.Endpoint) {
         return response, ErrDestination
     }
-    info, err := os.Lstat(d.Endpoint)
-    if err != nil || info.Mode()&os.ModeSocket == 0 || info.Mode().Perm()&0077 != 0 {
-        return response, ErrUnavailable
+    if err := privateSocket(d.Endpoint, false); err != nil {
+        return response, err
     }
     connection, err := (&net.Dialer{}).DialContext(ctx, "unix", d.Endpoint)
     if err != nil {
@@ -119,6 +118,7 @@ type ClaudeChannelServer struct {
     cwd         string
     receipts    map[string]Receipt
     messages    map[string]Message
+    order       []string
 }
 
 type channelTransport struct {
@@ -149,11 +149,10 @@ func (s *ClaudeChannelServer) Serve(ctx context.Context, transport mcp.Transport
     if !validID(s.SessionID) || !filepath.IsAbs(s.SocketPath) || transport == nil {
         return ErrDestination
     }
-    parent, err := os.Lstat(filepath.Dir(s.SocketPath))
-    if err != nil || !parent.IsDir() || parent.Mode()&os.ModeSymlink != 0 || parent.Mode().Perm()&0077 != 0 {
+    if err := privateSocketDirectory(filepath.Dir(s.SocketPath)); err != nil {
         return ErrDestination
     }
-    if _, err = os.Lstat(s.SocketPath); !os.IsNotExist(err) {
+    if _, err := os.Lstat(s.SocketPath); !os.IsNotExist(err) {
         return ErrDestination
     }
     cwd, err := os.Getwd()
@@ -176,6 +175,7 @@ func (s *ClaudeChannelServer) Serve(ctx context.Context, transport mcp.Transport
     s.mu.Lock()
     s.receipts = map[string]Receipt{}
     s.messages = map[string]Message{}
+    s.order = nil
     s.initialized = false
     s.cwd = cwd
     s.mu.Unlock()
@@ -322,6 +322,16 @@ func (s *ClaudeChannelServer) deliver(ctx context.Context, message Message, read
         return receipt
     }
     if len(s.receipts) >= 256 {
+        for i, id := range s.order {
+            if s.receipts[id].State == "processed" {
+                delete(s.receipts, id)
+                delete(s.messages, id)
+                s.order = append(s.order[:i], s.order[i+1:]...)
+                break
+            }
+        }
+    }
+    if len(s.receipts) >= 256 {
         s.mu.Unlock()
         rejected.ReasonCode = "CLAUDE_CHANNEL_CAPACITY"
         return rejected
@@ -329,6 +339,7 @@ func (s *ClaudeChannelServer) deliver(ctx context.Context, message Message, read
     receipt := Receipt{MessageID: message.ID, State: "unconfirmed", ReasonCode: "CLAUDE_SEND_UNCONFIRMED"}
     s.receipts[message.ID] = receipt
     s.messages[message.ID] = message
+    s.order = append(s.order, message.ID)
     connection := s.connection
     s.mu.Unlock()
     body, _ := json.Marshal(message)

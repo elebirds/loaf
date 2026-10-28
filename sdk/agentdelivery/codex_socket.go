@@ -32,10 +32,8 @@ func openCodexSocket(ctx context.Context, endpoint string) (rpc.Transport, error
     if !filepath.IsAbs(endpoint) {
         return nil, ErrDestination
     }
-    // Native Codex may use a symlink to its short, private socket path.
-    info, err := os.Stat(endpoint)
-    if err != nil || info.Mode()&os.ModeSocket == 0 || info.Mode().Perm()&0077 != 0 {
-        return nil, ErrUnavailable
+    if err := privateSocket(endpoint, true); err != nil {
+        return nil, err
     }
     transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
         return (&net.Dialer{}).DialContext(ctx, "unix", endpoint)

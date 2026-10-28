@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "strings"
+    "time"
 
     "github.com/elebirds/loaf/internal/cli/interaction"
     "github.com/elebirds/loaf/internal/client"
@@ -63,6 +64,78 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
         return nil, asyncUnavailable("notify")
     }
     service := c.app.Notify
+    if strings.HasPrefix(path, "notify delivery ") || strings.HasPrefix(path, "notify subscription ") || path == "notify destination remove" || path == "notify prune" {
+        control, ok := service.(client.NotificationControlService)
+        if !ok {
+            return nil, asyncUnavailable(path)
+        }
+        switch path {
+        case "notify delivery show":
+            return control.ShowDelivery(ctx, g.Notify.Delivery.Show.ID)
+        case "notify delivery reconcile":
+            return control.ReconcileDelivery(ctx, g.Notify.Delivery.Reconcile.ID)
+        case "notify delivery resolve":
+            return control.ResolveDelivery(ctx, g.Notify.Delivery.Resolve.ID, g.Notify.Delivery.Resolve.As)
+        case "notify delivery resend":
+            v := g.Notify.Delivery.Resend
+            if !v.AllowDuplicate {
+                return nil, fault.Invalid("--allow-duplicate", "missing_argument", "notify_duplicate_required")
+            }
+            if c.policy.Batch && !v.Yes {
+                return nil, fault.Invalid("--yes", "missing_argument", "notify_resend_yes_required")
+            }
+            if !v.Yes {
+                detail, err := control.ShowDelivery(ctx, v.ID)
+                if err != nil {
+                    return detail, err
+                }
+                recipient := detail.Delivery.Destination + " (" + detail.Recipient.Kind + " " + detail.Recipient.SessionID + ")"
+                yes, err := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("notify_resend_confirm", map[string]any{"ID": v.ID, "Value": recipient}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: p.locale.Text("yes"), RejectLabel: p.locale.Text("no")})
+                if err != nil {
+                    return detail, err
+                }
+                if !yes {
+                    return nil, fault.New("NOTIFY_CANCELED", "notify_canceled", nil)
+                }
+            }
+            return control.ResendDelivery(ctx, v.ID)
+        case "notify subscription show":
+            return control.ShowSubscription(ctx, g.Notify.Subscription.Show.ID)
+        case "notify subscription disable":
+            return control.ChangeSubscription(ctx, g.Notify.Subscription.Disable.ID, "disabled")
+        case "notify subscription enable":
+            return control.ChangeSubscription(ctx, g.Notify.Subscription.Enable.ID, "enabled")
+        case "notify subscription remove":
+            return control.ChangeSubscription(ctx, g.Notify.Subscription.Remove.ID, "removed")
+        case "notify destination remove":
+            name := g.Notify.Destination.Remove.Name
+            err := control.RemoveDestination(ctx, name)
+            return destinationRemoval{Name: name, Removed: err == nil}, err
+        case "notify prune":
+            v := g.Notify.Prune
+            before, err := time.Parse(time.RFC3339Nano, v.Before)
+            if err != nil {
+                return nil, fault.Invalid("--before", "invalid_value", "notify_before_invalid")
+            }
+            if !v.DryRun && c.policy.Batch && !v.Yes {
+                return nil, fault.Invalid("--yes", "missing_argument", "notify_prune_yes_required")
+            }
+            preview, err := control.Prune(ctx, client.PruneInput{Before: before, DryRun: true})
+            if err != nil || v.DryRun {
+                return preview, err
+            }
+            if !v.Yes {
+                yes, err := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("notify_prune_confirm", map[string]any{"Count": preview.Deliveries, "Total": preview.Inbox}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: p.locale.Text("yes"), RejectLabel: p.locale.Text("no")})
+                if err != nil {
+                    return preview, err
+                }
+                if !yes {
+                    return preview, fault.New("NOTIFY_CANCELED", "notify_canceled", nil)
+                }
+            }
+            return control.Prune(ctx, client.PruneInput{Before: before})
+        }
+    }
     switch path {
     case "notify bind":
         if !g.Notify.Bind.Current {
@@ -83,7 +156,7 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
         return service.Destinations(ctx)
     case "notify destination add":
         v := g.Notify.Destination.Add
-        destination := agentdelivery.Destination{Kind: v.Kind, Endpoint: v.Endpoint, SessionID: v.Session, CWD: v.CWD}
+        destination := agentdelivery.Destination{Kind: v.Kind, Endpoint: v.Endpoint, SessionID: v.Session, CWD: v.CWD, BearerRef: v.BearerEnv, AllowInsecureHTTP: v.AllowInsecureHTTP}
         if destination.Validate() != nil {
             return nil, fault.Invalid("--kind/--session/--endpoint", "invalid_value", "notify_destination_invalid")
         }
@@ -99,7 +172,10 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
         }
         return service.Subscribe(ctx, client.SubscribeInput{Subject: subject, Source: v.Source, Target: g.Target, Destinations: v.Destination, Replay: v.Replay, Policy: c.policy})
     case "notify subscriptions":
-        return service.Subscriptions(ctx)
+        if err := boundedAsyncLimit(g.Notify.Subscriptions.Limit); err != nil {
+            return nil, err
+        }
+        return service.ListSubscriptions(ctx, client.SubscriptionListInput{After: g.Notify.Subscriptions.After, Limit: g.Notify.Subscriptions.Limit})
     case "notify", "notify deliveries":
         if err := boundedAsyncLimit(g.Notify.Deliveries.Limit); err != nil {
             return nil, err
@@ -206,4 +282,9 @@ type queueCleanResult struct {
     DryRun bool         `json:"dry_run"`
     IDs    []string     `json:"request_ids"`
     Result queue.Result `json:"result"`
+}
+
+type destinationRemoval struct {
+    Name    string `json:"name"`
+    Removed bool   `json:"removed"`
 }

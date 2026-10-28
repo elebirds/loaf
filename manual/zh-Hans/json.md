@@ -61,7 +61,7 @@
 | `events list` | 绑定来源的 events、source_id、next_cursor、has_more；事件保留原来源身份 |
 | `notify destination list`、`notify subscriptions`、`notify deliveries` | 安全的目的地、订阅或投递行；派发状态与 SDK 证据分开 |
 | `notify bind NAME --current` | 只读验证当前线程并保存后的安全 destination 信息，以及 verified_at 时间 |
-| `notify serve --once` | received/attempted/accepted/unconfirmed/pending 计数 |
+| `notify serve --once` | received/attempted/accepted/unconfirmed/pending/rejected 计数 |
 | `queue submit` | 队列 request、可选 Run 观察或离线 preview；入队不代表执行接受 |
 | 其他队列查询/控制 | request(s)、共享额度 status 或明确已删除的 cleaned ID |
 | `queue clean` | 明确的 dry_run、request_ids 和队列 result |
@@ -136,3 +136,8 @@ loaf help run --json
 - [已接管但观察失败](../examples/accepted-unreachable.json)：CLI 退出 1，保留原 ID。
 - [部分历史查询成功](../examples/partial-history.json)：CLI 退出 1，保留两行。
 - [远端结果已验证但本地保存失败](../examples/state-error.json)：CLI 退出 2，保留已验证结果。
+
+通知订阅返回 `status` 与逐绑定 `sources`。delivery show 返回安全的冻结正文、尝试、接收方元数据及 parent/resolution 关联；不返回私有 endpoint 或凭据值。人工处置不改写 SDK 回执。
+
+`notify subscriptions` 返回分页对象 `subscriptions`、`has_more` 和可选 `next_after`，
+使用 `--after`、`--limit` 继续。多来源订阅仅分别返回来源诊断，不混合来源时间判断恢复。

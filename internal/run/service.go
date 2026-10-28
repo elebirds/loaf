@@ -358,7 +358,7 @@ func (s Service) Observe(ctx context.Context, ref task.RunRef, wait time.Duratio
     result.ObservedAt = time.Now().UTC()
     result.Log = &observed.Log
     queueAccepted := ref.QueueRequestID != "" && accepted(ref, observed.Record) && observed.Record.Request.AttemptedAt != nil && !observed.Record.Request.AttemptedAt.IsZero()
-    if (ref.Submission == "uncertain" || ref.Submission == "preparing" && queueAccepted) && result.Status != "unknown" && accepted(ref, observed.Record) {
+    if ref.Submission == "uncertain" && result.Status != "unknown" && accepted(ref, observed.Record) || queueAccepted && (ref.Submission == "preparing" || ref.Submission == "uncertain") {
         // Confirm the saved ID after a successful observation. This changes
         // only its local submission locator, never sends another start.
         bound.Submission = "submitted"

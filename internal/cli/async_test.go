@@ -35,10 +35,11 @@ func (f *fakeEvents) List(_ context.Context, in client.EventListInput) (event.Pa
 }
 
 type fakeNotify struct {
-    destination  client.DestinationInput
-    subscription client.SubscribeInput
-    serveInput   client.NotifyServeInput
-    serveCalls   int
+    destination   client.DestinationInput
+    subscription  client.SubscribeInput
+    serveInput    client.NotifyServeInput
+    serveCalls    int
+    subscriptions []client.Subscription
 }
 
 func (f *fakeNotify) PutDestination(_ context.Context, in client.DestinationInput) (client.DestinationRecord, error) {
@@ -53,6 +54,9 @@ func (f *fakeNotify) Subscribe(_ context.Context, in client.SubscribeInput) (cli
     return client.Subscription{ID: "sub_1", Subject: in.Subject, Source: in.Source, Destinations: in.Destinations}, nil
 }
 func (f *fakeNotify) Subscriptions(context.Context) ([]client.Subscription, error) {
+    if f.subscriptions != nil {
+        return f.subscriptions, nil
+    }
     return []client.Subscription{}, nil
 }
 func (f *fakeNotify) Deliveries(context.Context, int) ([]client.Delivery, error) {
@@ -295,6 +299,43 @@ type failAfterWriter struct {
 }
 
 func (w *failAfterWriter) Write(p []byte) (int, error) { w.calls++; return 0, io.ErrClosedPipe }
+
+func TestSubscriptionsRetainSourceSyncAndFailureTimes(t *testing.T) {
+    synced := time.Date(2026, 10, 28, 2, 0, 0, 0, time.UTC)
+    failed := synced.Add(-time.Hour)
+    row := client.Subscription{ID: "sub_1", Subject: event.Subject{Kind: "run", ID: "r_1"}, Source: "project", Destinations: []string{"research"}, LastSyncedAt: &synced, SourceError: "SSH_FAILED", SourceErrorAt: &failed}
+    for _, lang := range []string{"en", "zh-Hans"} {
+        o := fixture(t)
+        o.Notify = &fakeNotify{subscriptions: []client.Subscription{row}}
+        code, out, stderr := run(t, o, "--lang", lang, "notify", "subscriptions")
+        if code != 0 || stderr != "" {
+            t.Fatal(code, out, stderr)
+        }
+        l, _ := i18n.New(lang, nil)
+        for _, detail := range []string{
+            "sub_1  run:r_1  project  research",
+            l.Text("notify_source_synced", map[string]any{"Value": synced.Format(time.RFC3339)}),
+            l.Text("notify_source_error_at", map[string]any{"Value": failed.Format(time.RFC3339), "Code": "SSH_FAILED"}),
+        } {
+            if !strings.Contains(out, detail) {
+                t.Fatal(out, detail)
+            }
+        }
+        code, out, stderr = run(t, o, "--lang", lang, "notify", "subscriptions", "--json")
+        var result struct {
+            Data []client.Subscription `json:"data"`
+        }
+        if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &result) != nil || len(result.Data) != 1 || !reflect.DeepEqual(result.Data[0], row) {
+            t.Fatal(code, out, stderr)
+        }
+        undated := row
+        undated.LastSyncedAt, undated.SourceErrorAt = nil, nil
+        buffer := &bytes.Buffer{}
+        if err := printSubscription(buffer, undated, l); err != nil || !strings.Contains(buffer.String(), l.Text("notify_source_error", map[string]any{"Code": "SSH_FAILED"})) || strings.Contains(buffer.String(), "2026-") {
+            t.Fatal(buffer.String(), err)
+        }
+    }
+}
 
 func TestHumanDeliveryShowsDispatchAndReceiptSeparately(t *testing.T) {
     l, _ := i18n.New("en", nil)

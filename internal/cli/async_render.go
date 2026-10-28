@@ -117,6 +117,22 @@ func printDestination(out io.Writer, r client.DestinationRecord, l *i18n.Localiz
 
 func printSubscription(out io.Writer, r client.Subscription, l *i18n.Localizer) error {
     _, err := fmt.Fprintf(out, "%s  %s:%s  %s  %s\n", r.ID, r.Subject.Kind, r.Subject.ID, r.Source, strings.Join(r.Destinations, ", "))
+    if err != nil {
+        return err
+    }
+    if r.LastSyncedAt != nil {
+        if _, err = fmt.Fprintln(out, "  "+l.Text("notify_source_synced", map[string]any{"Value": r.LastSyncedAt.Format(time.RFC3339)})); err != nil {
+            return err
+        }
+    }
+    if r.SourceError != "" {
+        id, params := "notify_source_error", map[string]any{"Code": r.SourceError}
+        if r.SourceErrorAt != nil {
+            id = "notify_source_error_at"
+            params["Value"] = r.SourceErrorAt.Format(time.RFC3339)
+        }
+        _, err = fmt.Fprintln(out, "  "+l.Text(id, params))
+    }
     return err
 }
 

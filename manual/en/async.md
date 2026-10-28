@@ -119,6 +119,11 @@ default to `project`; select `--source resources` for cloud facts or `--source
 queue` for admission facts. Retained matches are included by default;
 `--replay=false` selects future facts only.
 
+`notify subscriptions` keeps the last successful source-sync time and the last
+source-query error code/time separately, including after a later successful
+sync. Compare those timestamps when checking recovery. A source-query failure
+is not a destination rejection or an Agent-processing result.
+
 Delivery records separate application dispatch state from SDK evidence.
 `written` means transport output, `accepted` means destination acknowledgment,
 and `processed` requires processing evidence. Neither a socket write nor an

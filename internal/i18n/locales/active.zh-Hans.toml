@@ -2178,3 +2178,12 @@ other = "当前开启 Claude 会话的唯一标签；目的地绑定需使用同
 
 [notify_channel_native]
 other = "Claude Channel 使用原生 MCP 标准输入/输出，不使用 Loaf JSON 或 NDJSON。请去掉 --json 和 --trace；诊断写入 stderr。"
+
+[notify_source_synced]
+other = "最近来源同步：{{.Value}}。"
+
+[notify_source_error]
+other = "上次来源查询错误：{{.Code}}。"
+
+[notify_source_error_at]
+other = "上次来源查询错误（{{.Value}}）：{{.Code}}。"

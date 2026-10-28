@@ -44,6 +44,9 @@ explicit foreground operation and never follows from receiving a notification.
 Event sources are local inbox, resources, remote project and remote queue.
 Keep each source cursor with its database incarnation; row limits are 1–1000.
 Continuous `notify serve --json` is NDJSON, while `--once` returns one result.
+Subscriptions retain `last_synced_at` and `source_error`/`source_error_at`
+independently; compare times before treating a retained error as current.
+Source-query failure is separate from delivery or Agent-processing evidence.
 Ctrl-C stops the Bridge, not remote work. Remote facts can be collected after
 local disconnection while their disk remains intact.
 

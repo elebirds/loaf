@@ -106,6 +106,10 @@ loaf notify subscriptions
 订阅默认来源为 `project`；云事实使用 `--source resources`，入队派发事实使用
 `--source queue`。默认包含保留的匹配事件；`--replay=false` 仅订阅之后的事实。
 
+`notify subscriptions` 分别保留最近成功同步时间、上次来源查询错误的稳定 code 和时间，
+之后同步成功也不会抹去旧错误；判断恢复时应比较两类时间。
+来源查询失败不是目的地拒绝，也不是 Agent 处理结果。
+
 投递记录分别保留应用派发状态和 SDK 证据。`written` 仅表示已写入传输，
 `accepted` 表示目的地明确接收，`processed` 需要处理证据。
 Socket 写入或普通 Webhook 接收不能证明 Agent 已处理。

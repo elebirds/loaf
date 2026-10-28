@@ -99,6 +99,18 @@ type NotificationService interface {
     Serve(context.Context, NotifyServeInput, func(Delivery) error) (NotifyServeResult, error)
 }
 
+// ChannelInput binds an explicitly enabled Claude MCP session to a private socket.
+type ChannelInput struct {
+    Socket    string
+    SessionID string
+}
+
+// ChannelService runs only the native MCP stdio protocol on the supplied streams.
+// It is optional and does not extend the durable notification service contract.
+type ChannelService interface {
+    Channel(context.Context, ChannelInput, Streams) error
+}
+
 // QueueEnableInput explicitly enables machine/user admission with fixed slots.
 type QueueEnableInput struct {
     Target *string

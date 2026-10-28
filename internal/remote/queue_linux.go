@@ -228,7 +228,12 @@ func validateQueueExecution(q queue.Request, e queue.Execution) error {
 }
 
 func queuedExecution(e queuestate.Entry, action string) wire.Request {
-    return wire.Request{FormatVersion: wire.FormatVersion, Version: e.Execution.Version, Action: action, Root: e.Execution.Root, ProjectID: e.Request.ProjectID, RunID: e.Request.RunID, Args: slices.Clone(e.Execution.Args), Setup: e.Execution.Setup, Env: maps.Clone(e.Execution.Env), Outputs: slices.Clone(e.Execution.Outputs)}
+    req := wire.Request{FormatVersion: wire.FormatVersion, Version: e.Execution.Version, Action: action, Root: e.Execution.Root, ProjectID: e.Request.ProjectID, RunID: e.Request.RunID, Args: slices.Clone(e.Execution.Args), Setup: e.Execution.Setup, Env: maps.Clone(e.Execution.Env), Outputs: slices.Clone(e.Execution.Outputs)}
+    if action == "launch" {
+        req.QueueRequestID = e.Request.ID
+        req.AttemptedAt = e.Request.AttemptedAt
+    }
+    return req
 }
 
 // QueueEvents reads the machine queue source independently of any Run.
@@ -306,6 +311,9 @@ func QueueRunGuard(req wire.Request, launching bool) error {
     if launching {
         if e.Request.State != "dispatching" || !e.Attempted {
             return errors.New("QUEUE_NO_START")
+        }
+        if req.QueueRequestID != e.Request.ID || req.AttemptedAt == nil || e.Request.AttemptedAt == nil || !req.AttemptedAt.Equal(*e.Request.AttemptedAt) {
+            return errors.New("QUEUE_IDENTITY_MISMATCH")
         }
         expected := queuedExecution(e, "launch")
         if !sameExecution(expected, req) {
@@ -424,6 +432,9 @@ func queueOutcome(e queuestate.Entry, r *wire.RunRecord) coordinator.Outcome {
         return coordinator.Outcome{Code: "QUEUE_DISPATCH_UNCONFIRMED"}
     }
     if !sameExecution(r.Request, queuedExecution(e, "launch")) {
+        return coordinator.Outcome{Code: "QUEUE_RUN_MISMATCH"}
+    }
+    if r.Request.QueueRequestID != e.Request.ID || r.Request.AttemptedAt == nil || e.Request.AttemptedAt == nil || !r.Request.AttemptedAt.Equal(*e.Request.AttemptedAt) {
         return coordinator.Outcome{Code: "QUEUE_RUN_MISMATCH"}
     }
     if r.Status == "unknown" {

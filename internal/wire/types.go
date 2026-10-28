@@ -22,24 +22,26 @@ var Version = "dev"
 
 // Request is one SSH stdin control document. Args are never interpreted as Shell code.
 type Request struct {
-    Events        *event.ReadInput  `json:"events,omitempty"`
-    Queue         *queue.Command    `json:"queue,omitempty"`
-    FormatVersion int               `json:"format_version"`
-    Version       string            `json:"version"`
-    Action        string            `json:"action"`
-    Root          string            `json:"root,omitempty"`
-    ProjectID     string            `json:"project_id,omitempty"`
-    RunID         string            `json:"run_id,omitempty"`
-    Args          []string          `json:"args,omitempty"`
-    Setup         string            `json:"setup,omitempty"`
-    Env           map[string]string `json:"env,omitempty"`
-    WaitMillis    int64             `json:"wait_millis,omitempty"`
-    Tail          int               `json:"tail,omitempty"`
-    GraceMillis   *int64            `json:"grace_millis,omitempty"`
-    Outputs       []string          `json:"outputs,omitempty"`
-    Depth         int               `json:"depth,omitempty"`
-    Limit         int               `json:"limit,omitempty"`
-    Resume        string            `json:"resume,omitempty"`
+    Events         *event.ReadInput  `json:"events,omitempty"`
+    Queue          *queue.Command    `json:"queue,omitempty"`
+    FormatVersion  int               `json:"format_version"`
+    Version        string            `json:"version"`
+    Action         string            `json:"action"`
+    Root           string            `json:"root,omitempty"`
+    ProjectID      string            `json:"project_id,omitempty"`
+    RunID          string            `json:"run_id,omitempty"`
+    QueueRequestID string            `json:"queue_request_id,omitempty"`
+    AttemptedAt    *time.Time        `json:"attempted_at,omitempty"`
+    Args           []string          `json:"args,omitempty"`
+    Setup          string            `json:"setup,omitempty"`
+    Env            map[string]string `json:"env,omitempty"`
+    WaitMillis     int64             `json:"wait_millis,omitempty"`
+    Tail           int               `json:"tail,omitempty"`
+    GraceMillis    *int64            `json:"grace_millis,omitempty"`
+    Outputs        []string          `json:"outputs,omitempty"`
+    Depth          int               `json:"depth,omitempty"`
+    Limit          int               `json:"limit,omitempty"`
+    Resume         string            `json:"resume,omitempty"`
 }
 
 // RunRecord is persisted by the remote execution owner.

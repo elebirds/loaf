@@ -5,6 +5,8 @@ package agentdelivery
 import (
     "context"
     "errors"
+    "net/url"
+    "path/filepath"
     "strings"
     "unicode"
 )
@@ -13,6 +15,8 @@ var (
     ErrDestination = errors.New("invalid delivery destination")
     ErrMessage     = errors.New("invalid delivery message")
     ErrUnsupported = errors.New("delivery capability is unsupported")
+    ErrUnavailable = errors.New("delivery destination is unavailable")
+    ErrUnconfirmed = errors.New("delivery outcome is unconfirmed")
 )
 
 // Destination addresses one explicit integration mode and session.
@@ -31,14 +35,24 @@ func (d Destination) Validate() error {
         if !validID(d.SessionID) {
             return ErrDestination
         }
+        if d.Endpoint != "" && !filepath.IsAbs(d.Endpoint) {
+            return ErrDestination
+        }
+        if d.Kind == "claude-channel" && d.Endpoint == "" {
+            return ErrDestination
+        }
     case "webhook":
-        if d.Endpoint == "" {
+        address, err := url.Parse(d.Endpoint)
+        if err != nil || address.Host == "" || address.Scheme != "https" && address.Scheme != "http" || address.User != nil || address.Fragment != "" {
             return ErrDestination
         }
     default:
         return ErrDestination
     }
     if strings.ContainsAny(d.Endpoint+d.CWD, "\x00\r\n") {
+        return ErrDestination
+    }
+    if d.CWD != "" && !filepath.IsAbs(d.CWD) {
         return ErrDestination
     }
     return nil

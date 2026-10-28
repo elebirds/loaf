@@ -6,7 +6,9 @@ import (
     "database/sql"
     "os"
 
+    "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/state/db"
+    "github.com/elebirds/loaf/internal/state/eventlog"
 )
 
 // Store shares the local state database without depending on cloud policy types.
@@ -16,15 +18,33 @@ type Store struct {
 
 // Save commits the complete request before a provider mutation may proceed.
 func (s Store) Save(ctx context.Context, id, created string, data []byte) error {
+    return s.SaveEvent(ctx, id, created, data, "", nil)
+}
+
+// SaveEvent atomically saves the request and its public confirmed transition.
+func (s Store) SaveEvent(ctx context.Context, id, created string, data []byte, key string, fact *event.Envelope) error {
 
     database, err := db.Open(ctx, s.Path, true)
     if err != nil {
         return err
     }
     defer database.Close()
-    _, err = database.ExecContext(ctx, `INSERT INTO cloud_requests(id,created_at,data) VALUES(?,?,?)
+    tx, err := database.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback()
+    _, err = tx.ExecContext(ctx, `INSERT INTO cloud_requests(id,created_at,data) VALUES(?,?,?)
         ON CONFLICT(id) DO UPDATE SET data=excluded.data`, id, created, data)
-    return err
+    if err != nil {
+        return err
+    }
+    if fact != nil {
+        if _, err = eventlog.Append(ctx, tx, key, *fact); err != nil {
+            return err
+        }
+    }
+    return tx.Commit()
 
 }
 

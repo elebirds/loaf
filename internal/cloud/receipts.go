@@ -13,6 +13,7 @@ import (
     "sort"
     "time"
 
+    "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/state/receipts"
     "golang.org/x/sys/unix"
@@ -96,7 +97,36 @@ func (s Receipts) Save(r Receipt) error {
     if err != nil {
         return err
     }
-    return s.store().Save(context.Background(), r.ID, r.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z"), data)
+    return s.store().SaveEvent(context.Background(), r.ID, r.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z"), data, "cloud:"+r.ID+":"+r.Status, r.publicEvent())
+}
+
+func (r Receipt) publicEvent() *event.Envelope {
+    kind := ""
+    switch {
+    case r.Status == "uncertain":
+        kind = "resource.attention_required"
+    case r.Operation == "acquire" && r.Status == "created":
+        kind = "resource.acquired"
+    case r.Operation == "acquire" && r.Status == "ready":
+        kind = "resource.ready"
+    case r.Operation == "start" && r.Status == "completed":
+        kind = "resource.started"
+    case r.Operation == "stop" && r.Status == "completed":
+        kind = "resource.stopped"
+    }
+    if kind == "" {
+        return nil
+    }
+    e := &event.Envelope{Type: kind, Subject: event.Subject{Kind: "resource_operation", ID: r.ID}, Correlation: event.Correlation{CloudRequestID: r.ID}, Data: event.Data{Status: r.Status}, OccurredAt: time.Now().UTC()}
+    if r.Status == "uncertain" {
+        e.Data.Code = "CLOUD_UNCONFIRMED"
+    }
+    if r.Instance != nil {
+        e.Subject = event.Subject{Kind: "resource", ID: r.Instance.Provider + ":" + r.Instance.Product + ":" + r.Instance.ID}
+        e.Data.InstanceID = r.Instance.ID
+        e.Data.Product = r.Instance.Product
+    }
+    return e
 }
 
 func decodeReceipt(data []byte) (Receipt, error) {

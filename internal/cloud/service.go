@@ -127,6 +127,8 @@ func (s *Service) Watch(ctx context.Context, p Provider, plan Plan, limit int, e
 
 // AcquireInput is one explicitly authorized request for at most one resource.
 type AcquireInput struct {
+    // BeforeMutation records an optional waiting relation before allocation.
+    BeforeMutation     func(context.Context, Receipt) error
     Account            string
     Settings           Account
     Target, RemoteBase string
@@ -207,6 +209,11 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
             }
             if err := s.Receipts.Save(result); err != nil {
                 return err
+            }
+            if in.BeforeMutation != nil {
+                if err := in.BeforeMutation(ctx, result); err != nil {
+                    return err
+                }
             }
             if !hasInventory {
                 if err := emitEvent(emit, Event{Type: "allocation_attempt", RequestID: result.ID}); err != nil {

@@ -70,6 +70,22 @@ type Envelope struct {
     Data         Data        `json:"data"`
 }
 
+// Matches includes a fact explicitly correlated to the requested stable object.
+func (e Envelope) Matches(subject Subject) bool {
+    if e.Subject == subject {
+        return true
+    }
+    switch subject.Kind {
+    case "run":
+        return e.Correlation.RunID == subject.ID
+    case "queue_request":
+        return e.Correlation.QueueRequestID == subject.ID
+    case "resource_operation":
+        return e.Correlation.CloudRequestID == subject.ID
+    }
+    return false
+}
+
 // Validate checks persisted event identity and bounded public values.
 func (e Envelope) Validate() error {
     if e.EventVersion != Version || e.DataVersion != 1 || !identifier(e.ID) || !identifier(e.SourceID) || e.Sequence == 0 || e.OccurredAt.IsZero() || e.Subject.Validate() != nil {

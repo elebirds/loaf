@@ -14,6 +14,8 @@ import (
     "syscall"
     "time"
 
+    "github.com/elebirds/loaf/internal/event"
+    "github.com/elebirds/loaf/internal/state/eventlog"
     "github.com/elebirds/loaf/internal/wire"
     "modernc.org/sqlite"
 )
@@ -47,6 +49,7 @@ CREATE TABLE cleanup_receipts (
     root TEXT NOT NULL, project_id TEXT NOT NULL, summary TEXT NOT NULL,
     cleaned_at TEXT, device TEXT NOT NULL, inode TEXT NOT NULL
 );
+` + eventlog.Schema + `
 PRAGMA application_id=1280262482;
 PRAGMA user_version=2;`
 
@@ -304,7 +307,12 @@ func (s *Store) SaveRun(r *wire.RunRecord) error {
         return errors.New("WRITE_FAILED")
     }
     args := append(values[1:], r.Request.RunID)
-    result, err := s.db.Exec(`UPDATE runs SET format_version=?,request=?,status=?,phase=?,created_at=?,completed_at=?,supervisor_pid=?,supervisor_start=?,boot_id=?,child_pid=?,exit_code=?,signal=?,reason=?,copy_millis=?,stop_grace_millis=? WHERE run_id=? AND status NOT IN ('succeeded','failed','stopped')`, args...)
+    tx, err := s.db.Begin()
+    if err != nil {
+        return errors.New("WRITE_FAILED")
+    }
+    defer tx.Rollback()
+    result, err := tx.Exec(`UPDATE runs SET format_version=?,request=?,status=?,phase=?,created_at=?,completed_at=?,supervisor_pid=?,supervisor_start=?,boot_id=?,child_pid=?,exit_code=?,signal=?,reason=?,copy_millis=?,stop_grace_millis=? WHERE run_id=? AND status NOT IN ('succeeded','failed','stopped')`, args...)
     if err != nil {
         return errors.New("WRITE_FAILED")
     }
@@ -315,7 +323,35 @@ func (s *Store) SaveRun(r *wire.RunRecord) error {
     if n == 0 {
         return errors.New("RUN_EXISTS")
     }
+    fact := event.Envelope{Subject: event.Subject{Kind: "run", ID: r.Request.RunID}, Correlation: event.Correlation{ProjectID: r.Request.ProjectID, RunID: r.Request.RunID, QueueRequestID: r.Request.QueueRequestID}, Data: event.Data{Phase: r.Phase}}
+    if r.SupervisorPID > 0 {
+        fact.Type = "run.accepted"
+        fact.Data.Status = "accepted"
+        if _, err := eventlog.Append(context.Background(), tx, "run:"+r.Request.RunID+":accepted", fact); err != nil {
+            return errors.New("WRITE_FAILED")
+        }
+    }
+    if wire.Terminal(r.Status) {
+        fact.Type = "run." + r.Status
+        fact.Data.Status = r.Status
+        fact.Data.ExitCode = r.ExitCode
+        fact.Data.Signal = r.Signal
+        if r.CompletedAt != nil {
+            fact.OccurredAt = *r.CompletedAt
+        }
+        if _, err := eventlog.Append(context.Background(), tx, "run:"+r.Request.RunID+":terminal", fact); err != nil {
+            return errors.New("WRITE_FAILED")
+        }
+    }
+    if err := tx.Commit(); err != nil {
+        return errors.New("WRITE_FAILED")
+    }
     return nil
+}
+
+// Events reads source facts without creating a project or touching payloads.
+func (s *Store) Events(ctx context.Context, in event.ReadInput) (event.Page, error) {
+    return eventlog.Read(ctx, s.db, in)
 }
 
 func (s *Store) Stop(id string) (*int64, error) {

@@ -260,10 +260,13 @@ func definiteRejection(code string) bool {
 }
 
 func matching(ref task.RunRef, r *wire.RunRecord) bool {
-    return r != nil && r.FormatVersion == wire.FormatVersion && r.Request.Version == wire.Version && r.Request.RunID == ref.ID && r.Request.ProjectID == ref.ProjectID && r.Request.Root == ref.RemoteDir && (ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID)
+    if r == nil || r.FormatVersion != wire.FormatVersion || r.Request.Version != wire.Version || r.Request.RunID != ref.ID || r.Request.ProjectID != ref.ProjectID || r.Request.Root != ref.RemoteDir {
+        return false
+    }
+    return ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID || r.Request.QueueRequestID == "" && r.SupervisorPID == 0 && !wire.Terminal(r.Status) && (r.Phase == "copying" || r.Phase == "prepared")
 }
 func accepted(ref task.RunRef, r *wire.RunRecord) bool {
-    return matching(ref, r) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
+    return matching(ref, r) && (ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID) && (r.SupervisorPID > 0 || wire.Terminal(r.Status) && r.Phase != "copying")
 }
 
 // Select resolves an ID only within the current project. Ambiguity never falls
@@ -355,7 +358,7 @@ func (s Service) Observe(ctx context.Context, ref task.RunRef, wait time.Duratio
     result.ObservedAt = time.Now().UTC()
     result.Log = &observed.Log
     queueAccepted := ref.QueueRequestID != "" && accepted(ref, observed.Record) && observed.Record.Request.AttemptedAt != nil && !observed.Record.Request.AttemptedAt.IsZero()
-    if (ref.Submission == "uncertain" || ref.Submission == "preparing" && queueAccepted) && result.Status != "unknown" && accepted(ref, observed.Record) {
+    if ref.Submission == "uncertain" && result.Status != "unknown" && accepted(ref, observed.Record) || queueAccepted && (ref.Submission == "preparing" || ref.Submission == "uncertain") {
         // Confirm the saved ID after a successful observation. This changes
         // only its local submission locator, never sends another start.
         bound.Submission = "submitted"

@@ -109,8 +109,22 @@ func Read(ctx context.Context, database *sql.DB, in event.ReadInput) (event.Page
     query := "SELECT sequence,payload FROM event_log WHERE sequence>?"
     args := []any{after}
     if in.Subject != nil {
-        query += " AND subject_kind=? AND subject_id=?"
+        query += " AND ((subject_kind=? AND subject_id=?)"
         args = append(args, in.Subject.Kind, in.Subject.ID)
+        field := ""
+        switch in.Subject.Kind {
+        case "run":
+            field = "run_id"
+        case "queue_request":
+            field = "queue_request_id"
+        case "resource_operation":
+            field = "cloud_request_id"
+        }
+        if field != "" {
+            query += " OR json_extract(payload,'$.correlation." + field + "')=?"
+            args = append(args, in.Subject.ID)
+        }
+        query += ")"
     }
     query += " ORDER BY sequence LIMIT ?"
     args = append(args, in.Limit+1)

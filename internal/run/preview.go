@@ -24,5 +24,6 @@ type RunPreview struct {
     Pull              config.PullPolicy   `json:"pull"`
     Source            sources.Plan        `json:"source"`
     Metadata          task.RunMetadata    `json:"metadata"`
+    Notifications     []string            `json:"notifications,omitempty"`
     Provenance        map[string][]string `json:"provenance"`
 }

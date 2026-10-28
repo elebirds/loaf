@@ -28,6 +28,11 @@ CREATE TABLE run_metadata (run_id TEXT PRIMARY KEY REFERENCES runs(id), project_
 CREATE TABLE observations (run_id TEXT PRIMARY KEY REFERENCES runs(id), project_id TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE cloud_requests (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE queue_bindings (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, data BLOB NOT NULL);
+CREATE TABLE notify_destinations (name TEXT PRIMARY KEY, data BLOB NOT NULL);
+CREATE TABLE notify_subscriptions (id TEXT PRIMARY KEY, subject_kind TEXT NOT NULL, subject_id TEXT NOT NULL, source TEXT NOT NULL, data BLOB NOT NULL);
+CREATE TABLE notify_cursors (subscription_id TEXT PRIMARY KEY REFERENCES notify_subscriptions(id), source_id TEXT NOT NULL, cursor TEXT NOT NULL);
+CREATE TABLE notify_inbox (received_sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE, source_id TEXT NOT NULL, sequence INTEGER NOT NULL, payload BLOB NOT NULL, UNIQUE(source_id,sequence));
+CREATE TABLE notify_deliveries (id TEXT PRIMARY KEY, subscription_id TEXT NOT NULL REFERENCES notify_subscriptions(id), destination TEXT NOT NULL, event_id TEXT NOT NULL REFERENCES notify_inbox(event_id), stage TEXT NOT NULL, next_attempt_at TEXT NOT NULL, data BLOB NOT NULL, UNIQUE(subscription_id,destination,event_id));
 ` + eventlog.Schema + `
 PRAGMA application_id=1280262470;
 PRAGMA user_version=2;

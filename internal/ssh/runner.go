@@ -76,6 +76,13 @@ func (c *Client) uploadRunner(ctx context.Context, target config.Target, version
 
 // Control transports one JSON request without interpolating its fields into Shell.
 func (c *Client) Control(ctx context.Context, target config.Target, runner string, request wire.Request, noninteractive bool) (record *wire.RunRecord, err error) {
+    response, err := c.ControlResponse(ctx, target, runner, request, noninteractive)
+    return response.Record, err
+}
+
+// ControlResponse retains all structured partial results from a finite request.
+// New queue/event callers share the original version checks and mutation safety.
+func (c *Client) ControlResponse(ctx context.Context, target config.Target, runner string, request wire.Request, noninteractive bool) (response wire.Response, err error) {
     stage := request.Action
     if stage == "version" {
         stage = "runner_verify"
@@ -84,41 +91,54 @@ func (c *Client) Control(ctx context.Context, target config.Target, runner strin
     defer func() { finish(err) }()
     defer func() { err = fault.At(err, stage) }()
     if request.Version != wire.Version {
-        return nil, &RemoteError{Code: "VERSION_MISMATCH"}
+        return response, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     data, err := json.Marshal(request)
     if err != nil {
-        return nil, err
+        return response, err
     }
     var out []byte
     var sshErr error
-    switch request.Action {
-    case "version", "status", "logs":
+    if readOnlyControl(request) {
         out, sshErr = c.executeRead(ctx, target, Quote(runner), data, noninteractive)
-    default:
+    } else {
         out, sshErr = c.Execute(ctx, target, Quote(runner), bytes.NewReader(data), noninteractive)
     }
-    var response wire.Response
     if err := json.Unmarshal(out, &response); err != nil {
         if sshErr != nil {
-            return nil, sshErr
+            return wire.Response{}, sshErr
         }
-        return nil, errors.New("BAD_RESPONSE")
+        return wire.Response{}, errors.New("BAD_RESPONSE")
     }
     if response.FormatVersion != wire.FormatVersion {
-        return nil, &RemoteError{Code: "BAD_FORMAT"}
+        return wire.Response{}, &RemoteError{Code: "BAD_FORMAT"}
     }
     if response.Version != wire.Version {
-        return nil, &RemoteError{Code: "VERSION_MISMATCH"}
+        return wire.Response{}, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     if !response.OK {
         if response.Error == nil {
-            return response.Record, errors.New("BAD_RESPONSE")
+            return response, errors.New("BAD_RESPONSE")
         }
-        return response.Record, &RemoteError{response.Error.Code}
+        return response, &RemoteError{response.Error.Code}
     }
     if sshErr != nil {
-        return response.Record, sshErr
+        return response, sshErr
     }
-    return response.Record, nil
+    return response, nil
+}
+
+func readOnlyControl(request wire.Request) bool {
+    switch request.Action {
+    case "version", "status", "logs", "events":
+        return true
+    case "queue":
+        if request.Queue != nil {
+            switch request.Queue.Action {
+            case "list", "show", "status", "events", "clean-preview":
+                return true
+            }
+        }
+    }
+    return false
 }

@@ -14,7 +14,8 @@ import (
     "github.com/elebirds/loaf/internal/fault"
 )
 
-func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
+func (c *invocation) cloud(ctx context.Context, path string) (data any, err error) {
+    defer func() { c.cloudNavigation(path, data, err) }()
     g, p, r := c.grammar.Cloud, c.output, c.app.Resources
     selectInput := client.CloudSelect{Account: g.Account, Product: g.Product}
     if g.Product != nil && !cloud.ValidProduct(*g.Product) {
@@ -25,6 +26,54 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
         approval = c.approveCloud
     }
     switch path {
+    case "cloud profile save":
+        v := g.Profile.Save
+        plan, e := v.ResourceFlags.plan(g.Product)
+        if e != nil {
+            return nil, e
+        }
+        plan.Explicit.Continuous = v.Continuous
+        row, e := r.SaveResolvedCloudProfile(ctx, v.Name, plan, selectInput, v.Replace)
+        return cloudProfilesResult{Profiles: []client.CloudProfile{row}}, e
+    case "cloud profile remove":
+        v := g.Profile.Remove
+        if !v.Yes {
+            if c.policy.Batch {
+                return nil, fault.Invalid("--yes", "missing_argument", "cloud_confirm_required")
+            }
+            accepted, e := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("cloud_profile_remove_confirm", map[string]any{"Target": v.Name}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: p.locale.Text("yes"), RejectLabel: p.locale.Text("no")})
+            if e != nil {
+                return nil, e
+            }
+            if !accepted {
+                return nil, interaction.ErrCanceled
+            }
+        }
+        rows, e := r.RemoveCloudProfile(ctx, v.Name)
+        return cloudProfilesResult{Profiles: rows}, e
+    case "cloud account use":
+        return complete(r.UseCloudAccount(ctx, g.AccountCommands.Use.Name, g.Product))
+    case "cloud profile", "cloud profile list", "cloud profile show":
+        name := ""
+        if path == "cloud profile show" {
+            name = g.Profile.Show.Name
+        }
+        rows, e := r.CloudProfiles(ctx, name)
+        return cloudProfilesResult{Profiles: rows}, e
+    case "cloud catalog gpu", "cloud catalog region", "cloud catalog image":
+        v := g.Catalog.GPU
+        category := "gpu"
+        kind := ""
+        if path == "cloud catalog region" {
+            v = g.Catalog.Region
+            category = "region"
+        }
+        if path == "cloud catalog image" {
+            v = g.Catalog.Image.catalogQuery
+            kind = g.Catalog.Image.Kind
+            category = "image"
+        }
+        return r.CloudCatalog(ctx, selectInput, cloud.CatalogInput{Category: category, Kind: kind, Query: v.Query, Limit: v.Limit})
     case "cloud account", "cloud account list":
         return complete(r.CloudAccounts())
     case "cloud account add":
@@ -44,7 +93,11 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
     case "cloud list":
         return complete(r.CloudList(ctx, selectInput, g.List.Limit))
     case "cloud info":
-        return complete(r.CloudInfo(ctx, client.CloudInstanceInput{Select: selectInput, ID: g.Info.ID}))
+        id, e := c.chooseCloudInstance(ctx, &selectInput, g.Info.ID)
+        if e != nil {
+            return nil, e
+        }
+        return complete(r.CloudInfo(ctx, client.CloudInstanceInput{Select: selectInput, ID: id}))
     case "cloud credentials":
         return complete(r.CloudCredentials(ctx, client.CloudInstanceInput{Select: selectInput, ID: g.Credentials.ID, ShowPassword: g.Credentials.ShowPassword}))
     case "cloud start", "cloud stop":
@@ -52,8 +105,20 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
         if path == "cloud start" {
             v = g.Start
         }
-        result, err := r.CloudPower(ctx, client.CloudPowerInput{Select: selectInput, ID: v.ID, Start: path == "cloud start", Yes: v.Yes, Wait: v.Wait}, approval)
-        if result.Receipt != nil {
+        id, e := c.chooseCloudInstance(ctx, &selectInput, v.ID)
+        if e != nil {
+            return nil, e
+        }
+        runCtx, cancel := context.WithCancel(ctx)
+        defer cancel()
+        feedback := &cloudFeedback{call: c, mode: v.Progress, cancel: cancel, ctx: runCtx}
+        defer func() {
+            if e := feedback.close(); e != nil && err == nil {
+                err = e
+            }
+        }()
+        result, err := r.CloudPower(runCtx, client.CloudPowerInput{Select: selectInput, ID: id, Start: path == "cloud start", Yes: v.Yes, Wait: v.Wait, Progress: feedback.emit}, approval)
+        if result.Receipt != nil && (result.Receipt.ID != "" || result.Receipt.Instance != nil) {
             return *result.Receipt, err
         }
         if result.Reference.ID != "" {
@@ -85,30 +150,41 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
         }
         return result, err
     case "cloud acquire":
-        v := g.Acquire
-        plan, err := v.ResourceFlags.plan(g.Product)
-        if err != nil {
-            return nil, err
-        }
-        result, err := r.CloudAcquire(ctx, client.CloudAcquireInput{Select: selectInput, Plan: plan, Name: v.Name, Limit: v.Limit, CloneFrom: v.CloneFrom, Yes: v.Yes, AllowUnquoted: v.AllowUnquoted, RemoteBase: v.RemoteDir, ReadyTimeout: v.ReadyTimeout, Notify: v.Notify}, approval, func(event cloud.Event) error {
-            if p.json {
-                return nil
-            }
-            return c.cloudEvent(event)
-        })
-        if result.Binding != nil {
-            return *result.Binding, err
-        }
-        if result.Acquisition != nil {
-            return *result.Acquisition, err
-        }
-        if result.Plan != nil {
-            return *result.Plan, err
-        }
-        return nil, err
+        return c.acquireCloud(ctx)
     case "cloud bind":
         v := g.Bind
-        return r.CloudBind(ctx, client.CloudBindInput{Select: selectInput, Name: v.Name, Instance: v.Instance, Request: v.Request, RemoteBase: v.RemoteDir, Replace: v.Replace, ReadyTimeout: v.ReadyTimeout})
+        if v.Instance == "" && v.Request == "" {
+            id, e := c.chooseCloudInstance(ctx, &selectInput, "")
+            if e != nil {
+                return nil, e
+            }
+            v.Instance = id
+        }
+        if v.Name == "" && v.Request == "" && !c.policy.Batch {
+            name := &interaction.Field{Title: p.locale.Text("cloud_wizard_name"), Value: "gpu", Validate: func(s string) error {
+                if s == "" {
+                    return errors.New(p.locale.Text("cloud_name_required"))
+                }
+                return nil
+            }}
+            if e := c.input.Page(ctx, p.locale.Text("cloud_bind_short"), name); e != nil {
+                return nil, e
+            }
+            v.Name = name.Value
+        }
+        runCtx, cancel := context.WithCancel(ctx)
+        defer cancel()
+        feedback := &cloudFeedback{call: c, mode: v.Progress, cancel: cancel, ctx: runCtx}
+        defer func() {
+            if e := feedback.close(); e != nil && err == nil {
+                err = e
+            }
+        }()
+        result, bindErr := r.CloudBind(runCtx, client.CloudBindInput{Select: selectInput, Name: v.Name, Instance: v.Instance, Request: v.Request, RemoteBase: v.RemoteDir, Replace: v.Replace, ReadyTimeout: v.ReadyTimeout, Progress: feedback.emit})
+        if closeErr := feedback.close(); closeErr != nil {
+            return result, closeErr
+        }
+        return c.recoverCloudBinding(ctx, result, bindErr)
     case "cloud requests":
         if g.Requests.ID != "" {
             return r.CloudRequest(ctx, selectInput, g.Requests.ID)
@@ -123,23 +199,36 @@ func (c *invocation) cloud(ctx context.Context, path string) (any, error) {
 
 func (c *invocation) approveCloud(ctx context.Context, approval client.CloudApproval) error {
     p := c.output
-    fmt.Fprintln(p.err, p.locale.Text("cloud_approval_identity", map[string]any{"Account": approval.Account, "Product": approval.Product, "Target": approval.Target, "ID": approval.InstanceID, "Request": approval.RequestID}))
-    prompt := p.locale.Text("cloud_power_confirm", map[string]any{"Value": approval.Operation, "ID": approval.InstanceID})
-    if approval.Operation == "no-instance" {
-        prompt = p.locale.Text("cloud_no_instance_confirm")
+    target := approval.Target
+    if target == approval.InstanceID {
+        target = ""
     }
+    d := interaction.Document{Title: p.locale.Text("cloud_ui_approve_" + approval.Operation), Context: cloudScope(p.locale, approval.Account, approval.Product, target)}
+    if p.cloudWizard && approval.Operation == "acquire" {
+        d.Context = withCloudRoadmap(d.Context, p.locale, 4)
+    }
+    if approval.InstanceID != "" {
+        d.Rows = append(d.Rows, interaction.Row{Label: p.locale.Text("cloud_ui_label_instance"), Value: approval.InstanceID})
+    }
+    if approval.RequestID != "" {
+        d.Rows = append(d.Rows, interaction.Row{Label: p.locale.Text("cloud_ui_label_request"), Value: approval.RequestID})
+    }
+    d.Body = p.locale.Text("cloud_ui_notice_" + approval.Operation)
     if approval.Plan != nil {
-        printCloud(p.err, *approval.Plan, p.locale)
-        prompt = p.locale.Text("cloud_acquire_confirm")
+        d.Rows = cloudPlanRows(p.locale, *approval.Plan, p.regionCatalog)
         if approval.Plan.Clone != nil {
-            prompt = p.locale.Text("cloud_clone_confirm", map[string]any{"ID": approval.Plan.Clone.Instance.ID, "Region": approval.Plan.Clone.Region})
+            d.Body = p.locale.Text("cloud_ui_clone_notice") + "\n" + d.Body
         }
     }
-    yes, err := c.input.Confirm(ctx, interaction.Confirmation{Title: prompt, Kind: interaction.ConfirmTypedYes})
+    yes, err := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("cloud_ui_type_yes"), Summary: &d, Kind: interaction.ConfirmTypedYes})
     if err != nil {
+        if errors.Is(err, context.Canceled) || errors.Is(err, interaction.ErrCanceled) {
+            p.cloudDeclined = true
+        }
         return err
     }
     if !yes {
+        p.cloudDeclined = true
         return fault.New("BAD_CONFIG", "cloud_confirm_required", nil)
     }
     return nil
@@ -185,6 +274,7 @@ func (c *invocation) login(ctx context.Context) (any, error) {
 
 func (f ResourceFlags) plan(product *string) (client.CloudPlanInput, error) {
     profile := cloud.Profile{Product: product, GPUVendor: f.GPUVendor, GPUCount: f.GPUCount, MinCPUs: f.MinCPUs, MaxComputeHourlyPrice: f.MaxComputeHourlyPrice, Currency: f.Currency, WaitTimeout: f.Wait, PollInterval: f.PollInterval, AutoDL: cloud.AutoDLProfile{Image: f.Image, PrivateImageUUID: f.PrivateImage, GPUSpecID: f.GPUSpecID, GPUSpecUUID: f.GPUSpec, CUDAFrom: f.CUDAFrom, ExpandSystemDiskGB: f.ExpandSystemDisk, ExpandDataDiskGB: f.ExpandDataDisk}}
+    profile.MaxStorageDailyPrice = f.MaxStorageDailyPrice
     if f.GPUModel.Present {
         profile.GPUModels = f.GPUModel.Values
     }

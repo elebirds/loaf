@@ -51,7 +51,7 @@ func (s Receipts) store() receipts.Store {
 }
 
 func (r Receipt) validate() error {
-    if r.FormatVersion != 1 || !receiptID.MatchString(r.ID) || !localName.MatchString(r.Account) || r.Settings.Validate() != nil || r.CreatedAt.IsZero() || r.Deadline.Before(r.CreatedAt) || r.Attempts < 0 {
+    if r.FormatVersion != 1 || !receiptID.MatchString(r.ID) || !localName.MatchString(r.Account) || r.Settings.Validate() != nil || r.CreatedAt.IsZero() || (!r.Plan.Continuous && r.Deadline.Before(r.CreatedAt)) || (r.Plan.Continuous && (r.Operation != "acquire" || !r.Deadline.IsZero())) || r.Attempts < 0 {
         return invalid()
     }
     if r.Operation != "acquire" && r.Operation != "start" && r.Operation != "stop" {

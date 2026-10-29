@@ -216,7 +216,7 @@ func (a *api) request(ctx context.Context, method, path string, body any, mutati
         // Deliberately narrow: no message matching or retrying arbitrary API
         // errors. Unknown failure codes require human inspection, not a charge.
         switch envelope.Code {
-        case "NoStock", "GPUStockNotEnough":
+        case "NoStock", "GPUStockNotEnough", "MachineGpuNumUpdateFailed":
             failure.Code = "NO_STOCK"
             failure.NoStock = true
             failure.Unconfirmed = false
@@ -499,11 +499,14 @@ func (s *Standard) Create(ctx context.Context, plan cloud.Plan, offer *cloud.Off
     if offer == nil || !validID.MatchString(offer.ID) || (plan.AutoDL.Image == "") == (plan.AutoDL.PrivateImageUUID == "") || plan.AutoDL.Image != "" && !validID.MatchString(plan.AutoDL.Image) || plan.AutoDL.PrivateImageUUID != "" && !validID.MatchString(plan.AutoDL.PrivateImageUUID) || plan.AutoDL.ExpandSystemDiskGB != 0 {
         return cloud.Ref{}, &cloud.APIError{Code: "BAD_REQUEST"}
     }
-    compute, _, err := s.quote(ctx, plan, offer.ID)
+    compute, storage, err := s.quote(ctx, plan, offer.ID)
     if err != nil {
-        return cloud.Ref{}, err
+        return cloud.Ref{}, creationReadFailure(err)
     }
     if err := checkPrice(compute, plan.Requirements); err != nil {
+        return cloud.Ref{}, err
+    }
+    if err := checkStorage(storage, plan.Requirements); err != nil {
         return cloud.Ref{}, err
     }
     // Current ordinary-console request shape, independently checked against
@@ -520,12 +523,17 @@ func (s *Standard) Create(ctx context.Context, plan cloud.Plan, offer *cloud.Off
 // Search normalizes only fields whose units the adapter knows. Unrecognized
 // hardware fields remain unknown rather than guessing a model's specifications.
 func (s *Standard) Search(ctx context.Context, plan cloud.Plan, limit int) (cloud.InventoryPage, error) {
-    result := cloud.InventoryPage{Offers: []cloud.Offer{}, ObservedAt: time.Now().UTC()}
-    if limit < 1 || limit > 1000 {
+    return s.SearchWindow(ctx, plan, limit, 0)
+}
+
+func (s *Standard) SearchWindow(ctx context.Context, plan cloud.Plan, limit, offset int) (cloud.InventoryPage, error) {
+    result := cloud.InventoryPage{Offers: []cloud.Offer{}, ObservedAt: time.Now().UTC(), ScanOffset: offset}
+    if limit < 1 || limit > 1000 || offset < 0 || offset > 1000000 {
         return result, &cloud.APIError{Code: "BAD_REQUEST"}
     }
     size := min(100, limit)
-    for page := 1; result.Examined < limit; page++ {
+    skip := offset % size
+    for page := offset/size + 1; result.Examined < limit; page++ {
         models := append([]string{}, plan.Requirements.GPUModels...)
         regions := append([]string{}, plan.Requirements.Regions...)
         body := map[string]any{"charge_type": "payg", "default_order": true, "gpu_idle_num": plan.Requirements.GPUCount, "gpu_type_name": models, "region_sign_list": regions, "page_index": page, "page_size": size}
@@ -541,14 +549,20 @@ func (s *Standard) Search(ctx context.Context, plan cloud.Plan, limit int) (clou
         if json.Unmarshal(raw, &data) != nil || data.List == nil || len(data.List) > size {
             return result, &cloud.APIError{Code: "INVALID_RESPONSE"}
         }
-        take := min(len(data.List), limit-result.Examined)
+        rows := data.List[min(skip, len(data.List)):]
+        take := min(len(rows), limit-result.Examined)
         result.Examined += take
-        for _, o := range data.List[:take] {
+        for _, o := range rows[:take] {
             id := text(o, "machine_id")
             if !validID.MatchString(id) {
                 return result, &cloud.APIError{Code: "INVALID_RESPONSE"}
             }
             offer := cloud.Offer{ID: id, Model: text(o, "gpu_name"), Vendor: text(o, "chip_corp"), GPUCount: plan.Requirements.GPUCount, Region: text(o, "region_sign"), Source: "autodl:standard:machine/list", ObservedAt: result.ObservedAt}
+            offer.Architecture, offer.Driver, offer.HighestCUDA = text(o, "cpu_arch"), text(o, "driver_version"), text(o, "highest_cuda_version")
+            if image := plan.AutoDL.Compatibility; image != nil {
+                compatible := (image.Vendor == "" || strings.EqualFold(image.Vendor, offer.Vendor)) && (image.Architecture == "" || image.Architecture == offer.Architecture) && (image.CUDA == "" || cudaCompatible(offer.HighestCUDA, image.CUDA))
+                offer.ImageAvailable = &compatible
+            }
             if source := plan.Clone; source != nil {
                 compatible := strings.EqualFold(offer.Vendor, source.Vendor) && text(o, "cpu_arch") == source.Architecture && cudaCompatible(text(o, "highest_cuda_version"), source.CUDA)
                 offer.ImageAvailable = &compatible
@@ -584,6 +598,7 @@ func (s *Standard) Search(ctx context.Context, plan cloud.Plan, limit int) (clou
             }
             eligible := plan.Requirements
             eligible.MaxComputeHourlyPrice = nil
+            eligible.MaxStorageDailyPrice = nil
             if len(cloud.Match(offer, eligible)) == 0 {
                 offer.ComputeHourlyPrice, offer.StorageDailyPrice, err = s.quote(ctx, plan, id)
                 if err != nil {
@@ -592,14 +607,17 @@ func (s *Standard) Search(ctx context.Context, plan cloud.Plan, limit int) (clou
             }
             result.Offers = append(result.Offers, offer)
         }
-        if take < len(data.List) {
+        if take < len(rows) {
+            result.HasMore, result.NextOffset = true, offset+result.Examined
             return result, nil
         }
-        if len(data.List) < size || data.Total != nil && *data.Total <= result.Examined || data.MaxPage != nil && page >= *data.MaxPage {
-            result.Complete = true
-            break
+        if len(data.List) < size || data.Total != nil && *data.Total <= offset+result.Examined || data.MaxPage != nil && page >= *data.MaxPage {
+            result.Complete = offset == 0
+            return result, nil
         }
+        skip = 0
     }
+    result.HasMore, result.NextOffset = true, offset+result.Examined
     return result, nil
 }
 

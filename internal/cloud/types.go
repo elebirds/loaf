@@ -60,6 +60,7 @@ type Binding struct {
 
 // Instance is a public, deliberately allowlisted observation.
 type Instance struct {
+    Aliases         []string  `json:"aliases,omitempty"`
     Ref             Ref       `json:"instance"`
     Name            string    `json:"name,omitempty"`
     Status          string    `json:"status"`
@@ -80,6 +81,8 @@ type Connection struct {
 
 // Page reports coverage rather than presenting a truncated list as complete.
 type Page struct {
+    Account   string     `json:"account,omitempty"`
+    Product   string     `json:"product,omitempty"`
     Instances []Instance `json:"instances"`
     Examined  int        `json:"examined"`
     Complete  bool       `json:"complete"`
@@ -122,6 +125,9 @@ type CloneSource struct {
 // Offer retains unknown quantities as nil. GPU memory is per card, while Price
 // is the whole requested instance's compute fee per hour, excluding storage.
 type Offer struct {
+    Architecture       string    `json:"architecture,omitempty"`
+    Driver             string    `json:"driver,omitempty"`
+    HighestCUDA        string    `json:"highest_cuda,omitempty"`
     ID                 string    `json:"id"`
     Vendor             string    `json:"gpu_vendor,omitempty"`
     Model              string    `json:"gpu_model,omitempty"`
@@ -141,6 +147,9 @@ type Offer struct {
 
 // InventoryPage is one bounded catalog observation, not a reservation.
 type InventoryPage struct {
+    ScanOffset int       `json:"scan_offset,omitempty"`
+    NextOffset int       `json:"next_offset,omitempty"`
+    HasMore    bool      `json:"has_more,omitempty"`
     Offers     []Offer   `json:"offers"`
     Examined   int       `json:"examined"`
     Complete   bool      `json:"complete"`
@@ -148,15 +157,17 @@ type InventoryPage struct {
 }
 
 // APIError deliberately carries no response body, request token or password.
-// Only a confirmed mapped NoStock permits another allocation attempt.
+// Only a confirmed mapped NoStock permits retrying an allocation. A proven
+// pre-mutation read failure can instead resume monitoring without replaying one.
 type APIError struct {
-    Code        string
-    AuthStage   string
-    HTTPStatus  int
-    RetryAfter  time.Duration
-    Transient   bool
-    Unconfirmed bool
-    NoStock     bool
+    BeforeMutation bool
+    Code           string
+    AuthStage      string
+    HTTPStatus     int
+    RetryAfter     time.Duration
+    Transient      bool
+    Unconfirmed    bool
+    NoStock        bool
 }
 
 func (e *APIError) Error() string { return "cloud API: " + e.Code }

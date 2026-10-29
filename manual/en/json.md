@@ -70,6 +70,9 @@ per card. CLI memory floors use GiB; platform disk-expansion flags use GB.
 | Other queue queries/control | Request(s), shared capacity `status`, or confirmed `cleaned` IDs |
 | `queue clean` | Explicit `dry_run`, `request_ids` and queue `result` |
 | `cloud search` | Frozen plan, matches, rejections, observation time and pagination coverage |
+| `cloud catalog gpu/region/image` | Account/product, canonical items, examined/complete coverage and observation time; regions may include `data_center` grouping and a `public` visibility/usage flag, absent when unknown |
+| `cloud profile list/show` | Profile names/scopes and optionally the merged plan and field sources |
+| `cloud acquire --dry-run` | Local account/target/plan, field sources, pending live checks and optional pending clone inheritance |
 | `cloud acquire/bind` | Stage-dependent plan/receipt/binding, retaining known request and instance IDs on failure |
 | `cloud list/info/requests` | Bounded instance page, one instance, receipt list or explicit receipt respectively |
 | `cloud start/stop/reconcile` | Saved resource identity/receipt; acceptance is not power completion |
@@ -97,6 +100,8 @@ loaf help run --json
 - `commands`: child names and localized descriptions.
 - `examples`: argv arrays, including the `loaf` executable name.
 
+Cloud parameters also expose optional `group`, `enum`, `requires`, `conflicts_with`, `exactly_one_of` and `applicable_when` annotations. These describe relationships; effective profile values still need local validation.
+
 List format is `repeat` or `csv` when applicable. A static default is not the
 current effective project/user value. Actual submission provenance is available
 from `run --dry-run`. The historical `[ps].limit` configuration key is retained
@@ -109,6 +114,16 @@ omitted. Reasons identify unknown command/option, missing argument, invalid type
 or value, out-of-range, conflicts, invalid configuration, and replaced commands.
 No raw argv dump, source excerpt or secret value is included.
 `expected_version`/`actual_version` accompany task version mismatches.
+
+## Follow cloud operations without parsing prose
+
+Cloud envelopes optionally add `context` with operation, account/product, target, mode (`select` or `auto`), stage, request ID and instance ID. Applicable values are retained on failures. `next_actions` contains safe argv arrays in `command`, a stable `kind`, and `requires_confirmation`; suggestions do not grant authority. Existing stage-dependent `data` shapes and keys remain intact. Input errors can additionally expose `error.issues[]` with `argument` and `reason`.
+
+Use `cloud bind --request ID --json` to resume a known acquisition. An uncertain request instead needs inspection/reconciliation; do not repeat acquire. A later profile/account default change does not reinterpret the receipt.
+
+Default `--json` has no progress output. `cloud acquire/start/stop/bind --progress=json --json` opts into **stderr** NDJSON with `schema_version: 1`, `type: "progress"`, `operation`, `stage`, and applicable event fields (`request_id`, `instance`, `observation`, `plan`, `poll_count`, `allocation_attempts`, `elapsed_ms`, `next_check_at`, `code`). Counters describe polling cycles and entry into allocation attempts, including their final read-only recheck, not HTTP call counts or charges. An immediate stock recheck can make multiple read requests in one cycle. Each stderr line is a progress object, not a finite result envelope. Read the single stdout envelope for completion/error; stderr EOF or a `created` event does not prove SSH readiness. `NO_STOCK` is distinct from a temporary read retry.
+
+Continuous acquisition has `plan.continuous: true`; its saved `deadline` is the zero RFC3339 time, not a finite expiry. `wait_timeout` retains its configured value but does not limit this explicitly selected mode. Ordinary finite waiting and `--wait 0s` keep their existing semantics.
 
 ## Consume streams one line at a time
 
@@ -155,3 +170,6 @@ Notification subscriptions expose `status` and per-binding `sources`. Delivery s
 `notify subscriptions` returns a page object: `subscriptions`, `has_more`, and
 optional `next_after`. Use `--after` and `--limit` for continuation. Combined
 subscriptions expose per-source diagnostics instead of a cross-source aggregate.
+
+
+Cloud connection diagnostics add optional `error.failure_reason`, and progress may include `probe_attempts`, `failure_kind` and `failure_reason`. These are safe classifications, not raw SSH diagnostics. Inventory windows may include `scan_offset`, `next_offset` and `has_more`; a later window does not establish complete inventory coverage. Offline successful acquisition previews expose the canonical effective argv as `next_actions[].command`, without `--yes` or credentials. `cloud profile save/remove` return the existing profile result shape.

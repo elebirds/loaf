@@ -120,6 +120,7 @@ func (p *WebPro) Search(ctx context.Context, plan cloud.Plan, limit int) (cloud.
                 offer.DiskGiB = &disk
                 eligible := plan.Requirements
                 eligible.MaxComputeHourlyPrice = nil
+                eligible.MaxStorageDailyPrice = nil
                 if len(cloud.Match(offer, eligible)) == 0 {
                     offer.ComputeHourlyPrice, offer.StorageDailyPrice, err = p.quote(ctx, plan, *id, name)
                     if err != nil {
@@ -142,15 +143,16 @@ func (p *WebPro) Create(ctx context.Context, plan cloud.Plan, offer *cloud.Offer
     }
     // Quote again immediately before the one mutating call. A rejected or failed
     // quote is read-only and never makes a possibly duplicated order.
-    compute, _, err := p.quote(ctx, plan, spec, offer.Model)
+    compute, storage, err := p.quote(ctx, plan, spec, offer.Model)
     if err != nil {
-        return cloud.Ref{}, err
+        return cloud.Ref{}, creationReadFailure(err)
     }
     if compute == nil {
         return cloud.Ref{}, &cloud.APIError{Code: "PRICE_UNVERIFIABLE"}
     }
     checked := *offer
     checked.ComputeHourlyPrice = compute
+    checked.StorageDailyPrice = storage
     if len(cloud.Match(checked, plan.Requirements)) > 0 {
         return cloud.Ref{}, &cloud.APIError{Code: "OFFER_CHANGED"}
     }

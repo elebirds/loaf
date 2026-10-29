@@ -2,6 +2,97 @@
 
 [Home](../../README.md) · [Command reference](commands.md) · [简体中文](../zh-Hans/cloud.md)
 
+## Start with your cloud overview
+
+```bash
+loaf cloud
+```
+
+An interactive terminal opens **My instances, Find compute / rent, Requests needing attention, Accounts and profiles, Exit**. The header identifies the current account and Standard/Pro product. Switching is session-only; explicitly set a default to save it. The first page queries only that scope. Expired login still leaves local request recovery and account/login navigation available. JSON, noninteractive calls and explicit help remain help-only, with no implicit network access.
+
+Search, filter by state and refresh existing instances, retaining partial results and their coverage. Details offer binding/retry, native SSH, redacted connection details, project selection and applicable power actions. Power changes require separate confirmation; the menu observes them for two minutes. Direct commands still default to submission-only, including explicit `--wait 0s`; accepted is not completed.
+
+Pending requests prioritize uncertain creation, created-but-unconnected instances and unresolved power changes. Recovery uses the saved principal and resource, regardless of the menu scope. Associate a platform-verified instance or explicitly confirm that creation did not happen. Power recovery observes the original request without resubmitting it.
+
+## Rent a GPU in one guided flow
+
+```bash
+loaf cloud acquire
+```
+
+In an interactive terminal, the Huh wizard collects four groups of choices:
+
+1. **Compute:** search the actual GPU model names, choose the card count and allowed regions. Resource floors are optional advanced conditions.
+2. **Selection or automatic acquisition:** select a currently available host, or set a whole-instance hourly price cap and wait for matching stock.
+3. **Environment and storage:** select a base or personal image by its framework/Python/CUDA label, then choose disk expansion. Expanded storage has a separate daily price cap.
+4. **Review:** check the account, product, image, prices and conditions; choose an alias and optional post-ready actions. Type `yes` to authorize at most one instance.
+
+Regions are grouped by the platform's data center, with one choice per display area. Selecting an area includes all of its internal region IDs. A flag or profile restricted to particular IDs keeps that exact scope; only explicitly selecting the whole group expands it. `--region` and catalog JSON retain canonical IDs.
+
+With no region preference, the wizard preselects regions marked public by the platform. Enterprise regions remain visible and can be checked as needed. Existing settings take precedence, including an explicit empty list. Clearing all choices allows any region, including enterprise regions. Noninteractive commands keep their original semantics: no configured region condition means unrestricted, without the wizard's preselection.
+
+The header keeps the complete route visible: **Mode → GPUs → Host/conditions → Image/disk → Approve → Acquire → Connect**. `●` marks the current step, `✓` marks earlier completed choices, and `○` marks upcoming steps. Only the current step's fields expand; going back updates the position.
+
+Use arrows to navigate, `/` to search, Space to toggle multiple choices, Enter to continue, and Shift+Tab to move between fields. Each page offers back/cancel navigation where choices change. Ctrl+C cancels. A plain-terminal fallback uses numbered choices; Enter keeps the marked choice, comma-separated numbers select multiple entries, and `0` clears them. Existing flags and profiles prefill the wizard. Complete named commands retain their direct path; `--yes`, `--json` and noninteractive calls never enter it. A single saved account can be selected for this invocation without changing its global default. With no account, the wizard can return from native login to acquisition.
+
+A complete profile opens at review. Go back to change individual groups without losing the draft. Review also offers save-without-renting and an equivalent command without payment approval.
+
+**Selection fixes one candidate.** The review requotes that candidate with the chosen environment and storage. If stock or price changes, return to selection; Loaf never silently buys a different host. For web Pro, a candidate is a model/region/specification combination, not a physical host reservation. The first guided path supports pay-as-you-go, base/personal images; period billing, coupons and community-application creation are not offered.
+
+Compare price, GPU/VRAM, CPU, RAM, region and ID. Price ascending is the default; CPU/RAM descending put unknown values last. Refresh or load the next window. Standard scans stay within `--limit` per round and continue through later pages before wrapping. Windows collected at different times are not a complete snapshot. Later-page selections recheck the same ID in the same window; an exported `loaf-offer-v1:…` value is a discovery hint, not a reservation. Web Pro retains aggregate inventory semantics.
+
+**Automatic acquisition freezes conditions before waiting.** After authorization it polls and automatically requests a matching instance, without another purchase prompt. The foreground display shows the stage, elapsed time, next actual poll, poll/allocation counts and inventory coverage. The main view highlights the blocker and checked range; Tab shows technical details. Before allocation, press `e` to stop waiting and edit, then authorize again. Created or uncertain results only offer recovery of the original resource. Starting, disk-copying and SSH connection stages remain distinct. There is no estimated percentage for unknown stock arrival. The display's clock does not poll the provider.
+
+Forms and progress update in place, showing only the current stage. Inventory statistics disappear when SSH connection begins. Review the model, budget, environment and billing notice together on the approval page; technical IDs and rejection reasons stay in progress details. Completion leaves one result and a next-step command. If SSH is unconfirmed, that result retains the original instance and gives the command to resume its connection.
+
+`--continuous` explicitly waits until success or cancellation; `--wait 30m` is bounded, and `--wait 0s` still means one attempt. Do not combine `--continuous` with explicit `--wait`, or `--offer` with either monitoring mode. The client must remain running. Cancellation never shuts down an already created instance. New continuous/fixed-offer requests require a compute price cap; paid disk expansion also requires `--max-storage-daily-price`. Neither is a total-spend limit.
+
+### Discover choices and reuse preferences
+
+```bash
+loaf cloud catalog gpu --query 4090
+loaf cloud catalog region
+loaf cloud catalog image --query PyTorch
+loaf cloud catalog image --kind private
+loaf cloud account use autodl-main
+loaf cloud profile list
+loaf cloud profile show train
+loaf cloud profile save train --gpu-model 'RTX 4090' --image IMAGE --max-compute-hourly-price 3
+loaf cloud profile remove train --yes
+```
+
+Directories return canonical values, not live stock. `--query` searches names/IDs; `--limit` bounds returned items and coverage remains visible. Standard regions and Pro data centers are different values. The Pro region directory reports the known console subset as incomplete; developer-token Pro directories are unsupported. The wizard uses searchable valid image combinations rather than making up versions. Image metadata compatibility is checked for new fixed/continuous requests, not package installation or experiment dependencies.
+
+`profile save` stores effective preferences offline using existing precedence, even before renting; replacing a personal name needs `--replace`. `remove` deletes only the personal profile, with interactive confirmation or batch `--yes`. A same-named project profile remains effective. Profile views report sources and overrides without editing project files.
+
+The review can optionally select the ready machine for this project and save a personal profile under its alias. Saved preferences contain resource/image conditions, not accounts, instance IDs or payment approval. An existing profile is not silently replaced. Use `--profile` to prefill another acquisition.
+
+### Use the same workflow without prompts
+
+```bash
+# Offline local validation: no credentials, network, IDs, state or reservation.
+loaf cloud acquire gpu-a --profile train --dry-run --json
+
+# IMAGE is a canonical image ID from the appropriate directory.
+loaf cloud acquire gpu-a --account autodl-main \
+  --gpu-model 'RTX 4090' --image IMAGE \
+  --max-compute-hourly-price 2.50 --continuous --yes --json
+
+# Pin an offer returned by search; never substitute a cheaper candidate.
+loaf cloud acquire gpu-a --account autodl-main --offer OFFER_ID \
+  --image IMAGE --max-compute-hourly-price 2.50 --yes --json
+```
+
+Dry-run reports effective values, per-field sources, pending live checks and canonical round-trippable argv in `next_actions`, without credentials or `--yes`. Explicit zero, empty lists and false are preserved. Clone previews resolve a saved source alias locally; source image/region/disk inheritance remains pending live validation. A successful preview does not prove stock, a quote, clone readiness or SSH access. It is optional, not a prerequisite for acquisition.
+
+Finite JSON still has one stdout result. Default `--json` suppresses progress; opt in with `--progress=json` for versioned NDJSON on **stderr**. `--progress=plain` writes sparse stage updates and `none` suppresses runtime feedback. Cloud results add `context` and argv-style `next_actions` without replacing stage-specific `data`. Follow known request/instance IDs on failure:
+
+```bash
+loaf cloud bind --request REQUEST_ID --json
+```
+
+This recovers the alias and frozen resource from the receipt, never rents again. `cloud info`, `cloud start`, `cloud stop` and `cloud bind` can offer an instance picker when invoked interactively without an ID; noninteractive callers must supply exact IDs or bound aliases. Whole-instance power changes still require explicit confirmation.
+
 ## Acquire and connect AutoDL compute
 
 Existing SSH targets need no cloud account. For AutoDL, log in with a main account's phone number or the full `subuser@master-id` login. One verified session can access **ordinary instances** (`standard`) and **Pro** (`pro`), subject to the account's permissions. Password input is hidden; credentials are never accepted as command-line flags.
@@ -61,7 +152,12 @@ loaf run -- python3 train.py
 
 Cloud runner operations share one private, command-scoped OpenSSH master per bound instance and connection configuration. Connection details are resolved once while that master is healthy; its authenticated connection carries probes, runner requests, and native rsync. Loaf never borrows a pre-existing master or writes SSH configuration. Normal exit and cancellation close only this command's masters; a parent-lifetime pipe also prevents an orphaned persistent connection if the CLI is killed. Static SSH targets and foreground `exec`, `ssh`, and `forward` retain their original connection behavior.
 
-`bind` checks that the account can inspect this instance, saves the binding, then verifies authenticated SSH. `ready` means platform running + SSH authenticated + target saved, not Python/CUDA ready. `--ready-timeout` defaults to 2m (0s makes one bounded check). A created but unreachable instance may already be billing: keep its ID and fix its connection, rather than renting another. Retry a saved acquisition with `loaf cloud bind gpu-a --request <request-id>`; it never creates a replacement. An explicit `--replace` can rebind an alias; older runs still refresh their original instance's endpoint.
+`bind` checks that the account can inspect this instance, saves the binding, then verifies authenticated SSH. `ready` means platform running + SSH authenticated + target saved, not Python/CUDA ready. `acquire/bind --ready-timeout` defaults to 5m, capped at 10m; 0s makes one bounded check. A created but unreachable instance may already be billing: keep its ID and fix its connection, rather than renting another. Retry a saved acquisition with `loaf cloud bind --request <request-id>`; it never creates a replacement. An explicit `--replace` can rebind an alias; older runs still refresh their original instance's endpoint.
+
+
+Connection readiness runs only fixed `/bin/true` probes, at most ten seconds each. Transient connection and platform-read failures retry every five seconds. Trust, authentication and configuration failures immediately give a safe classification and action. Probe counts are separate from allocation attempts; ordinary foreground `exec` is never replayed.
+
+For first-host trust, interactive recovery opens a native OpenSSH fingerprint decision without password/key authentication, then strictly authenticates the same instance. A changed host key stops automatic connection and requires manual investigation, without a key-removal shortcut. After a timeout, continue checking the original instance, view redacted connection details, or keep the result and exit. Rebinding the same frozen identity is idempotent; a different resource still needs explicit `--replace`.
 
 ### Choose conditions in configuration or directly
 
@@ -103,7 +199,7 @@ loaf cloud acquire gpu-a --account autodl-main \
   --image your-image-uuid --wait 30m --yes
 ```
 
-Other conditions are `--gpu-vendor`, `--gpu-model`, `--min-cpus`, `--min-disk` and `--region`. Models and regions are exact platform labels/IDs; inspect search output rather than guessing them. Memory/disk CLI floors require the `GiB` suffix. Ordinary data-disk expansion uses `--expand-data-disk`; Pro system expansion uses `--expand-system-disk` (both use the platform's GB convention). Image pullability and dependency readiness are not verified before rental. Image settings are product-specific: `--image` selects an ordinary base-image UUID or a Pro image UUID. For a private image with either web-session product, use `--private-image` instead of `--image`, not both. Developer Pro uses its own image UUID.
+Other conditions are `--gpu-vendor`, `--gpu-model`, `--min-cpus`, `--min-disk` and `--region`. Models and regions are exact platform labels/IDs; use `cloud catalog` or the wizard rather than guessing them. Memory/disk CLI floors require the `GiB` suffix. Ordinary data-disk expansion uses `--expand-data-disk`; Pro system expansion uses `--expand-system-disk` (both use the platform's GB convention). Image pullability and dependency readiness are not verified before rental. Image settings are product-specific: `--image` selects an ordinary base-image UUID or a Pro image UUID. For a private image with either web-session product, use `--private-image` instead of `--image`, not both. Developer Pro uses its own image UUID.
 
 Precedence is explicit flags, project profile, user profile, then defaults, **independently per field**. `resources.default` supplies optional shared defaults; a named profile overlays it. User `[cloud.defaults]` supplies lower-priority personal defaults. Model/region lists replace the whole lower-priority list, rather than widening it. Explicit zero/empty overrides are preserved when valid. Accounts and `cloud.default_account` are user-only; project files cannot contain them.
 
@@ -129,7 +225,7 @@ loaf cloud acquire gpu-copy --account autodl-main --product standard \
 
 The existing acquisition loop waits for eligible stock, rechecks the winner and price, then requests **both system- and data-disk copying**. It never falls back to another region or a blank instance. Conflicting region settings are rejected. Source vendor, architecture and CUDA requirements constrain image compatibility. The clone inherits the source image, ignoring configured image defaults; explicit image/spec/CUDA/system-disk flags and `--allow-unquoted` are rejected.
 
-Data-disk expansion defaults to the source allocation; project/user settings and `--expand-data-disk` may increase it, not shrink it. Compute conditions and spending ceilings retain their normal precedence. With no wait preference, clone acquisition defaults to 30m; project/user settings or `--wait` override it, including explicit `0s` for one attempt. The maximum window is 24h, and the command must remain running to keep acquiring.
+Data-disk expansion defaults to the source allocation; project/user settings and `--expand-data-disk` may increase it, not shrink it. Compute conditions and spending ceilings retain their normal precedence. With no wait preference, clone acquisition defaults to 30m; project/user settings or `--wait` override it, including explicit `0s` for one attempt. Finite windows are at most 24h; explicit `--continuous` waits until canceled or successful. The command must remain running to keep acquiring.
 
 SSH becoming reachable does not mean copying has finished. Clone `ready` also requires the platform's successful data-copy result. If the observation timeout expires, retain the returned request/instance IDs and resume the same clone:
 
@@ -148,7 +244,7 @@ loaf cloud bind gpu-copy --request REQUEST_ID --ready-timeout 10m
 | `cloud watch` | Foreground read-only monitoring; requires a positive `--wait`/profile timeout. Never rents. |
 | `cloud acquire <alias>` | Explicit authorization for at most one instance; rechecks conditions, records intent before creation, then connects it. |
 
-Polling cycles start at 10s, respect a configurable 10s–10m minimum (creation adds one immediate recheck), and add backoff/jitter and `Retry-After` on transient failures. Waiting is bounded to 24h; closing the client ends monitoring, not a resource already created. Human output reports matches, rejection reasons, coverage and observation time. JSON finite commands/acquire return one envelope; `watch --json` uses NDJSON change events, sparse heartbeats and a final end/error. Changed configuration cannot broaden an already running authorization.
+Polling cycles start at 10s, respect a configurable 10s–10m minimum (creation adds one immediate recheck), and add backoff/jitter and `Retry-After` on transient failures. Finite waiting is bounded to 24h; acquisition can explicitly use `--continuous`. Closing the client ends monitoring, not a resource already created. Human output reports matches, rejection reasons, coverage and observation time. JSON finite commands/acquire return one envelope; `watch --json` uses NDJSON change events, sparse heartbeats and a final end/error. Changed configuration cannot broaden an already running authorization.
 
 Ordinary inventory is an **unofficial web-session API**. Hardware units are normalized from the platform's public rental form: GPU memory is per card; CPU/RAM allocations scale by card count. Offline machines and exhausted instance slots are excluded. Missing required fields stay unknown. The adapter examines at most `--limit` entries (100 by default, up to 1000); incomplete pagination remains visible and “cheapest” means cheapest within that examined set.
 
@@ -172,7 +268,7 @@ loaf cloud acquire pro-a --account autodl-pro \
   --gpu-count 1 --wait 10m --allow-unquoted --yes
 ```
 
-This is not read-only stock monitoring. `--allow-unquoted` cannot bypass an effective price ceiling; that case returns `PRICE_UNVERIFIABLE` without charging. Unverifiable generic hardware floors are also refused, not silently relaxed. Pro region IDs are data-center IDs, unlike ordinary region-sign IDs. `118` is the platform's CUDA 11.8 lower-bound code. Loaf never uses a platform startup command to run experiments. See the [official Pro API](https://www.autodl.com/docs/instance_pro_api/), the [current ordinary rental form](https://www.autodl.com/assets/index.9040cb9d.js), and the [GET-query observation](https://github.com/RordChang/autodl-pro-codex-skill/blob/main/references/api.md). Developer Pro snapshot/status use query parameters; no automatic GET-body fallback or mutation replay is attempted.
+This is not read-only stock monitoring. `--allow-unquoted` cannot bypass an effective price ceiling; that case returns `PRICE_UNVERIFIABLE` without charging. Unverifiable generic hardware floors are also refused, not silently relaxed. Pro region IDs are data-center IDs, unlike ordinary region-sign IDs. `118` is the platform's CUDA 11.8 lower-bound code. Loaf never uses a platform startup command to run experiments. See the [official Pro API](https://www.autodl.com/docs/instance_pro_api/), the [current ordinary rental form](https://www.autodl.com/create), and the [GET-query observation](https://github.com/RordChang/autodl-pro-codex-skill/blob/main/references/api.md). Developer Pro snapshot/status use query parameters; no automatic GET-body fallback or mutation replay is attempted.
 
 ### Recover uncertainty and control billing explicitly
 

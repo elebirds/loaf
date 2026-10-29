@@ -66,6 +66,9 @@
 | 其他队列查询/控制 | request(s)、共享额度 status 或明确已删除的 cleaned ID |
 | `queue clean` | 明确的 dry_run、request_ids 和队列 result |
 | `cloud search` | 冻结计划、匹配、拒绝、观察时间和分页覆盖 |
+| `cloud catalog gpu/region/image` | 账号／产品、规范目录项、examined/complete 覆盖与观察时间；地区项可带 `data_center` 分组和 `public` 公开用途标记，缺失表示未知 |
+| `cloud profile list/show` | 模板名称／作用域及可选的合并后计划、字段来源 |
+| `cloud acquire --dry-run` | 本地账号／目标／计划、字段来源、待实时校验项及可选的克隆继承项 |
 | `cloud acquire/bind` | 按阶段返回计划/收据/绑定，失败仍保留已知请求及实例 ID |
 | `cloud list/info/requests` | 有界实例页、一个实例、收据列表或指定收据 |
 | `cloud start/stop/reconcile` | 保存的资源身份/收据；接受请求不代表电源操作完成 |
@@ -90,6 +93,8 @@ loaf help run --json
 - `commands`：子命令名与本地化描述。
 - `examples`：包含 `loaf` 可执行文件名的 argv 数组。
 
+云参数还可提供 `group`、`enum`、`requires`、`conflicts_with`、`exactly_one_of`、`applicable_when` 关系注解；模板实际生效值仍须本地校验。
+
 列表形式为 `repeat` 或 `csv`。静态默认值不等于当前项目/用户的生效值；
 提交的实际配置来源使用 `run --dry-run`。
 命令改名为 `status` 后，原配置键 `[ps].limit` 仍保留。
@@ -99,6 +104,16 @@ loaf help run --json
 原因区分未知命令/选项、缺参、类型或值错误、越界、冲突、配置错误和旧命令迁移。
 不输出原始 argv、配置片段或秘密值。
 版本不匹配另带 `expected_version` 与 `actual_version`。
+
+## 不解析提示文字也能跟进云操作
+
+云 envelope 可增加 `context`：操作、账号／产品、目标、模式（`select` 或 `auto`）、阶段、请求 ID 与实例 ID；失败仍保留适用值。`next_actions` 提供 `command` argv 数组、稳定 `kind` 和 `requires_confirmation`；建议不代表授权。原有按阶段变化的 `data` 及键名不变。输入错误还可提供 `error.issues[]` 的 `argument` 和 `reason`。
+
+使用 `cloud bind --request ID --json` 继续接入已知租用结果。未确认请求先检查／核对，不重跑 acquire。更改模板或账号默认值不重解释已保存收据。
+
+默认 `--json` 不输出进度。`cloud acquire/start/stop/bind --progress=json --json` 显式在 **stderr** 输出 NDJSON：`schema_version: 1`、`type: "progress"`、`operation`、`stage`，以及适用的 `request_id`、`instance`、`observation`、`plan`、`poll_count`、`allocation_attempts`、`elapsed_ms`、`next_check_at`、`code`。计数为轮询周期和进入申请尝试的次数（包括最后的只读复查），不是 HTTP 请求数或扣费次数；创建前即时复查可使一轮包含多个只读请求。每行是进度对象，不是有限结果 envelope。完成／错误以 stdout 的唯一 envelope 为准；stderr EOF 或 `created` 事件不证明 SSH 就绪。`NO_STOCK` 与临时读取重试分开。
+
+持续获取使用 `plan.continuous: true`，保存的 `deadline` 为零 RFC3339 时间，不表示有限截止；`wait_timeout` 保留配置值，但不限制该显式模式。普通有限等待及 `--wait 0s` 保持原有语义。
 
 ## 逐行消费 NDJSON
 
@@ -141,3 +156,6 @@ loaf help run --json
 
 `notify subscriptions` 返回分页对象 `subscriptions`、`has_more` 和可选 `next_after`，
 使用 `--after`、`--limit` 继续。多来源订阅仅分别返回来源诊断，不混合来源时间判断恢复。
+
+
+云接入诊断可增加 `error.failure_reason`；进度可包含 `probe_attempts`、`failure_kind`、`failure_reason`，均为安全分类，不包含 SSH 原始诊断。库存窗口可包含 `scan_offset`、`next_offset`、`has_more`；后页不代表完整库存。成功的离线获取预览在 `next_actions[].command` 提供规范生效 argv，不含 `--yes` 或凭据。`cloud profile save/remove` 沿用模板结果结构。

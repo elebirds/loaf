@@ -12,8 +12,11 @@ type CloudSelect struct{ Account, Product *string }
 
 // CloudPlanInput preserves per-field absence for layered resource planning.
 type CloudPlanInput struct {
-    Profile  string
-    Explicit cloud.Profile
+    InventoryOffset int
+    ImageName       string
+    Compatibility   *cloud.ImageCompatibility
+    Profile         string
+    Explicit        cloud.Profile
 }
 
 // CloudApproval identifies the exact lifecycle operation requiring consent.
@@ -35,6 +38,7 @@ type CloudInstanceInput struct {
 
 // CloudPowerInput requests one explicitly authorized instance operation.
 type CloudPowerInput struct {
+    Progress   func(cloud.Event) error
     Select     CloudSelect
     ID         string
     Start, Yes bool
@@ -43,6 +47,7 @@ type CloudPowerInput struct {
 
 // CloudSearchInput freezes resource/profile selection for search or watch.
 type CloudSearchInput struct {
+    Offset int
     Select CloudSelect
     Plan   CloudPlanInput
     Limit  int
@@ -50,6 +55,8 @@ type CloudSearchInput struct {
 
 // CloudAcquireInput requests at most one resource and subsequent explicit binding.
 type CloudAcquireInput struct {
+    OfferID            string
+    DryRun             bool
     Notify             []string
     Select             CloudSelect
     Plan               CloudPlanInput
@@ -63,6 +70,7 @@ type CloudAcquireInput struct {
 
 // CloudBindInput binds an existing instance or saved acquisition request.
 type CloudBindInput struct {
+    Progress                func(cloud.Event) error
     Select                  CloudSelect
     Name, Instance, Request string
     RemoteBase              *string
@@ -97,6 +105,8 @@ type CloudReceipts struct {
 
 // CloudBinding reports binding and readiness independently of allocation.
 type CloudBinding struct {
+    remoteBase      string
+    principal       cloud.Binding       // Ephemeral recovery identity; never serialized.
     Target          string              `json:"target"`
     Instance        cloud.Ref           `json:"instance"`
     Status          string              `json:"status"`
@@ -120,6 +130,7 @@ type CloudCredentials struct {
 
 // AcquisitionResult preserves progress at an interrupted application boundary.
 type AcquisitionResult struct {
+    Preview     *CloudPreview
     Plan        *cloud.Plan
     Acquisition *CloudAcquisition
     Binding     *CloudBinding

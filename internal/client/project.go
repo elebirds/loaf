@@ -68,7 +68,11 @@ func (c *Machines) AddTarget(ctx context.Context, name, connection, remote strin
 
 // UseTarget records a choice only for the discovered project.
 func (c *Machines) UseTarget(ctx context.Context, name string) (UseResult, error) {
-    if _, ok := c.Settings.Targets[name]; !ok {
+    settings, err := c.Config.Load()
+    if err != nil {
+        return UseResult{}, err
+    }
+    if _, ok := settings.Targets[name]; !ok {
         return UseResult{}, fault.New("BAD_CONFIG", "target_unknown", map[string]any{"Target": name})
     }
     root, _, err := config.Discover(ctx, c.CWD)

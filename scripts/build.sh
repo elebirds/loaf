@@ -41,7 +41,8 @@ for target in $targets; do
     mv "$staging/$package.tar.gz" "dist/$package.tar.gz"
     archives+=("dist/$package.tar.gz")
     if [[ "$target" == "$(go env GOOS)/$(go env GOARCH)" ]]; then
-        cp "$directory/loaf" dist/loaf
+        # Replace the inode instead of overwriting a previously executed client.
+        mv "$directory/loaf" dist/loaf
     fi
     printf '%s\n' "dist/$package.tar.gz"
 done

@@ -12,6 +12,6 @@ func observationKey(r SearchResult) string {
     for _, o := range r.Matches {
         values = append(values, []any{o.ID, o.Vendor, o.Model, o.GPUCount, o.GPUMemoryGiB, o.CPUs, o.MemoryGiB, o.DiskGiB, o.Region, o.Available, o.ComputeHourlyPrice})
     }
-    data, _ := json.Marshal([]any{values, r.Rejected, r.Examined, r.Complete})
+    data, _ := json.Marshal([]any{values, r.Rejected, r.Examined, r.Complete, r.ScanOffset, r.NextOffset, r.HasMore})
     return string(data)
 }

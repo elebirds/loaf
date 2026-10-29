@@ -62,7 +62,7 @@ func (s *Standard) Clone(ctx context.Context, plan cloud.Plan, offer *cloud.Offe
     }
     fresh, row, snapshot, err := s.cloneSource(ctx, source.Instance)
     if err != nil {
-        return cloud.Ref{}, err
+        return cloud.Ref{}, creationReadFailure(err)
     }
     if fresh != *source {
         return cloud.Ref{}, &cloud.APIError{Code: "CLONE_SOURCE_CHANGED"}
@@ -78,11 +78,14 @@ func (s *Standard) Clone(ctx context.Context, plan cloud.Plan, offer *cloud.Offe
     if base == "" && private == "" && reproduction == "" || base != "" && !validID.MatchString(base) || private != "" && !validID.MatchString(private) || reproduction != "" && !validID.MatchString(reproduction) {
         return cloud.Ref{}, &cloud.APIError{Code: "CLONE_SOURCE_INVALID"}
     }
-    compute, _, err := s.quote(ctx, plan, offer.ID)
+    compute, storage, err := s.quote(ctx, plan, offer.ID)
     if err != nil {
-        return cloud.Ref{}, err
+        return cloud.Ref{}, creationReadFailure(err)
     }
     if err := checkPrice(compute, plan.Requirements); err != nil {
+        return cloud.Ref{}, err
+    }
+    if err := checkStorage(storage, plan.Requirements); err != nil {
         return cloud.Ref{}, err
     }
     info := map[string]any{

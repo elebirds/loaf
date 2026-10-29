@@ -197,7 +197,9 @@ func TestOrdinaryHardwareIsPerCardAndQuoteIsWholeInstance(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    page, err := p.(cloud.Inventory).Search(context.Background(), plan(), 100)
+    request := plan()
+    request.Requirements.MaxStorageDailyPrice = &cloud.Money{Amount: "1.00", Currency: "CNY"}
+    page, err := p.(cloud.Inventory).Search(context.Background(), request, 100)
     if err != nil || len(page.Offers) != 1 {
         t.Fatal(page, err)
     }
@@ -244,6 +246,7 @@ func TestFailuresDoNotExposeBodiesOrReplayMutations(t *testing.T) {
         {200, `{"code":"Success","data":{}}`, true, false},
         {200, `{"code":"SomethingUnexpected","msg":"fixture-token SSH-secret"}`, true, false},
         {200, `{"code":"NoStock","data":null}`, false, true},
+        {200, `{"code":"MachineGpuNumUpdateFailed","data":null}`, false, true},
         {401, `{"code":"InvalidToken","msg":"fixture-token"}`, false, false},
     } {
         calls := 0

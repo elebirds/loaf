@@ -4,6 +4,7 @@ package client
 import (
     "context"
     "io"
+    "time"
 
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/config"
@@ -107,7 +108,9 @@ type Resources struct {
     Cloud      *cloud.Service
     Auth       *cloud.Authentication
     Operations MachineOperations
-    CWD        string
+    // ReadyWait substitutes only the observation delay in deterministic tests.
+    ReadyWait func(context.Context, time.Duration) error
+    CWD       string
 }
 
 // App is only a composition facade; workflows live on focused services.

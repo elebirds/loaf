@@ -42,7 +42,7 @@ func main() {
         os.Exit(1)
     }
     env := map[string]string{}
-    for _, k := range []string{"LOAF_LANG", "LC_ALL", "LC_MESSAGES", "LANG", "TERM"} {
+    for _, k := range []string{"LOAF_LANG", "LC_ALL", "LC_MESSAGES", "LANG", "TERM", "NO_COLOR"} {
         env[k] = os.Getenv(k)
     }
     var checker application.Checker = unavailableSSH{}

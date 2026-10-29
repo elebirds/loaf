@@ -57,7 +57,16 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 
 | Command | Minimal call | Purpose |
 | --- | --- | --- |
-| `loaf cloud` | `loaf cloud --help` | Manage cloud resources and connect machines. |
+| `loaf cloud` | `loaf cloud` | Open the cloud overview; manage instances, rent and recover. |
+| `loaf cloud catalog` | `loaf cloud catalog gpu` | Discover GPU, region and image choices. |
+| `loaf cloud catalog gpu` | `loaf cloud catalog gpu` | List canonical GPU models. |
+| `loaf cloud catalog region` | `loaf cloud catalog region` | List regions by name and identifier. |
+| `loaf cloud catalog image` | `loaf cloud catalog image` | Search actual environment images. |
+| `loaf cloud profile` | `loaf cloud profile` | List, inspect, save or remove resource profiles offline. |
+| `loaf cloud profile list` | `loaf cloud profile list` | List personal and project templates. |
+| `loaf cloud profile show` | `loaf cloud profile show train` | Show effective template requirements. |
+| `loaf cloud profile save` | `loaf cloud profile save train` | Save effective resource preferences without renting |
+| `loaf cloud profile remove` | `loaf cloud profile remove train --yes` | Remove a personal resource profile |
 | `loaf cloud login` | `loaf cloud login main` | Log in with an AutoDL main or subaccount password |
 | `loaf cloud logout` | `loaf cloud logout main` | Clear the selected saved session and login digest |
 | `loaf cloud list` | `loaf cloud list` | List this account’s instances with bounded pagination |
@@ -67,11 +76,12 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | `loaf cloud stop` | `loaf cloud stop instance-id` | Stop a whole instance, not just a Loaf experiment |
 | `loaf cloud search` | `loaf cloud search` | Read inventory once and filter/rank matching offers |
 | `loaf cloud watch` | `loaf cloud watch --wait 10m` | Monitor inventory in the foreground without renting |
-| `loaf cloud acquire` | `loaf cloud acquire gpu` | Acquire at most one instance and bind its SSH target |
+| `loaf cloud acquire` | `loaf cloud acquire` | Acquire at most one instance and bind its SSH target |
 | `loaf cloud bind` | `loaf cloud bind gpu --instance instance-id` | Bind an existing instance and verify SSH authentication |
 | `loaf cloud requests` | `loaf cloud requests` | Inspect local allocation and power-operation receipts |
 | `loaf cloud reconcile` | `loaf cloud reconcile request-id --instance instance-id` | Resolve an uncertain request without replaying its mutation |
 | `loaf cloud account` | `loaf cloud account` | Manage user-owned account credential references |
+| `loaf cloud account use` | `loaf cloud account use main` | Select the default account and optional product. |
 | `loaf cloud account list` | `loaf cloud account list` | List account references without reading tokens |
 | `loaf cloud account add` | `loaf cloud account add main --token-env AUTODL_TOKEN` | Save a platform product and token environment-variable reference |
 | `loaf cloud account remove` | `loaf cloud account remove main` | Remove an account alias, keeping frozen instance bindings |

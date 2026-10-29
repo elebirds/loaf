@@ -23,7 +23,9 @@ func (c *Resources) resourcePlan(ctx context.Context, in CloudPlanInput, default
         }
     }
     layers := append(defaults, c.Settings.Cloud.Defaults, c.Settings.Resources["default"], c.Settings.Resources[in.Profile], file.Resources["default"], file.Resources[in.Profile], in.Explicit)
-    return cloud.Resolve(c.Settings.Cloud.Safety, layers...)
+    plan, err := cloud.Resolve(c.Settings.Cloud.Safety, layers...)
+    plan.InventoryOffset = in.InventoryOffset
+    return plan, err
 }
 
 func (c *Resources) searchProvider(ctx context.Context, in CloudSearchInput) (cloud.Provider, cloud.Plan, error) {
@@ -39,8 +41,25 @@ func (c *Resources) searchProvider(ctx context.Context, in CloudSearchInput) (cl
         return nil, plan, err
     }
     plan.Product = selectedProduct(in.Select, a, plan.Product)
+    plan.AutoDL.Compatibility = in.Plan.Compatibility
+    plan.AutoDL.Name = in.Plan.ImageName
     provider, err := c.Cloud.Open(ctx, name, a, plan.Product)
     return provider, plan, cloud.Failure(err)
+}
+
+// CloudSearchPlan resolves browsing preferences locally, without credentials or
+// provider access. It shares the same precedence as Search and Watch.
+func (c *Resources) CloudSearchPlan(ctx context.Context, in CloudSearchInput) (cloud.Plan, error) {
+    plan, err := c.resourcePlan(ctx, in.Plan)
+    if err != nil {
+        return plan, err
+    }
+    _, account, err := c.selectAccount(in.Select)
+    if err != nil {
+        return plan, err
+    }
+    plan.Product = selectedProduct(in.Select, account, plan.Product)
+    return plan, nil
 }
 
 func (c *Resources) acquisitionPlan(ctx context.Context, in CloudAcquireInput) (string, cloud.Account, cloud.Plan, error) {
@@ -51,11 +70,14 @@ func (c *Resources) acquisitionPlan(ctx context.Context, in CloudAcquireInput) (
     if in.CloneFrom == nil {
         name, a, err := c.selectAccount(in.Select)
         plan.Product = selectedProduct(in.Select, a, plan.Product)
+        plan.AutoDL.Compatibility = in.Plan.Compatibility
+        plan.AutoDL.Name = in.Plan.ImageName
+        plan.OfferID = in.OfferID
+        applyOffer(&plan, in)
         return name, a, plan, err
     }
-    flags := in.Plan.Explicit.AutoDL
-    if *in.CloneFrom == "" || in.AllowUnquoted || flags.Image != nil || flags.PrivateImageUUID != nil || flags.GPUSpecUUID != nil || flags.GPUSpecID != nil || flags.CUDAFrom != nil || flags.ExpandSystemDiskGB != nil {
-        return "", cloud.Account{}, plan, fault.Invalid("--clone-from", "conflicting_arguments", "cloud_clone_options")
+    if err := validateCloneOptions(in); err != nil {
+        return "", cloud.Account{}, plan, err
     }
     if target, ok := c.Settings.Targets[*in.CloneFrom]; ok && target.Cloud == nil {
         return "", cloud.Account{}, plan, fault.Invalid("--clone-from", "conflicting_arguments", "cloud_clone_options")
@@ -94,13 +116,51 @@ func (c *Resources) acquisitionPlan(ctx context.Context, in CloudAcquireInput) (
     }
     plan.Product = sourceBinding.Ref.Product
     plan, err = cloud.PrepareClone(plan, source)
+    plan.OfferID = in.OfferID
+    applyOffer(&plan, in)
     return name, a, plan, err
+}
+
+// A fixed candidate ignores inherited monitoring preferences, never explicit flags.
+func applyOffer(plan *cloud.Plan, in CloudAcquireInput) {
+    plan.OfferID = in.OfferID
+    if in.OfferID != "" {
+        if in.Plan.Explicit.WaitTimeout == nil {
+            plan.WaitTimeout = "0s"
+        }
+        if in.Plan.Explicit.Continuous == nil {
+            plan.Continuous = false
+        }
+    }
+}
+
+func validateCloneOptions(in CloudAcquireInput) error {
+    flags := in.Plan.Explicit.AutoDL
+    if *in.CloneFrom == "" || in.AllowUnquoted || flags.Image != nil || flags.PrivateImageUUID != nil || flags.GPUSpecUUID != nil || flags.GPUSpecID != nil || flags.CUDAFrom != nil || flags.ExpandSystemDiskGB != nil {
+        return fault.Invalid("--clone-from", "conflicting_arguments", "cloud_clone_options")
+    }
+    return nil
+}
+
+// CloudClonePlan reads the stopped source and resolves its inherited conditions
+// for a guided review. CloudAcquire remains the complete mutation entry point.
+func (c *Resources) CloudClonePlan(ctx context.Context, in CloudAcquireInput) (string, cloud.Plan, error) {
+    if in.CloneFrom == nil {
+        return "", cloud.Plan{}, cloudConfigError()
+    }
+    name, _, plan, err := c.acquisitionPlan(ctx, in)
+    return name, plan, err
 }
 
 // CloudAcquire coordinates authorization, durable allocation, binding and readiness.
 // A failed readiness check keeps the same resource and receipt; it never allocates a replacement.
 func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, approve ApproveCloud, emit func(cloud.Event) error) (AcquisitionResult, error) {
     result := AcquisitionResult{}
+    if in.DryRun {
+        preview, err := c.CloudPreview(ctx, in)
+        result.Preview = &preview
+        return result, err
+    }
     if err := validateNotificationNames(ctx, c.Notify, in.Notify); err != nil {
         return result, err
     }
@@ -125,8 +185,41 @@ func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, appr
         return result, err
     }
     result.Plan = &plan
+    if in.Plan.Explicit.Continuous != nil && *in.Plan.Explicit.Continuous && in.Plan.Explicit.WaitTimeout != nil {
+        return result, fault.Invalid("--continuous", "conflicting_arguments", "cloud_continuous_wait")
+    }
+    if err = cloud.ValidateAcquisition(plan, a.Credential.Mode); err != nil {
+        return result, err
+    }
+    if (plan.Continuous || plan.OfferID != "") && plan.Clone == nil {
+        kind, id := "base", plan.AutoDL.Image
+        if plan.AutoDL.PrivateImageUUID != "" {
+            kind, id = "private", plan.AutoDL.PrivateImageUUID
+        }
+        page, e := c.CloudCatalog(ctx, CloudSelect{Account: &name, Product: &plan.Product}, cloud.CatalogInput{Category: "image", Kind: kind, Query: id, Limit: 1000})
+        if e != nil {
+            return result, e
+        }
+        found := false
+        for _, item := range page.Items {
+            if item.ID == id {
+                plan.AutoDL.Compatibility = &cloud.ImageCompatibility{Vendor: item.Vendor, Architecture: item.Architecture, CUDA: item.CUDA}
+                plan.AutoDL.Name = item.Name
+                found = true
+                break
+            }
+        }
+        if !found {
+            return result, fault.Invalid("--image", "invalid_value", "cloud_image_unknown")
+        }
+    }
     if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: "acquire", Plan: &plan, Account: name, Product: plan.Product, Target: in.Name}); err != nil {
         return result, err
+    }
+    if emit != nil {
+        if err := emit(cloud.Event{Type: "authorized", At: time.Now().UTC(), Plan: &plan, Account: name, Target: in.Name}); err != nil {
+            return result, err
+        }
     }
     var observation *cloud.SearchResult
     observe := func(event cloud.Event) error {
@@ -158,7 +251,7 @@ func (c *Resources) CloudAcquire(ctx context.Context, in CloudAcquireInput, appr
         return result, fault.New("CLOUD_UNCONFIRMED", "cloud_unconfirmed", nil)
     }
     b := cloud.Binding{Ref: *r.Instance, Settings: a}
-    bound, err := c.bindCloud(ctx, in.Name, b, in.RemoteBase, false, in.ReadyTimeout, plan.Clone)
+    bound, err := c.bindCloud(ctx, in.Name, b, in.RemoteBase, false, in.ReadyTimeout, plan.Clone, emit)
     bound.Request = &r
     bound.Observation = observation
     result.Binding = &bound

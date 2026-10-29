@@ -110,6 +110,10 @@ func TestSubaccountNamespaceKeepsOnlyKnownCatalogExceptions(t *testing.T) {
     for input, want := range map[string]string{
         "/api/v1":                                  "/api/v1/sub_user",
         "/api/v1/passport":                         "/api/v1/sub_user/passport",
+        "/api/v1/common":                           "/api/v1/sub_user/common",
+        "/api/v1/machine/gpu_type":                 "/api/v1/sub_user/machine/gpu_type",
+        "/api/v1/image/all":                        "/api/v1/sub_user/image/all",
+        "/api/v1/image/private/get":                "/api/v1/sub_user/image/private/get",
         "/api/v1/instance":                         "/api/v1/sub_user/instance",
         "/api/v1/user/machine/list":                "/api/v1/sub_user/user/machine/list",
         "/api/v1/order/instance/create/payg":       "/api/v1/sub_user/order/instance/create/payg",

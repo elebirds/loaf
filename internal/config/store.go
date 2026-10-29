@@ -38,7 +38,7 @@ type Global struct {
     Stop          StopSettings             `toml:"stop,omitempty"`
     Pull          PullSettings             `toml:"pull,omitempty"`
     Exec          ExecSettings             `toml:"exec,omitempty"`
-    Cloud         cloud.Settings           `toml:"cloud,omitempty"`
+    Cloud         cloud.Settings           `toml:"cloud,omitzero"`
     Resources     map[string]cloud.Profile `toml:"resources,omitempty"`
     Targets       map[string]Target        `toml:"targets"`
 }

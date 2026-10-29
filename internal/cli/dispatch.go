@@ -9,6 +9,7 @@ import (
     "runtime/debug"
     "strings"
     "sync"
+    "sync/atomic"
 
     "github.com/elebirds/loaf/internal/cli/interaction"
     "github.com/elebirds/loaf/internal/client"
@@ -18,12 +19,14 @@ import (
 )
 
 type invocation struct {
-    app     *client.App
-    options Options
-    grammar *grammar
-    output  *presenter
-    input   *interaction.InputSession
-    policy  client.CallPolicy
+    editAcquisition *atomic.Bool
+    profileOnly     bool
+    app             *client.App
+    options         Options
+    grammar         *grammar
+    output          *presenter
+    input           *interaction.InputSession
+    policy          client.CallPolicy
 }
 
 // dispatch only adapts parsed input and presentation callbacks to application calls.
@@ -164,6 +167,9 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
             return nil, fault.New("BAD_CONFIG", "forward_json", nil)
         }
         return nil, c.app.Machines.Forward(ctx, deref(g.Target), g.Forward.Port, g.Forward.LocalPort, c.policy, p.err, c.progress)
+    }
+    if path == "cloud" {
+        return c.cloudHub(ctx)
     }
     if strings.HasPrefix(path, "cloud ") {
         return c.cloud(ctx, path)

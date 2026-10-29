@@ -3,9 +3,22 @@ package autodl
 import (
     "context"
     "encoding/json"
+    "errors"
 
     "github.com/elebirds/loaf/internal/cloud"
 )
+
+// creationReadFailure proves that a provider has not issued its mutation yet.
+// Do not apply this to the order/power response or erase an uncertain outcome.
+func creationReadFailure(err error) error {
+    var api *cloud.APIError
+    if errors.As(err, &api) && !api.Unconfirmed {
+        copy := *api
+        copy.BeforeMutation = true
+        return &copy
+    }
+    return err
+}
 
 // quotedPrices follows the console's final discount entries. Values already
 // cover all requested GPUs: instance fees are hourly, disk fees are daily.
@@ -53,6 +66,19 @@ func checkPrice(price *cloud.Money, r cloud.Requirements) error {
         return &cloud.APIError{Code: "PRICE_UNVERIFIABLE"}
     }
     if r.MaxComputeHourlyPrice != nil && (price.Currency != r.MaxComputeHourlyPrice.Currency || cloud.Less(*r.MaxComputeHourlyPrice, *price)) {
+        return &cloud.APIError{Code: "OFFER_CHANGED"}
+    }
+    return nil
+}
+
+func checkStorage(price *cloud.Money, r cloud.Requirements) error {
+    if r.MaxStorageDailyPrice == nil {
+        return nil
+    }
+    if price == nil {
+        return &cloud.APIError{Code: "PRICE_UNVERIFIABLE"}
+    }
+    if price.Currency != r.MaxStorageDailyPrice.Currency || cloud.Less(*r.MaxStorageDailyPrice, *price) {
         return &cloud.APIError{Code: "OFFER_CHANGED"}
     }
     return nil

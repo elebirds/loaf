@@ -57,7 +57,16 @@
 
 | 命令 | 最简调用 | 用途 |
 | --- | --- | --- |
-| `loaf cloud` | `loaf cloud --help` | 管理云资源并接入机器。 |
+| `loaf cloud` | `loaf cloud` | 进入云资源概览，管理实例、租用与恢复请求。 |
+| `loaf cloud catalog` | `loaf cloud catalog gpu` | 查找 GPU、地区和镜像选项。 |
+| `loaf cloud catalog gpu` | `loaf cloud catalog gpu` | 列出平台 GPU 型号。 |
+| `loaf cloud catalog region` | `loaf cloud catalog region` | 按名称和标识列出地区。 |
+| `loaf cloud catalog image` | `loaf cloud catalog image` | 搜索实际可用的环境镜像。 |
+| `loaf cloud profile` | `loaf cloud profile` | 离线列出、查看、保存或删除资源模板。 |
+| `loaf cloud profile list` | `loaf cloud profile list` | 列出个人和项目资源模板。 |
+| `loaf cloud profile show` | `loaf cloud profile show train` | 查看模板的有效资源条件。 |
+| `loaf cloud profile save` | `loaf cloud profile save train` | 离线保存生效的资源偏好 |
+| `loaf cloud profile remove` | `loaf cloud profile remove train --yes` | 删除个人资源模板 |
 | `loaf cloud login` | `loaf cloud login main` | 通过 AutoDL 主账号或子账号密码登录 |
 | `loaf cloud logout` | `loaf cloud logout main` | 清除所选账号保存的会话和登录摘要 |
 | `loaf cloud list` | `loaf cloud list` | 分页查看此账号的实例 |
@@ -67,11 +76,12 @@
 | `loaf cloud stop` | `loaf cloud stop instance-id` | 关闭整个实例，而不只是 Loaf 实验 |
 | `loaf cloud search` | `loaf cloud search` | 只读查询一次库存并筛选排序 |
 | `loaf cloud watch` | `loaf cloud watch --wait 10m` | 前台只读监测库存，不租用实例 |
-| `loaf cloud acquire` | `loaf cloud acquire gpu` | 租用最多一台实例并接入 SSH 机器 |
+| `loaf cloud acquire` | `loaf cloud acquire` | 租用最多一台实例并接入 SSH 机器 |
 | `loaf cloud bind` | `loaf cloud bind gpu --instance instance-id` | 绑定已有实例并验证 SSH 身份认证 |
 | `loaf cloud requests` | `loaf cloud requests` | 查看本地租用及开关机操作凭据 |
 | `loaf cloud reconcile` | `loaf cloud reconcile request-id --instance instance-id` | 核对未确认请求，不重放创建或开关机操作 |
 | `loaf cloud account` | `loaf cloud account` | 管理用户私有的云账号凭据引用 |
+| `loaf cloud account use` | `loaf cloud account use main` | 选择默认账号，可同时设置默认产品。 |
 | `loaf cloud account list` | `loaf cloud account list` | 列出账号引用，不读取令牌 |
 | `loaf cloud account add` | `loaf cloud account add main --token-env AUTODL_TOKEN` | 保存平台产品及令牌环境变量引用 |
 | `loaf cloud account remove` | `loaf cloud account remove main` | 删除账号别名，保留已有实例绑定 |

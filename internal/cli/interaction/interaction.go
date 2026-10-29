@@ -9,6 +9,7 @@ import (
     "io"
     "os"
     "strings"
+    "sync/atomic"
 
     "golang.org/x/term"
 )
@@ -50,6 +51,7 @@ const (
 
 type Confirmation struct {
     Title, Description       string
+    Summary                  *Document
     Kind                     ConfirmationKind
     AcceptLabel, RejectLabel string
 }
@@ -58,17 +60,24 @@ type Confirmation struct {
 // ReadPassword is an optional terminal adapter, primarily for composition/tests.
 // Blocking real inputs must be *os.File; other Readers are for in-memory input.
 type Options struct {
-    In           io.Reader
-    Err          io.Writer
-    Interactive  bool
-    Rich         bool
-    ReadPassword func(context.Context) ([]byte, error)
+    Compact        bool
+    PageHelp       string
+    SelectHelp     string
+    MultiHelp      string
+    PlainMultiHelp string
+    ChoiceError    string
+    In             io.Reader
+    Err            io.Writer
+    Interactive    bool
+    Rich           bool
+    ReadPassword   func(context.Context) ([]byte, error)
 }
 
 // InputSession serializes all prompt and explicit stdin reads for one command.
 // Do not read its underlying input concurrently or give it to native commands
 // until the session has finished. It never closes caller-owned streams.
 type InputSession struct {
+    dark    atomic.Bool
     options Options
     owner   chan struct{}
 }
@@ -85,7 +94,9 @@ func New(options Options) *InputSession {
         output, outputOK := options.Err.(terminalOutput)
         options.Rich = inputOK && outputOK && term.IsTerminal(int(input.Fd())) && term.IsTerminal(int(output.Fd()))
     }
-    return &InputSession{options: options, owner: make(chan struct{}, 1)}
+    session := &InputSession{options: options, owner: make(chan struct{}, 1)}
+    session.dark.Store(true)
+    return session
 }
 
 // Plain shares the session's input owner, but never starts a raw-mode renderer.
@@ -178,7 +189,17 @@ func (s *InputSession) confirm(ctx context.Context, prompt Confirmation, rich bo
     if rich && prompt.Kind == ConfirmDefaultNo && prompt.AcceptLabel != "" && prompt.RejectLabel != "" {
         return s.richConfirm(ctx, prompt)
     }
-    answer, err := s.textOwned(ctx, TextPrompt{Title: prompt.Title, Description: prompt.Description, MaxBytes: 64}, rich && prompt.Kind == ConfirmTypedYes)
+    var answer string
+    var err error
+    if rich && prompt.Kind == ConfirmTypedYes && prompt.Summary != nil {
+        answer, err = s.richSummaryConfirmation(ctx, prompt)
+    } else {
+        description := prompt.Description
+        if prompt.Summary != nil {
+            description = prompt.Summary.Content(max(20, min(Width(s.options.Err), 96)-4), false, s.Dark())
+        }
+        answer, err = s.textOwned(ctx, TextPrompt{Title: prompt.Title, Description: description, MaxBytes: 64}, rich && prompt.Kind == ConfirmTypedYes)
+    }
     if errors.Is(err, io.EOF) {
         return false, nil
     }

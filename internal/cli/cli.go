@@ -12,6 +12,7 @@ import (
 
     "github.com/elebirds/loaf/internal/cli/interaction"
     "github.com/elebirds/loaf/internal/client"
+    "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
@@ -33,11 +34,13 @@ type Options struct {
 }
 
 type errorView struct {
+    Issues          []inputIssue    `json:"issues,omitempty"`
     Reason          string          `json:"reason,omitempty"`
     Argument        string          `json:"argument,omitempty"`
     HelpCommand     []string        `json:"help_command,omitempty"`
     Location        *fault.Location `json:"location,omitempty"`
     FailureKind     string          `json:"failure_kind,omitempty"`
+    FailureReason   string          `json:"failure_reason,omitempty"`
     Code            string          `json:"code"`
     Message         string          `json:"message"`
     Hint            string          `json:"hint,omitempty"`
@@ -50,11 +53,13 @@ type errorView struct {
     ActualVersion   string          `json:"actual_version,omitempty"`
 }
 type envelope struct {
-    SchemaVersion int              `json:"schema_version"`
-    OK            bool             `json:"ok"`
-    Data          any              `json:"data,omitempty"`
-    Error         *errorView       `json:"error,omitempty"`
-    Trace         *ssh.TraceReport `json:"trace,omitempty"`
+    Context       *cloudContext     `json:"context,omitempty"`
+    NextActions   []cloudNextAction `json:"next_actions,omitempty"`
+    SchemaVersion int               `json:"schema_version"`
+    OK            bool              `json:"ok"`
+    Data          any               `json:"data,omitempty"`
+    Error         *errorView        `json:"error,omitempty"`
+    Trace         *ssh.TraceReport  `json:"trace,omitempty"`
 }
 
 // Execute parses one invocation and returns its public operation exit code.
@@ -86,7 +91,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     if langErr != nil && !early.languageSet && o.Env["LOAF_LANG"] == "" && (early.help || early.version || len(args) > 0 && (args[0] == "help" || args[0] == "version")) {
         l, langErr = i18n.New("auto", o.Env)
     }
-    p := &presenter{json: early.json, out: o.Out, err: o.Err, locale: l, trace: o.Trace}
+    p := &presenter{json: early.json, out: o.Out, err: o.Err, locale: l, trace: o.Trace, dark: true}
     // Even input errors must not corrupt a native MCP protocol stream.
     if early.nativeChannel && !early.help && !early.version {
         p.json = false
@@ -109,6 +114,13 @@ func Execute(ctx context.Context, args []string, o Options) int {
     if err != nil {
         return p.finish(nil, err)
     }
+    if parsed.path == "cloud" && o.Interactive && !early.json && !early.help && len(model.Help.Command) == 0 {
+        // Resolve defaults through the declared grammar, not a second flag list.
+        if _, err := parser.Parse(append(append([]string{}, args...), "list")); err != nil {
+            return p.finish(nil, parseFailure())
+        }
+        parsed.help = false
+    }
     if parsed.help {
         help := helpData(parsed.node, l)
         if p.json {
@@ -120,6 +132,8 @@ func Execute(ctx context.Context, args []string, o Options) int {
         return 0
     }
     p.command = parsed.path
+    p.styled = o.TerminalOutput && o.Env["TERM"] != "dumb" && o.Env["NO_COLOR"] == ""
+    p.width = interaction.Width(o.Out)
     if parsed.path == "version" {
         info, _ := debug.ReadBuildInfo()
         return p.finish(versionData(info), nil)
@@ -140,9 +154,10 @@ func Execute(ctx context.Context, args []string, o Options) int {
         }
         o.Trace.Enable()
     }
-    input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: o.TerminalError && o.Env["TERM"] != "dumb", ReadPassword: o.ReadPassword})
+    input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: o.TerminalError && o.Env["TERM"] != "dumb", Compact: parsed.path == "cloud" || strings.HasPrefix(parsed.path, "cloud "), PageHelp: l.Text("cloud_ui_form_help"), ReadPassword: o.ReadPassword, ChoiceError: l.Text("cloud_choice_invalid"), SelectHelp: l.Text("cloud_select_help"), MultiHelp: l.Text("cloud_multi_help"), PlainMultiHelp: l.Text("cloud_multi_plain")})
     call := invocation{app: o.App, options: o, grammar: model, output: p, input: input, policy: client.CallPolicy{Batch: p.json || !o.Interactive}}
     result, err := call.dispatch(ctx, parsed.path)
+    p.dark = input.Dark()
     if p.json && (parsed.path == "exec" || parsed.path == "cloud watch" || parsed.path == "logs" && model.Logs.Follow || parsed.path == "notify serve" && !model.Notify.Serve.Once) {
         return p.finishStream(result, err)
     }
@@ -150,13 +165,22 @@ func Execute(ctx context.Context, args []string, o Options) int {
 }
 
 type presenter struct {
-    waited   bool
-    command  string
-    json     bool
-    out, err io.Writer
-    locale   *i18n.Localizer
-    trace    *ssh.Trace
-    writeErr error
+    issues        []inputIssue
+    regionCatalog []cloud.CatalogItem
+    cloudWizard   bool
+    cloudDeclined bool
+    styled        bool
+    dark          bool
+    width         int
+    cloudContext  *cloudContext
+    nextActions   []cloudNextAction
+    waited        bool
+    command       string
+    json          bool
+    out, err      io.Writer
+    locale        *i18n.Localizer
+    trace         *ssh.Trace
+    writeErr      error
 }
 
 func (p *presenter) stream(data any) error {
@@ -187,13 +211,19 @@ func (p *presenter) error(err error) *errorView {
             parameters["Value"] = p.locale.Text("type_" + kind)
         }
     }
-    view := &errorView{FailureKind: ssh.FailureKind(err), Code: f.Code, Message: p.locale.Text(f.Message, parameters), Stage: fault.Stage(err)}
+    view := &errorView{FailureKind: ssh.FailureKind(err), FailureReason: ssh.FailureReason(err), Code: f.Code, Message: p.locale.Text(f.Message, parameters), Stage: fault.Stage(err)}
     if f.Input != nil {
+        if strings.HasPrefix(p.command, "cloud ") {
+            view.Issues = []inputIssue{{Argument: f.Input.Argument, Reason: f.Input.Reason}}
+        }
         view.Reason, view.Argument = f.Input.Reason, f.Input.Argument
         view.Location, view.HelpCommand = f.Input.Location, f.Input.HelpCommand
         if len(view.HelpCommand) == 0 {
             view.HelpCommand = append([]string{"loaf", "help"}, strings.Fields(p.command)...)
         }
+    }
+    if len(p.issues) > 0 {
+        view.Issues = append([]inputIssue{}, p.issues...)
     }
     view.ProviderCode, _ = f.Params["ProviderCode"].(string)
     view.HTTPStatus, _ = f.Params["HTTPStatus"].(int)
@@ -265,13 +295,19 @@ func (p *presenter) finishStream(data any, err error) int {
 func (p *presenter) finish(data any, err error) int {
     view := p.error(err)
     if p.json {
-        if err := json.NewEncoder(p.out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: data, Error: view, Trace: p.trace.Snapshot()}); err != nil {
+        if err := json.NewEncoder(p.out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: data, Error: view, Trace: p.trace.Snapshot(), Context: p.cloudContext, NextActions: p.nextActions}); err != nil {
             return 1
         }
         return exitCode(view)
     }
     if trace := p.trace.Snapshot(); trace != nil {
         printTrace(p.err, *trace, p.locale)
+    }
+    if p.finishCloud(data, view) {
+        if p.writeErr != nil {
+            return 1
+        }
+        return exitCode(view)
     }
     if data != nil {
         if renderErr := printResult(p.out, data, p.locale, view == nil); renderErr != nil && view == nil {
@@ -281,6 +317,7 @@ func (p *presenter) finish(data any, err error) int {
             printRunNext(p.out, run, p.locale, p.waited && err == nil)
         }
     }
+    p.printCloudActions(data)
     if view != nil {
         fmt.Fprintln(p.err, view.Message)
         if view.Location != nil {

@@ -33,7 +33,7 @@ type grammar struct {
     Forward     forwardCommand `cmd:"" group:"machines" help:"forward_short" example:"loaf forward 6006"`
     Clean       cleanCommand   `cmd:"" group:"experiments" help:"clean_short" example:"loaf clean r_example --dry-run"`
     Sync        syncCommand    `cmd:"" group:"experiments" help:"sync_short" example:"loaf sync --dry-run"`
-    Cloud       cloudCommand   `cmd:"" group:"resources" help:"cloud_short" example:"loaf cloud --help"`
+    Cloud       cloudCommand   `cmd:"" group:"resources" help:"cloud_short" example:"loaf cloud"`
     Queue       queueCommand   `cmd:"" group:"experiments" help:"queue_short" example:"loaf queue"`
     Events      eventsCommand  `cmd:"" group:"diagnostics" help:"events_short" example:"loaf events"`
     Notify      notifyCommand  `cmd:"" group:"diagnostics" help:"notify_short" example:"loaf notify"`
@@ -151,6 +151,8 @@ type cleanCommand struct {
 }
 
 type cloudCommand struct {
+    Catalog         catalogCommand       `cmd:"" help:"cloud_catalog_short" example:"loaf cloud catalog gpu"`
+    Profile         profileCommand       `cmd:"" help:"cloud_profile_short" example:"loaf cloud profile"`
     Account         *string              `help:"cloud_flag_account" config:"cloud.default_account"`
     Product         *string              `help:"cloud_flag_product" config:"resources.product"`
     Login           loginCommand         `cmd:"" help:"cloud_login_short" example:"loaf cloud login main"`
@@ -162,14 +164,14 @@ type cloudCommand struct {
     Stop            powerCommand         `cmd:"" help:"cloud_stop_short" example:"loaf cloud stop instance-id"`
     Search          searchCommand        `cmd:"" help:"cloud_search_short" example:"loaf cloud search"`
     Watch           searchCommand        `cmd:"" help:"cloud_watch_short" example:"loaf cloud watch --wait 10m"`
-    Acquire         acquireCommand       `cmd:"" help:"cloud_acquire_short" example:"loaf cloud acquire gpu"`
+    Acquire         acquireCommand       `cmd:"" help:"cloud_acquire_short" example:"loaf cloud acquire"`
     Bind            bindCommand          `cmd:"" help:"cloud_bind_short" example:"loaf cloud bind gpu --instance instance-id"`
     Requests        optionalID           `cmd:"" help:"cloud_requests_short" example:"loaf cloud requests"`
     Reconcile       reconcileCommand     `cmd:"" help:"cloud_reconcile_short" example:"loaf cloud reconcile request-id --instance instance-id"`
     AccountCommands accountsCommand      `cmd:"" name:"account" help:"cloud_account_short" example:"loaf cloud account"`
 }
 type cloudInstanceCommand struct {
-    ID string `arg:"" help:"cloud_instance_arg" value-type:"instance-id"`
+    ID string `arg:"" optional:"" help:"cloud_instance_arg" value-type:"instance-id"`
 }
 
 type cloudListCommand struct {
@@ -180,54 +182,61 @@ type credentialsCommand struct {
     ShowPassword bool   `help:"cloud_flag_password"`
 }
 type powerCommand struct {
-    ID   string        `arg:"" help:"cloud_instance_arg" value-type:"instance-id"`
-    Yes  bool          `help:"cloud_flag_yes"`
-    Wait time.Duration `help:"cloud_flag_power_wait" value-type:"duration"`
+    ID       string        `arg:"" optional:"" help:"cloud_instance_arg" value-type:"instance-id"`
+    Yes      bool          `help:"cloud_flag_yes"`
+    Wait     time.Duration `help:"cloud_flag_power_wait" value-type:"duration"`
+    Progress string        `enum:"auto,plain,json,none" default:"auto" help:"cloud_flag_progress"`
 }
 type ResourceFlags struct {
-    Profile               string  `help:"cloud_flag_profile"`
-    GPUVendor             *string `name:"gpu-vendor" help:"cloud_flag_gpu_vendor" config:"resources.gpu_vendor"`
-    GPUModel              csvList `name:"gpu-model" help:"cloud_flag_gpu_model" config:"resources.gpu_models" value-type:"csv"`
-    GPUCount              *int    `name:"gpu-count" help:"cloud_flag_gpu_count" builtin-default:"1" config:"resources.gpu_count"`
-    MinGPUMemory          *string `name:"min-gpu-memory" help:"cloud_flag_min_gpu_memory" config:"resources.min_gpu_memory_gib" value-type:"gib"`
-    MinCPUs               *int    `name:"min-cpus" help:"cloud_flag_min_cpus" config:"resources.min_cpus"`
-    MinMemory             *string `help:"cloud_flag_min_memory" config:"resources.min_memory_gib" value-type:"gib"`
-    MinDisk               *string `help:"cloud_flag_min_disk" config:"resources.min_disk_gib" value-type:"gib"`
-    Region                csvList `help:"cloud_flag_region" config:"resources.regions" value-type:"csv"`
-    MaxComputeHourlyPrice *string `help:"cloud_flag_max_compute_hourly_price" config:"resources.max_compute_hourly_price" value-type:"decimal"`
-    Currency              *string `help:"cloud_flag_currency" builtin-default:"CNY" config:"resources.currency"`
-    Wait                  *string `help:"cloud_flag_wait" builtin-default:"0s" config:"resources.wait_timeout" value-type:"duration"`
-    PollInterval          *string `help:"cloud_flag_poll_interval" builtin-default:"10s" config:"resources.poll_interval" value-type:"duration"`
-    Image                 *string `help:"cloud_flag_image" config:"resources.autodl.image"`
-    PrivateImage          *string `help:"cloud_flag_private_image" config:"resources.autodl.private_image_uuid"`
-    GPUSpec               *string `name:"gpu-spec" help:"cloud_flag_gpu_spec" config:"resources.autodl.gpu_spec_uuid"`
-    GPUSpecID             *int    `name:"gpu-spec-id" help:"cloud_flag_gpu_spec_id" config:"resources.autodl.gpu_spec_id"`
-    CUDAFrom              *int    `name:"cuda-from" help:"cloud_flag_cuda_from" config:"resources.autodl.cuda_from"`
-    ExpandSystemDisk      *int    `help:"cloud_flag_expand_system_disk" config:"resources.autodl.expand_system_disk_gb"`
-    ExpandDataDisk        *int    `help:"cloud_flag_expand_data_disk" config:"resources.autodl.expand_data_disk_gb"`
+    MaxStorageDailyPrice  *string `help:"cloud_flag_storage_cap" config:"resources.max_storage_daily_price" value-type:"decimal" ux-group:"conditions"`
+    Profile               string  `help:"cloud_flag_profile" ux-group:"common"`
+    GPUVendor             *string `name:"gpu-vendor" help:"cloud_flag_gpu_vendor" config:"resources.gpu_vendor" ux-group:"conditions"`
+    GPUModel              csvList `name:"gpu-model" help:"cloud_flag_gpu_model" config:"resources.gpu_models" value-type:"csv" ux-group:"common"`
+    GPUCount              *int    `name:"gpu-count" help:"cloud_flag_gpu_count" builtin-default:"1" config:"resources.gpu_count" ux-group:"common"`
+    MinGPUMemory          *string `name:"min-gpu-memory" help:"cloud_flag_min_gpu_memory" config:"resources.min_gpu_memory_gib" value-type:"gib" ux-group:"conditions"`
+    MinCPUs               *int    `name:"min-cpus" help:"cloud_flag_min_cpus" config:"resources.min_cpus" ux-group:"conditions"`
+    MinMemory             *string `help:"cloud_flag_min_memory" config:"resources.min_memory_gib" value-type:"gib" ux-group:"conditions"`
+    MinDisk               *string `help:"cloud_flag_min_disk" config:"resources.min_disk_gib" value-type:"gib" ux-group:"conditions"`
+    Region                csvList `help:"cloud_flag_region" config:"resources.regions" value-type:"csv" ux-group:"common"`
+    MaxComputeHourlyPrice *string `help:"cloud_flag_max_compute_hourly_price" config:"resources.max_compute_hourly_price" value-type:"decimal" ux-group:"common"`
+    Currency              *string `help:"cloud_flag_currency" builtin-default:"CNY" config:"resources.currency" ux-group:"advanced"`
+    Wait                  *string `help:"cloud_flag_wait" builtin-default:"0s" config:"resources.wait_timeout" value-type:"duration" ux-group:"advanced"`
+    PollInterval          *string `help:"cloud_flag_poll_interval" builtin-default:"10s" config:"resources.poll_interval" value-type:"duration" ux-group:"advanced"`
+    Image                 *string `help:"cloud_flag_image" config:"resources.autodl.image" exactly-one-of:"--image --private-image" applicable-when:"operation:acquire clone:false" ux-group:"environment"`
+    PrivateImage          *string `help:"cloud_flag_private_image" config:"resources.autodl.private_image_uuid" conflicts-with:"--image" applicable-when:"auth:session clone:false" ux-group:"environment"`
+    GPUSpec               *string `name:"gpu-spec" help:"cloud_flag_gpu_spec" config:"resources.autodl.gpu_spec_uuid" ux-group:"advanced"`
+    GPUSpecID             *int    `name:"gpu-spec-id" help:"cloud_flag_gpu_spec_id" config:"resources.autodl.gpu_spec_id" ux-group:"advanced"`
+    CUDAFrom              *int    `name:"cuda-from" help:"cloud_flag_cuda_from" config:"resources.autodl.cuda_from" ux-group:"advanced"`
+    ExpandSystemDisk      *int    `help:"cloud_flag_expand_system_disk" config:"resources.autodl.expand_system_disk_gb" ux-group:"environment"`
+    ExpandDataDisk        *int    `help:"cloud_flag_expand_data_disk" config:"resources.autodl.expand_data_disk_gb" ux-group:"environment"`
 }
 type searchCommand struct {
     ResourceFlags `embed:""`
-    Limit         int `default:"100" help:"cloud_flag_limit"`
+    Limit         int `default:"100" help:"cloud_flag_limit" ux-group:"advanced"`
 }
 type acquireCommand struct {
-    Notify        []string `sep:"none" help:"flag_notify"`
-    Name          string   `arg:"" help:"name_arg" value-type:"name"`
+    Continuous    *bool    `help:"cloud_flag_continuous" config:"resources.continuous" requires:"--max-compute-hourly-price" conflicts-with:"--wait --offer" ux-group:"common"`
+    Offer         string   `help:"cloud_flag_offer" requires:"--max-compute-hourly-price" conflicts-with:"--continuous --wait" ux-group:"common"`
+    DryRun        bool     `help:"cloud_flag_acquire_preview" ux-group:"common"`
+    Progress      string   `enum:"auto,plain,json,none" default:"auto" help:"cloud_flag_progress" ux-group:"advanced"`
+    Notify        []string `sep:"none" help:"flag_notify" ux-group:"advanced"`
+    Name          string   `arg:"" optional:"" help:"name_arg" value-type:"name"`
     ResourceFlags `embed:""`
-    Limit         int           `default:"100" help:"cloud_flag_limit"`
-    CloneFrom     *string       `help:"cloud_flag_clone_from"`
-    Yes           bool          `help:"cloud_flag_yes"`
-    AllowUnquoted bool          `help:"cloud_flag_unquoted"`
-    RemoteDir     string        `default:"~/.local/share/loaf/projects" help:"flag_remote" value-type:"path"`
-    ReadyTimeout  time.Duration `default:"2m" help:"cloud_flag_ready" value-type:"duration"`
+    Limit         int           `default:"100" help:"cloud_flag_limit" ux-group:"advanced"`
+    CloneFrom     *string       `help:"cloud_flag_clone_from" ux-group:"environment"`
+    Yes           bool          `help:"cloud_flag_yes" ux-group:"common"`
+    AllowUnquoted bool          `help:"cloud_flag_unquoted" ux-group:"advanced"`
+    RemoteDir     string        `default:"~/.local/share/loaf/projects" help:"flag_remote" value-type:"path" ux-group:"advanced"`
+    ReadyTimeout  time.Duration `default:"5m" help:"cloud_flag_ready" value-type:"duration" ux-group:"advanced"`
 }
 type bindCommand struct {
-    Name         string        `arg:"" help:"name_arg" value-type:"name"`
+    Name         string        `arg:"" optional:"" help:"name_arg" value-type:"name"`
+    Progress     string        `enum:"auto,plain,json,none" default:"auto" help:"cloud_flag_progress"`
     Instance     string        `help:"cloud_flag_instance"`
     Request      string        `help:"cloud_flag_request"`
     RemoteDir    *string       `help:"flag_remote" value-type:"path"`
     Replace      bool          `help:"flag_replace"`
-    ReadyTimeout time.Duration `default:"2m" help:"cloud_flag_ready" value-type:"duration"`
+    ReadyTimeout time.Duration `default:"5m" help:"cloud_flag_ready" value-type:"duration"`
 }
 type reconcileCommand struct {
     ID         string `arg:"" help:"cloud_required_request_arg" value-type:"request-id"`
@@ -236,9 +245,42 @@ type reconcileCommand struct {
     Yes        bool   `help:"cloud_flag_yes"`
 }
 type accountsCommand struct {
+    Use    requiredName      `cmd:"" help:"cloud_account_use_short" example:"loaf cloud account use main"`
     List   struct{}          `cmd:"" default:"1" help:"cloud_account_list_short" example:"loaf cloud account list"`
     Add    accountAddCommand `cmd:"" help:"cloud_account_add_short" example:"loaf cloud account add main --token-env AUTODL_TOKEN"`
     Remove requiredName      `cmd:"" help:"cloud_account_remove_short" example:"loaf cloud account remove main"`
+}
+
+type catalogCommand struct {
+    GPU    catalogQuery      `cmd:"" name:"gpu" help:"cloud_catalog_gpu_short" example:"loaf cloud catalog gpu"`
+    Region catalogQuery      `cmd:"" help:"cloud_catalog_region_short" example:"loaf cloud catalog region"`
+    Image  catalogImageQuery `cmd:"" help:"cloud_catalog_image_short" example:"loaf cloud catalog image"`
+}
+type catalogQuery struct {
+    Query string `help:"cloud_flag_query"`
+    Limit int    `default:"100" help:"cloud_flag_limit"`
+}
+type catalogImageQuery struct {
+    catalogQuery `embed:""`
+    Kind         string `default:"base" enum:"base,private,community" help:"cloud_flag_image_kind"`
+}
+type profileCommand struct {
+    List   struct{}             `cmd:"" default:"1" help:"cloud_profile_list_short" example:"loaf cloud profile list"`
+    Show   requiredName         `cmd:"" help:"cloud_profile_show_short" example:"loaf cloud profile show train"`
+    Save   profileSaveCommand   `cmd:"" help:"cloud_profile_save_short" example:"loaf cloud profile save train"`
+    Remove profileRemoveCommand `cmd:"" help:"cloud_profile_remove_short" example:"loaf cloud profile remove train --yes"`
+}
+
+type profileSaveCommand struct {
+    Name          string `arg:"" help:"name_arg" value-type:"name"`
+    ResourceFlags `embed:""`
+    Continuous    *bool `help:"cloud_flag_continuous"`
+    Replace       bool  `help:"flag_replace"`
+}
+
+type profileRemoveCommand struct {
+    Name string `arg:"" help:"name_arg" value-type:"name"`
+    Yes  bool   `help:"cloud_flag_yes"`
 }
 type accountAddCommand struct {
     Name       string `arg:"" help:"name_arg" value-type:"name"`

@@ -20,6 +20,17 @@ func FailureKind(err error) string {
     if errors.Is(err, context.DeadlineExceeded) {
         return "observation_timeout"
     }
+    var connection *classifiedConnectionFailure
+    if errors.As(err, &connection) {
+        return connection.kind
+    }
+    // Application wrappers retain the transport evidence in their cause.
+    if inner := errors.Unwrap(err); inner != nil {
+        kind := FailureKind(inner)
+        if kind != "operation_failed" {
+            return kind
+        }
+    }
     var f *fault.Error
     if errors.As(err, &f) {
         detail, _ := f.Params["Detail"].(string)

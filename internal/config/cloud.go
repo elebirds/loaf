@@ -12,6 +12,83 @@ import (
 
 var instanceID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 
+// UseCloudAccount selects a saved account without changing frozen bindings.
+func (s *Store) UseCloudAccount(ctx context.Context, name string, product *string) error {
+    return locked(ctx, s.ConfigFile, func() error {
+        c, err := s.Load()
+        if err != nil {
+            return err
+        }
+        a, ok := c.Cloud.Accounts[name]
+        if !ok {
+            return fault.New("BAD_CONFIG", "cloud_account_unknown", nil)
+        }
+        if product != nil {
+            if !cloud.ValidProduct(*product) {
+                return fault.New("BAD_CONFIG", "cloud_config", nil)
+            }
+            a.DefaultProduct = *product
+            c.Cloud.Accounts[name] = a
+        }
+        c.Cloud.DefaultAccount = name
+        data, err := toml.Marshal(c)
+        if err != nil {
+            return err
+        }
+        return atomicfile.Write(s.ConfigFile, data)
+    })
+}
+
+// SaveCloudProfile writes a personal template; project files remain unchanged.
+func (s *Store) SaveCloudProfile(ctx context.Context, name string, p cloud.Profile, replace bool) error {
+    if !ValidName(name) {
+        return fault.New("BAD_CONFIG", "cloud_config", nil)
+    }
+    if _, err := cloud.Resolve(cloud.Ceiling{}, p); err != nil {
+        return err
+    }
+    return locked(ctx, s.ConfigFile, func() error {
+        c, err := s.Load()
+        if err != nil {
+            return err
+        }
+        if _, ok := c.Resources[name]; ok && !replace {
+            return fault.New("BAD_CONFIG", "target_exists", map[string]any{"Target": name})
+        }
+        if c.Resources == nil {
+            c.Resources = map[string]cloud.Profile{}
+        }
+        c.Resources[name] = p
+        data, err := toml.Marshal(c)
+        if err != nil {
+            return err
+        }
+        return atomicfile.Write(s.ConfigFile, data)
+    })
+}
+
+// RemoveCloudProfile deletes only a user-owned resource template.
+func (s *Store) RemoveCloudProfile(ctx context.Context, name string) error {
+    if !ValidName(name) {
+        return fault.New("BAD_CONFIG", "cloud_config", nil)
+    }
+    return locked(ctx, s.ConfigFile, func() error {
+        cfg, err := s.Load()
+        if err != nil {
+            return err
+        }
+        if _, ok := cfg.Resources[name]; !ok {
+            return fault.New("BAD_CONFIG", "cloud_profile_unknown", nil)
+        }
+        delete(cfg.Resources, name)
+        data, err := toml.Marshal(cfg)
+        if err != nil {
+            return err
+        }
+        return atomicfile.Write(s.ConfigFile, data)
+    })
+}
+
 // ValidCloudBinding checks a locator independently of mutable account settings.
 func ValidCloudBinding(b cloud.Binding) bool {
     return b.Settings.Validate() == nil && ValidName(b.Ref.Account) && instanceID.MatchString(b.Ref.ID) && b.Ref.Provider == b.Settings.Provider && cloud.ValidProduct(b.Ref.Product)

@@ -1,0 +1,202 @@
+{
+  "source": "https://fe-config-backend.autodl.com/api/v1/autodl/region/tag",
+  "common_source": "https://www.autodl.com/api/v1/common",
+  "observed_date": "2026-10-29",
+  "items": [
+    {
+      "id": "west-B",
+      "name": "西北B区",
+      "data_center": "westDC3",
+      "public": true
+    },
+    {
+      "id": "bj-B1",
+      "name": "北京B区",
+      "data_center": "beijingDC2",
+      "public": true
+    },
+    {
+      "id": "west-C",
+      "name": "西北B区",
+      "data_center": "westDC3",
+      "public": true
+    },
+    {
+      "id": "west-D",
+      "name": "西北B区",
+      "data_center": "westDC3",
+      "public": true
+    },
+    {
+      "id": "west-E",
+      "name": "西北B区",
+      "data_center": "westDC3",
+      "public": true
+    },
+    {
+      "id": "bj-B2",
+      "name": "北京B区",
+      "data_center": "beijingDC2",
+      "public": true
+    },
+    {
+      "id": "bj-B3",
+      "name": "北京B区",
+      "data_center": "beijingDC2",
+      "public": true
+    },
+    {
+      "id": "cq-A1",
+      "name": "重庆A区",
+      "data_center": "chongqingDC1",
+      "public": true
+    },
+    {
+      "id": "nm-B1",
+      "name": "内蒙B区",
+      "data_center": "neimengDC3",
+      "public": true
+    },
+    {
+      "id": "nm-B2",
+      "name": "内蒙B区",
+      "data_center": "neimengDC3",
+      "public": true
+    },
+    {
+      "id": "beijing-A",
+      "name": "北京A区",
+      "data_center": "beijingDC1",
+      "public": true
+    },
+    {
+      "id": "foshan-A",
+      "name": "佛山区",
+      "data_center": "foshanDC1",
+      "public": true
+    },
+    {
+      "id": "beijing-C",
+      "name": "V100专区",
+      "data_center": "beijingDC3",
+      "public": true
+    },
+    {
+      "id": "beijing-B",
+      "name": "北京A区",
+      "data_center": "beijingDC1",
+      "public": true
+    },
+    {
+      "id": "beijing-D",
+      "name": "北京A区",
+      "data_center": "beijingDC1",
+      "public": true
+    },
+    {
+      "id": "nm-A1",
+      "name": "A800专区",
+      "data_center": "neimengDC2",
+      "public": true
+    },
+    {
+      "id": "beijing-E",
+      "name": "北京A区",
+      "data_center": "beijingDC1",
+      "public": true
+    },
+    {
+      "id": "west-X",
+      "name": "西北企业区",
+      "data_center": "westDC2",
+      "public": false
+    },
+    {
+      "id": "sh-A1",
+      "name": "摩尔线程专区",
+      "data_center": "shanghaiDC1",
+      "public": true
+    }
+  ],
+  "groups": [
+    {
+      "data_center": "westDC3",
+      "name": "西北B区",
+      "ids": [
+        "west-B",
+        "west-C",
+        "west-D",
+        "west-E"
+      ]
+    },
+    {
+      "data_center": "beijingDC2",
+      "name": "北京B区",
+      "ids": [
+        "bj-B1",
+        "bj-B2",
+        "bj-B3"
+      ]
+    },
+    {
+      "data_center": "chongqingDC1",
+      "name": "重庆A区",
+      "ids": [
+        "cq-A1"
+      ]
+    },
+    {
+      "data_center": "neimengDC3",
+      "name": "内蒙B区",
+      "ids": [
+        "nm-B1",
+        "nm-B2"
+      ]
+    },
+    {
+      "data_center": "beijingDC1",
+      "name": "北京A区",
+      "ids": [
+        "beijing-A",
+        "beijing-B",
+        "beijing-D",
+        "beijing-E"
+      ]
+    },
+    {
+      "data_center": "foshanDC1",
+      "name": "佛山区",
+      "ids": [
+        "foshan-A"
+      ]
+    },
+    {
+      "data_center": "beijingDC3",
+      "name": "V100专区",
+      "ids": [
+        "beijing-C"
+      ]
+    },
+    {
+      "data_center": "neimengDC2",
+      "name": "A800专区",
+      "ids": [
+        "nm-A1"
+      ]
+    },
+    {
+      "data_center": "westDC2",
+      "name": "西北企业区",
+      "ids": [
+        "west-X"
+      ]
+    },
+    {
+      "data_center": "shanghaiDC1",
+      "name": "摩尔线程专区",
+      "ids": [
+        "sh-A1"
+      ]
+    }
+  ]
+}

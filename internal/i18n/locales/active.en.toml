@@ -654,7 +654,7 @@ other = "cleanup unconfirmed"
 other = "Query the same run ID with loaf status to confirm acceptance before cleaning; do not submit a replacement run."
 
 [cloud_short]
-other = "Manage cloud resources and connect machines."
+other = "Open the cloud overview; manage instances, rent and recover."
 
 [cloud_config]
 other = "Invalid cloud settings. Check the account, resource conditions, image, units and time bounds."
@@ -903,7 +903,7 @@ other = "Minimum query interval (10s–10m); backoff may increase it"
 other = "Explicit ordinary base-image UUID or Pro image UUID"
 
 [cloud_flag_private_image]
-other = "Ordinary private image UUID when applicable"
+other = "Private image UUID (session standard or Pro)"
 
 [cloud_flag_gpu_spec]
 other = "Explicit Pro GPU specification UUID"
@@ -2382,3 +2382,987 @@ other = "Continue subscription listing after this subscription ID"
 
 [notify_subscriptions_more]
 other = "More subscriptions: use --after {{.ID}}."
+
+[cloud_catalog_short]
+other = "Discover GPU, region and image choices."
+
+[cloud_profile_short]
+other = "List, inspect, save or remove resource profiles offline."
+
+[cloud_catalog_gpu_short]
+other = "List canonical GPU models."
+
+[cloud_catalog_region_short]
+other = "List regions by name and identifier."
+
+[cloud_catalog_image_short]
+other = "Search actual environment images."
+
+[cloud_profile_list_short]
+other = "List personal and project templates."
+
+[cloud_profile_show_short]
+other = "Show effective template requirements."
+
+[cloud_account_use_short]
+other = "Select the default account and optional product."
+
+[cloud_flag_query]
+other = "Filter directory names or identifiers."
+
+[cloud_flag_image_kind]
+other = "Image source: base, private or community (capability required)."
+
+[cloud_flag_continuous]
+other = "Keep acquiring in the foreground until success or cancellation; needs a price cap."
+
+[cloud_flag_storage_cap]
+other = "Maximum daily storage price in CNY, separate from compute."
+
+[cloud_flag_offer]
+other = "Pin this catalog offer; do not substitute another host."
+
+[cloud_flag_acquire_preview]
+other = "Validate local requirements without credentials, network, IDs or writes."
+
+[cloud_flag_progress]
+other = "Progress on stderr: auto, plain, json (NDJSON), or none."
+
+[cloud_offer_wait]
+other = "A fixed offer cannot use continuous or positive waiting."
+
+[cloud_continuous_wait]
+other = "Choose either --continuous or an explicit --wait."
+
+[cloud_budget_required]
+other = "Set a valid whole-instance hourly compute price cap in CNY."
+
+[cloud_storage_budget_required]
+other = "Set a valid daily storage price cap for automatic disk expansion."
+
+[cloud_image_required]
+other = "Select one base or private image."
+
+[cloud_image_conflict]
+other = "Base and private images are mutually exclusive."
+
+[cloud_image_unknown]
+other = "The selected image is not present in this image directory."
+
+[cloud_cuda_required]
+other = "Pro creation requires --cuda-from."
+
+[cloud_spec_required]
+other = "Developer Pro creation requires --gpu-spec."
+
+[cloud_name_required]
+other = "Choose a machine alias using letters, numbers, hyphens or underscores."
+
+[cloud_model_required]
+other = "Select at least one GPU model."
+
+[cloud_number_invalid]
+other = "Enter a nonnegative integer."
+
+[cloud_gpu_count_invalid]
+other = "Enter an integer from 1 to {{.Count}}."
+
+[cloud_wait_invalid]
+other = "Enter a positive waiting duration, at most 24h."
+
+[cloud_candidate_changed]
+other = "The candidate is no longer eligible. Review another candidate."
+
+[cloud_nav_retry]
+other = "Refresh candidates"
+
+[cloud_nav_next]
+other = "Continue"
+
+[cloud_nav_back]
+other = "Back"
+
+[cloud_nav_cancel]
+other = "Cancel"
+
+[cloud_wizard_navigation]
+other = "Next step"
+
+[cloud_wizard_login]
+other = "Log in to another account"
+
+[cloud_wizard_account]
+other = "Choose an account"
+
+[cloud_wizard_account_name]
+other = "Local account name"
+
+[cloud_wizard_mode]
+other = "How would you like to acquire a machine?"
+
+[cloud_mode_select]
+other = "Select a host from current stock"
+
+[cloud_mode_auto]
+other = "Acquire automatically within confirmed conditions"
+
+[cloud_wizard_gpu]
+other = "GPU model"
+
+[cloud_wizard_count]
+other = "GPU count"
+
+[cloud_wizard_regions]
+other = "Allowed regions"
+
+[cloud_regions_any]
+other = "Clear all to allow any region, including enterprise regions."
+
+[cloud_regions_default]
+other = "Public regions are preselected; enterprise regions are optional. Clear all to allow any region."
+
+[cloud_wizard_advanced]
+other = "Resource constraints"
+
+[cloud_defaults_keep]
+other = "Keep effective defaults"
+
+[cloud_conditions_edit]
+other = "Edit minimum resources"
+
+[cloud_wizard_gpu_memory]
+other = "Minimum GPU memory per card (GiB)"
+
+[cloud_wizard_cpus]
+other = "Minimum allocated CPUs"
+
+[cloud_wizard_memory]
+other = "Minimum allocated memory (GiB)"
+
+[cloud_wizard_disk]
+other = "Minimum allocated disk (GiB)"
+
+[cloud_step_compute]
+other = "Choose compute"
+
+[cloud_step_candidate]
+other = "Choose a host or acquisition conditions"
+
+[cloud_step_environment]
+other = "Environment and storage"
+
+[cloud_step_review]
+other = "Review and authorize"
+
+[cloud_wizard_price]
+other = "Maximum compute price (CNY per instance-hour)"
+
+[cloud_wizard_wait]
+other = "Waiting policy"
+
+[cloud_wait_continuous]
+other = "Until success or manual cancellation"
+
+[cloud_wait_bounded]
+other = "For a specified duration"
+
+[cloud_wizard_duration]
+other = "Waiting duration (for example 30m): "
+
+[cloud_wizard_host]
+other = "Choose a host or specification"
+
+[cloud_wizard_image_source]
+other = "Image source"
+
+[cloud_image_base]
+other = "Base images"
+
+[cloud_image_private]
+other = "My private images"
+
+[cloud_wizard_image]
+other = "Environment image"
+
+[cloud_wizard_expand]
+other = "Additional disk (GB)"
+
+[cloud_expand_hint]
+other = "0 disables paid expansion. Clones prefill the source disk floor."
+
+[cloud_wizard_storage_price]
+other = "Maximum storage price (CNY per day): "
+
+[cloud_wizard_name]
+other = "Machine alias"
+
+[cloud_wizard_after]
+other = "After the machine is ready"
+
+[cloud_optional_choices]
+other = "Optional; leave unchecked to perform no additional action."
+
+[cloud_after_select]
+other = "Select this machine for the current project"
+
+[cloud_after_save]
+other = "Save these conditions as a personal template"
+
+[cloud_loading_catalog]
+other = "Loading read-only compute directories…"
+
+[cloud_loading_stock]
+other = "Checking current stock and prices…"
+
+[cloud_loading_images]
+other = "Loading environment images…"
+
+[cloud_progress_counts]
+other = "Inventory polls: {{.Count}} · allocation attempts: {{.Value}}"
+
+[cloud_progress_coverage]
+other = "Matches: {{.Total}} · examined: {{.Count}} · complete: {{.Value}}"
+
+[cloud_progress_cancel]
+other = "Tab details · Ctrl+C stops waiting or observation; existing instances are retained."
+
+[cloud_elapsed]
+other = "Elapsed:"
+
+[cloud_next_check]
+other = "Next check:"
+
+[cloud_progress_starting]
+other = "Waiting for the instance to start…"
+
+[cloud_progress_copying]
+other = "Waiting for clone disk copying…"
+
+[cloud_progress_connecting]
+other = "Verifying SSH authentication…"
+
+[cloud_progress_ready]
+other = "Machine ready."
+
+[cloud_progress_retrying]
+other = "Read failed; backing off before the next check."
+
+[cloud_progress_poll]
+other = "Waiting for eligible stock…"
+
+[cloud_next_action]
+other = "Next: {{.Value}}"
+
+[cloud_plan_offer]
+other = "Selected candidate: {{.ID}}"
+
+[cloud_plan_image]
+other = "Image: {{.Value}}"
+
+[cloud_plan_storage]
+other = "Daily storage cap: {{.Value}} CNY"
+
+[cloud_plan_source]
+other = "Requirement sources"
+
+[cloud_plan_pending]
+other = "Live checks still required: {{.Value}}"
+
+[cloud_reject_storage_price]
+other = "daily storage price exceeds cap"
+
+[cloud_reject_storage_price_unknown]
+other = "daily storage price is unknown"
+
+[cloud_coverage_complete]
+other = "complete"
+
+[cloud_coverage_partial]
+other = "partial"
+
+[cloud_choice_invalid]
+other = "Select an available numbered option."
+
+[cloud_select_help]
+other = "↑↓ select · / search · Enter continue · Ctrl+C cancel"
+
+[cloud_multi_help]
+other = "↑↓ move · Space toggle · / search · Enter continue · Ctrl+C cancel"
+
+[cloud_multi_plain]
+other = "Comma-separated numbers; 0 clears; Enter keeps the selection."
+
+[cloud_catalog_unsupported]
+other = "This product or image source has no supported read-only directory."
+
+[cloud_instance_required]
+other = "Select an explicit existing instance."
+
+[cloud_wizard_instance]
+other = "Choose an existing instance"
+
+[cloud_progress_stopping]
+other = "Waiting for the instance to stop…"
+
+[cloud_profile_scopes]
+other = "Personal: {{.Value}} · project: {{.Mode}}"
+
+[cloud_image_refine]
+other = "Refine the image search: "
+
+[cloud_plan_resources]
+other = "Minimum GPU {{.Count}} GiB/card · CPUs {{.Total}} · RAM {{.Value}} GiB · disk {{.Mode}} GiB"
+
+[cloud_wizard_context]
+other = "{{.Account}} / {{.Product}} · {{.Target}} · pay as you go"
+
+[cloud_progress_conditions]
+other = "{{.Value}} × {{.Count}} · compute cap {{.Price}}"
+
+[cloud_progress_authorized]
+other = "Conditions authorized; preparing acquisition…"
+
+[cloud_host_details]
+other = "GPU {{.GPU}} GiB/card · CPU {{.CPU}} · RAM {{.Memory}} GiB · disk {{.Disk}} GiB\nDriver {{.Driver}} · maximum CUDA {{.CUDA}}"
+
+[cloud_wizard_spec]
+other = "Choose a Pro specification (aggregate stock, not a reserved host)"
+
+[cloud_plan_inherited]
+other = "Inherited from clone source after live validation: {{.Value}}"
+
+[cloud_help_common]
+other = "Common choices"
+
+[cloud_help_environment]
+other = "Environment and storage"
+
+[cloud_help_conditions]
+other = "Hard conditions"
+
+[cloud_help_advanced]
+other = "Advanced and observation"
+
+[cloud_help_global]
+other = "Scope and global options"
+
+[cloud_profile_replace]
+other = "Replace personal template {{.Value}}?"
+
+[cloud_ui_form_help]
+other = "Enter continue · Shift+Tab back · Ctrl+C cancel"
+
+[cloud_ui_product_standard]
+other = "AutoDL Standard"
+
+[cloud_ui_product_pro]
+other = "AutoDL Pro"
+
+[cloud_ui_any_gpu]
+other = "Match resource conditions"
+
+[cloud_ui_any_region]
+other = "Any supported region"
+
+[cloud_ui_hourly_cap]
+other = "≤ ¥{{.Value}} / hour, whole instance"
+
+[cloud_ui_daily_cap]
+other = "≤ ¥{{.Value}} / day"
+
+[cloud_ui_data_disk]
+other = "Data disk +{{.Count}} GB"
+
+[cloud_ui_system_disk]
+other = "System disk +{{.Count}} GB"
+
+[cloud_ui_min_gpu_memory]
+other = "GPU ≥ {{.Count}} GiB/card"
+
+[cloud_ui_min_cpus]
+other = "CPU ≥ {{.Count}}"
+
+[cloud_ui_min_memory]
+other = "RAM ≥ {{.Count}} GiB"
+
+[cloud_ui_min_disk]
+other = "Disk ≥ {{.Count}} GiB"
+
+[cloud_ui_wait_continuous]
+other = "Until success or cancellation"
+
+[cloud_ui_wait_once]
+other = "One attempt"
+
+[cloud_ui_coverage_partial]
+other = "Checked {{.Count}} candidates · partial inventory"
+
+[cloud_ui_coverage_complete]
+other = "Checked {{.Count}} candidates · complete query"
+
+[cloud_ui_cancel]
+other = "Ctrl+C cancel"
+
+[cloud_ui_result_ready]
+other = "✓ {{.Target}} is ready"
+
+[cloud_ui_result_ready_partial]
+other = "! {{.Target}} is ready; a follow-up action failed"
+
+[cloud_ui_result_connect]
+other = "! Instance acquired · connection not ready"
+
+[cloud_ui_result_copying]
+other = "Instance acquired · disks still copying"
+
+[cloud_ui_result_copy_failed]
+other = "! Instance acquired · disk copy failed"
+
+[cloud_ui_result_uncertain]
+other = "! Acquisition needs reconciliation"
+
+[cloud_ui_connect_recovery]
+other = "Check SSH access and host trust, then reconnect to this instance."
+
+[cloud_ui_copy_recovery]
+other = "Resume this request to continue observing the same copy."
+
+[cloud_ui_copy_failed_recovery]
+other = "Inspect the copy result in AutoDL before recovering this instance."
+
+[cloud_ui_billing_active]
+other = "The instance is retained and may already be billing."
+
+[cloud_ui_check_console]
+other = "Check this request and the AutoDL console before retrying any purchase."
+
+[cloud_ui_power_observe]
+other = "Accepted by the platform; completion is not yet confirmed."
+
+[cloud_ui_next]
+other = "Next"
+
+[cloud_ui_resume]
+other = "Resume connection"
+
+[cloud_ui_inspect]
+other = "Inspect the original request"
+
+[cloud_ui_use]
+other = "Use this machine"
+
+[cloud_ui_approve_acquire]
+other = "Review acquisition"
+
+[cloud_ui_approve_start]
+other = "Start this instance"
+
+[cloud_ui_approve_stop]
+other = "Stop this instance"
+
+[cloud_ui_approve_no-instance]
+other = "Confirm no instance was created"
+
+[cloud_ui_notice_acquire]
+other = "Authorize one instance. Storage is charged separately; there is no total-spend limit or automatic shutdown."
+
+[cloud_ui_notice_start]
+other = "Starting can resume compute billing for the whole instance."
+
+[cloud_ui_notice_stop]
+other = "This stops the whole instance and interrupts all its jobs. Storage may still be charged."
+
+[cloud_ui_notice_no-instance]
+other = "Proceed only after verifying in AutoDL that this request created no instance. This clears duplicate-purchase protection."
+
+[cloud_ui_clone_notice]
+other = "Copy both disks and retain the source instance."
+
+[cloud_ui_type_yes]
+other = "Type yes to confirm"
+
+[cloud_ui_elapsed]
+other = "Elapsed"
+
+[cloud_ui_progress_keys]
+other = "Tab details  ·  Ctrl+C cancel observation"
+
+[cloud_ui_progress_back]
+other = "Tab overview  ·  Ctrl+C cancel observation"
+
+[cloud_ui_details]
+other = "Operation details"
+
+[cloud_ui_poll]
+other = "Poll {{.Count}} · allocation attempts {{.Value}}"
+
+[cloud_ui_read_retry]
+other = "Read temporarily failed; retrying automatically."
+
+[cloud_ui_creating_notice]
+other = "Request saved. Acquiring one instance."
+
+[cloud_ui_instance_created]
+other = "✓ Instance created"
+
+[cloud_ui_instance_saved]
+other = "✓ Original instance retained"
+
+[cloud_ui_rejections]
+other = "Main reason each candidate was excluded"
+
+[cloud_ui_cancelled]
+other = "Acquisition cancelled"
+
+[cloud_ui_not_sent]
+other = "No allocation request was sent."
+
+[cloud_ui_label_gpu]
+other = "Compute"
+
+[cloud_ui_label_region]
+other = "Region"
+
+[cloud_ui_label_budget]
+other = "Compute cap"
+
+[cloud_ui_label_storage_price]
+other = "Storage cap"
+
+[cloud_ui_label_source]
+other = "Clone source"
+
+[cloud_ui_label_image]
+other = "Environment"
+
+[cloud_ui_label_disk]
+other = "Expansion"
+
+[cloud_ui_label_minimum]
+other = "Minimums"
+
+[cloud_ui_label_spec]
+other = "Specification"
+
+[cloud_ui_label_wait]
+other = "Wait"
+
+[cloud_ui_label_vendor]
+other = "GPU vendor"
+
+[cloud_ui_label_instance]
+other = "Instance"
+
+[cloud_ui_label_request]
+other = "Request"
+
+[cloud_ui_label_image_id]
+other = "Image ID"
+
+[cloud_ui_stage_authorized]
+other = "Finding matching compute"
+
+[cloud_ui_stage_waiting]
+other = "Waiting for available compute"
+
+[cloud_ui_stage_retrying]
+other = "Waiting to retry inventory"
+
+[cloud_ui_stage_creating]
+other = "Acquiring an instance"
+
+[cloud_ui_stage_allocation_attempt]
+other = "Attempting allocation"
+
+[cloud_ui_stage_created]
+other = "Preparing your instance"
+
+[cloud_ui_stage_starting]
+other = "Waiting for the instance to start"
+
+[cloud_ui_stage_copying]
+other = "Copying disks"
+
+[cloud_ui_stage_connecting]
+other = "Checking SSH connection"
+
+[cloud_ui_stage_stopping]
+other = "Waiting for the instance to stop"
+
+[cloud_ui_stage_ready]
+other = "Connection ready"
+
+[cloud_ui_result_start_accepted]
+other = "Start request accepted"
+
+[cloud_ui_result_start_completed]
+other = "Start completed"
+
+[cloud_ui_result_start_unconfirmed]
+other = "Start needs confirmation"
+
+[cloud_ui_result_stop_accepted]
+other = "Stop request accepted"
+
+[cloud_ui_result_stop_completed]
+other = "Stop completed"
+
+[cloud_ui_result_stop_unconfirmed]
+other = "Stop needs confirmation"
+
+[cloud_ui_label_offer]
+other = "Selected offer"
+
+[cloud_ui_result_bind]
+other = "! Connection not completed"
+
+[cloud_ui_result_not_created]
+other = "No instance was created"
+
+[cloud_ui_result_start_rejected]
+other = "Start request rejected"
+
+[cloud_ui_result_stop_rejected]
+other = "Stop request rejected"
+
+[cloud_flow_mode]
+other = "Mode"
+
+[cloud_flow_compute]
+other = "GPUs"
+
+[cloud_flow_candidate]
+other = "Host/conditions"
+
+[cloud_flow_environment]
+other = "Image/disk"
+
+[cloud_flow_approval]
+other = "Approve"
+
+[cloud_flow_connection]
+other = "Connect"
+
+[cloud_flow_acquisition]
+other = "Acquire"
+
+[cloud_region_all]
+other = "{{.Value}} (all)"
+
+[cloud_region_exact]
+other = "{{.Value}} (exact: {{.Region}})"
+
+[cloud_connect_trust_hint]
+other = "Confirm the host fingerprint with native SSH, then check the same instance again. No replacement will be rented."
+
+[cloud_connect_changed_hint]
+other = "The host key changed. Verify it independently before modifying any trust record; the existing instance is retained."
+
+[cloud_connect_auth_hint]
+other = "SSH authentication failed. Check the instance credentials or SSH configuration, then reconnect to this instance."
+
+[cloud_recover_title]
+other = "Continue connecting to this instance"
+
+[cloud_recover_trust]
+other = "Verify the host fingerprint with native SSH, then continue"
+
+[cloud_recover_retry]
+other = "Check this instance again for up to 5 minutes"
+
+[cloud_recover_connection]
+other = "View connection information (password hidden)"
+
+[cloud_recover_leave]
+other = "Keep the instance and exit"
+
+[cloud_failure_host_trust]
+other = "Host fingerprint verification is required."
+
+[cloud_failure_authentication]
+other = "SSH authentication needs attention."
+
+[cloud_failure_configuration]
+other = "Check the SSH configuration."
+
+[cloud_failure_name_resolution]
+other = "The SSH address could not be resolved."
+
+[cloud_failure_connection_refused]
+other = "SSH is not accepting connections yet."
+
+[cloud_failure_connection_timeout]
+other = "The SSH connection timed out; another check is scheduled."
+
+[cloud_failure_connection_reset]
+other = "The SSH connection was reset."
+
+[cloud_failure_connection_closed]
+other = "The SSH connection closed."
+
+[cloud_failure_cloud_transport]
+other = "Platform connection information is temporarily unavailable."
+
+[cloud_failure_ssh_transport]
+other = "The SSH connection could not be confirmed."
+
+[cloud_failure_observation_timeout]
+other = "The observation window ended."
+
+[cloud_probe_count]
+other = "SSH probes: {{.Count}}"
+
+[cloud_profile_save_short]
+other = "Save effective resource preferences without renting"
+
+[cloud_profile_remove_short]
+other = "Remove a personal resource profile"
+
+[cloud_profile_remove_confirm]
+other = "Remove personal profile {{.Target}}? Project profiles and instances are retained."
+
+[cloud_hub_title]
+other = "Cloud resources"
+
+[cloud_hub_loading]
+other = "Reading instances"
+
+[cloud_hub_count]
+other = "{{.Count}} instances in this scope"
+
+[cloud_hub_no_account]
+other = "No account selected. Open Accounts and profiles to log in."
+
+[cloud_hub_instances]
+other = "My instances"
+
+[cloud_hub_market]
+other = "Find compute / rent"
+
+[cloud_hub_requests]
+other = "Requests needing attention"
+
+[cloud_hub_settings]
+other = "Accounts and profiles"
+
+[cloud_hub_scope]
+other = "Switch account / product"
+
+[cloud_hub_exit]
+other = "Exit"
+
+[cloud_hub_back]
+other = "Back"
+
+[cloud_hub_refresh]
+other = "Refresh"
+
+[cloud_hub_filter]
+other = "Filter by status"
+
+[cloud_hub_all]
+other = "All statuses"
+
+[cloud_hub_product]
+other = "Compute product"
+
+[cloud_hub_result]
+other = "Result"
+
+[cloud_hub_instance]
+other = "Instance actions"
+
+[cloud_hub_info]
+other = "View details"
+
+[cloud_hub_bind]
+other = "Connect / retry connection"
+
+[cloud_hub_connection]
+other = "Connection information (password hidden)"
+
+[cloud_hub_ssh]
+other = "Open native SSH"
+
+[cloud_hub_use]
+other = "Use for this project"
+
+[cloud_hub_start]
+other = "Start instance"
+
+[cloud_hub_stop]
+other = "Stop instance"
+
+[cloud_hub_clone]
+other = "Clone system and data disks"
+
+[cloud_hub_acquire]
+other = "Select or acquire an instance"
+
+[cloud_hub_catalog_gpu]
+other = "Browse GPU models"
+
+[cloud_hub_catalog_region]
+other = "Browse regions"
+
+[cloud_hub_catalog_image]
+other = "Browse images"
+
+[cloud_hub_search]
+other = "Search current stock (read-only)"
+
+[cloud_hub_watch]
+other = "Observe stock (read-only)"
+
+[cloud_hub_request]
+other = "Request recovery"
+
+[cloud_hub_request_info]
+other = "View saved facts"
+
+[cloud_hub_resume]
+other = "Resume connection to the original instance"
+
+[cloud_hub_associate]
+other = "Associate a verified instance ID"
+
+[cloud_hub_absent]
+other = "Confirm that no instance was created"
+
+[cloud_hub_observe]
+other = "Observe the original power operation"
+
+[cloud_hub_associate_id]
+other = "Verified instance ID from the platform"
+
+[cloud_hub_login]
+other = "Log in / renew this account"
+
+[cloud_hub_default]
+other = "Set this scope as the default"
+
+[cloud_hub_profiles]
+other = "Resource profiles"
+
+[cloud_hub_logout]
+other = "Log out credentials"
+
+[cloud_hub_remove_account]
+other = "Remove account configuration"
+
+[cloud_hub_confirm_logout]
+other = "Log out {{.Account}}? Connections using these credentials may need login again."
+
+[cloud_hub_confirm_remove_account]
+other = "Remove account {{.Account}}? Credentials, instances and frozen bindings remain."
+
+[cloud_hub_profile_info]
+other = "Show effective preferences and sources"
+
+[cloud_hub_profile_rent]
+other = "Use this profile to rent"
+
+[cloud_hub_profile_remove]
+other = "Remove the personal copy"
+
+[operation_stage_cloud_readiness]
+other = "Checking instance readiness"
+
+[cloud_candidates_columns]
+other = "Price/h · GPU × count · VRAM GiB · CPU · RAM GiB · Region · ID"
+
+[cloud_candidates_refresh]
+other = "Refresh this window"
+
+[cloud_candidate_refresh]
+other = "Refresh images"
+
+[cloud_candidates_sort]
+other = "Sort candidates"
+
+[cloud_candidates_more]
+other = "Load next inventory window"
+
+[cloud_candidates_sort_price]
+other = "Price: lowest first"
+
+[cloud_candidates_sort_cpu]
+other = "CPU: most cores first"
+
+[cloud_candidates_sort_memory]
+other = "Memory: largest first"
+
+[cloud_image_switch_private]
+other = "Switch to my images"
+
+[cloud_image_switch_base]
+other = "Switch to base images"
+
+[cloud_image_search]
+other = "Search image versions"
+
+[cloud_compatibility_unknown]
+other = "Compatibility not verified"
+
+[cloud_review_command]
+other = "Show equivalent command"
+
+[cloud_review_save]
+other = "Save as a profile without renting"
+
+[cloud_profile_save_name]
+other = "Personal profile name"
+
+[cloud_profile_source_user]
+other = "Personal"
+
+[cloud_profile_source_project]
+other = "Project"
+
+[cloud_profile_user_overridden]
+other = "Overrides personal fields"
+
+[cloud_profile_create]
+other = "Create a profile"
+
+[cloud_hub_profile_edit]
+other = "Edit and save preferences"
+
+[cloud_ui_edit_keys]
+other = "e edit conditions · Tab details · Ctrl+C stop waiting"
+
+[cloud_ui_blocker]
+other = "Waiting for: {{.Value}} ({{.Count}} candidates)"
+
+[cloud_ui_scan_window]
+other = "Current scan starts at {{.Count}}; inventory changes between scans."
+
+[cloud_optional_price]
+other = "Hourly price cap (optional)"
+
+[cloud_models_any]
+other = "Leave unchecked to allow any GPU model."
+
+[cloud_trust_confirmed]
+other = "Host fingerprint step complete; verifying SSH with the instance credentials."
+
+[cloud_scope_environment_reset]
+other = "Incompatible inherited environment defaults were reset for this product."
+
+[cloud_page_count]
+other = "Page {{.Count}} / {{.Value}}"
+
+[cloud_page_next]
+other = "Next page"
+
+[cloud_page_previous]
+other = "Previous page"
+
+[cloud_browse_actions]
+other = "Actions"
+
+[cloud_readonly_no_allocation]
+other = "Read-only: no instance will be rented."
+
+[cloud_failure_cloud_api]
+other = "The platform could not provide instance or connection information."

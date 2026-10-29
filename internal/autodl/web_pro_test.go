@@ -80,7 +80,9 @@ func TestWebProCatalogQuoteCreateAndPowerForBothIdentities(t *testing.T) {
                 t.Fatal(err)
             }
             p := provider.(*WebPro)
-            page, err := p.Search(context.Background(), webProPlan(), 10)
+            request := webProPlan()
+            request.Requirements.MaxStorageDailyPrice = &cloud.Money{Amount: "0.30", Currency: "CNY"}
+            page, err := p.Search(context.Background(), request, 10)
             if err != nil || !page.Complete || page.Examined != 1 || len(page.Offers) != 1 {
                 t.Fatal(page, err)
             }
@@ -88,7 +90,7 @@ func TestWebProCatalogQuoteCreateAndPowerForBothIdentities(t *testing.T) {
             if offer.ComputeHourlyPrice == nil || offer.ComputeHourlyPrice.Amount != "2.200" || offer.StorageDailyPrice.Amount != "0.300" || offer.GPUMemoryGiB != nil || *offer.CPUs != 8 || *offer.MemoryGiB != 32 {
                 t.Fatal(offer)
             }
-            id, err := p.Create(context.Background(), webProPlan(), &offer)
+            id, err := p.Create(context.Background(), request, &offer)
             if err != nil || id.Product != "pro" || id.ID != "created-web" || creates != 1 || quotes != 2 {
                 t.Fatal(id, err, creates, quotes)
             }

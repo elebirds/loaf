@@ -654,7 +654,7 @@ other = "清理未确认"
 other = "先用 loaf status 查询同一任务 ID，确认已接受后再清理；不要提交替代任务。"
 
 [cloud_short]
-other = "管理云资源并接入机器。"
+other = "进入云资源概览，管理实例、租用与恢复请求。"
 
 [cloud_config]
 other = "云配置无效，请检查账号、资源条件、镜像、单位和时间范围。"
@@ -903,7 +903,7 @@ other = "最小查询间隔（10s–10m），退避可能增大间隔"
 other = "显式指定普通实例基础镜像 UUID 或 Pro 镜像 UUID"
 
 [cloud_flag_private_image]
-other = "适用时指定普通实例的私有镜像 UUID"
+other = "私有镜像 UUID（网页会话普通实例或 Pro）"
 
 [cloud_flag_gpu_spec]
 other = "显式指定 Pro 算力规格 UUID"
@@ -2382,3 +2382,987 @@ other = "从此订阅 ID 后继续列出"
 
 [notify_subscriptions_more]
 other = "还有更多订阅，请使用 --after {{.ID}}。"
+
+[cloud_catalog_short]
+other = "查找 GPU、地区和镜像选项。"
+
+[cloud_profile_short]
+other = "离线列出、查看、保存或删除资源模板。"
+
+[cloud_catalog_gpu_short]
+other = "列出平台 GPU 型号。"
+
+[cloud_catalog_region_short]
+other = "按名称和标识列出地区。"
+
+[cloud_catalog_image_short]
+other = "搜索实际可用的环境镜像。"
+
+[cloud_profile_list_short]
+other = "列出个人和项目资源模板。"
+
+[cloud_profile_show_short]
+other = "查看模板的有效资源条件。"
+
+[cloud_account_use_short]
+other = "选择默认账号，可同时设置默认产品。"
+
+[cloud_flag_query]
+other = "筛选目录名称或标识。"
+
+[cloud_flag_image_kind]
+other = "镜像来源：base、private 或 community，需适配器支持。"
+
+[cloud_flag_continuous]
+other = "前台持续抢卡，直到成功或取消；须设置价格上限。"
+
+[cloud_flag_storage_cap]
+other = "每日存储费用上限，单位 CNY，与计算费用分开。"
+
+[cloud_flag_offer]
+other = "固定此目录候选，不替换为其他主机。"
+
+[cloud_flag_acquire_preview]
+other = "本地预览条件，不读取凭据、不联网、不分配 ID 或写入状态。"
+
+[cloud_flag_progress]
+other = "stderr 进度：auto、plain、json（NDJSON）或 none。"
+
+[cloud_offer_wait]
+other = "固定候选不能同时启用持续或正时长等待。"
+
+[cloud_continuous_wait]
+other = "请在 --continuous 与显式 --wait 之间选择一种。"
+
+[cloud_budget_required]
+other = "请设置有效的整实例每小时计算价格上限，单位 CNY。"
+
+[cloud_storage_budget_required]
+other = "自动扩盘请设置有效的每日存储费用上限。"
+
+[cloud_image_required]
+other = "请选择一个基础镜像或私有镜像。"
+
+[cloud_image_conflict]
+other = "基础镜像与私有镜像不能同时指定。"
+
+[cloud_image_unknown]
+other = "此镜像不在当前镜像目录中。"
+
+[cloud_cuda_required]
+other = "Pro 创建需要 --cuda-from。"
+
+[cloud_spec_required]
+other = "开发者 Pro 创建需要 --gpu-spec。"
+
+[cloud_name_required]
+other = "请使用字母、数字、连字符或下划线指定机器别名。"
+
+[cloud_model_required]
+other = "请至少选择一个 GPU 型号。"
+
+[cloud_number_invalid]
+other = "请输入非负整数。"
+
+[cloud_gpu_count_invalid]
+other = "请输入 1–{{.Count}} 的整数。"
+
+[cloud_wait_invalid]
+other = "请输入不超过 24h 的正等待时长。"
+
+[cloud_candidate_changed]
+other = "候选已不满足条件，请重新选择。"
+
+[cloud_nav_retry]
+other = "刷新候选"
+
+[cloud_nav_next]
+other = "继续"
+
+[cloud_nav_back]
+other = "返回修改"
+
+[cloud_nav_cancel]
+other = "取消"
+
+[cloud_wizard_navigation]
+other = "下一步"
+
+[cloud_wizard_login]
+other = "登录其他账号"
+
+[cloud_wizard_account]
+other = "选择账号"
+
+[cloud_wizard_account_name]
+other = "本地账号名称"
+
+[cloud_wizard_mode]
+other = "怎样获取机器？"
+
+[cloud_mode_select]
+other = "选卡：从当前库存选择主机"
+
+[cloud_mode_auto]
+other = "抢卡：按确认的条件自动获取"
+
+[cloud_wizard_gpu]
+other = "GPU 型号"
+
+[cloud_wizard_count]
+other = "GPU 卡数"
+
+[cloud_wizard_regions]
+other = "允许的地区"
+
+[cloud_regions_any]
+other = "全部取消则不限地区（含企业区）。"
+
+[cloud_regions_default]
+other = "已预选公开地区；企业区可按需勾选。全部取消则不限地区。"
+
+[cloud_wizard_advanced]
+other = "配套资源条件"
+
+[cloud_defaults_keep]
+other = "沿用有效默认值"
+
+[cloud_conditions_edit]
+other = "修改资源下限"
+
+[cloud_wizard_gpu_memory]
+other = "单卡最低显存（GiB）"
+
+[cloud_wizard_cpus]
+other = "最低分配 CPU 数"
+
+[cloud_wizard_memory]
+other = "最低分配内存（GiB）"
+
+[cloud_wizard_disk]
+other = "最低分配磁盘（GiB）"
+
+[cloud_step_compute]
+other = "选择算力"
+
+[cloud_step_candidate]
+other = "选择主机或抢卡条件"
+
+[cloud_step_environment]
+other = "环境与存储"
+
+[cloud_step_review]
+other = "核对与授权"
+
+[cloud_wizard_price]
+other = "计算费用上限（CNY／整实例小时）"
+
+[cloud_wizard_wait]
+other = "等待方式"
+
+[cloud_wait_continuous]
+other = "直到成功或手动停止"
+
+[cloud_wait_bounded]
+other = "设置等待时长"
+
+[cloud_wizard_duration]
+other = "等待时长（例如 30m）："
+
+[cloud_wizard_host]
+other = "选择主机或规格"
+
+[cloud_wizard_image_source]
+other = "镜像来源"
+
+[cloud_image_base]
+other = "基础镜像"
+
+[cloud_image_private]
+other = "我的私有镜像"
+
+[cloud_wizard_image]
+other = "环境镜像"
+
+[cloud_wizard_expand]
+other = "扩盘容量（GB）"
+
+[cloud_expand_hint]
+other = "0 表示不付费扩盘；克隆默认沿用源实例的扩盘下限。"
+
+[cloud_wizard_storage_price]
+other = "存储费用上限（CNY／日）："
+
+[cloud_wizard_name]
+other = "机器别名"
+
+[cloud_wizard_after]
+other = "机器就绪后"
+
+[cloud_optional_choices]
+other = "可选；不勾选则不进行额外操作。"
+
+[cloud_after_select]
+other = "为当前项目选择此机器"
+
+[cloud_after_save]
+other = "将这些条件保存为个人模板"
+
+[cloud_loading_catalog]
+other = "正在读取算力目录……"
+
+[cloud_loading_stock]
+other = "正在查询当前库存和报价……"
+
+[cloud_loading_images]
+other = "正在读取环境镜像……"
+
+[cloud_progress_counts]
+other = "库存轮询：{{.Count}} 轮 · 申请：{{.Value}} 次"
+
+[cloud_progress_coverage]
+other = "匹配：{{.Total}} · 已检查：{{.Count}} · 完整覆盖：{{.Value}}"
+
+[cloud_progress_cancel]
+other = "Tab 查看详情 · Ctrl+C 停止等待或观察；已创建实例会保留。"
+
+[cloud_elapsed]
+other = "已等待："
+
+[cloud_next_check]
+other = "下次检查："
+
+[cloud_progress_starting]
+other = "正在等待实例启动……"
+
+[cloud_progress_copying]
+other = "正在等待克隆磁盘复制……"
+
+[cloud_progress_connecting]
+other = "正在验证 SSH 认证……"
+
+[cloud_progress_ready]
+other = "机器已就绪。"
+
+[cloud_progress_retrying]
+other = "查询失败，正在退避后重试。"
+
+[cloud_progress_poll]
+other = "正在等待符合条件的库存……"
+
+[cloud_next_action]
+other = "下一步：{{.Value}}"
+
+[cloud_plan_offer]
+other = "固定候选：{{.ID}}"
+
+[cloud_plan_image]
+other = "镜像：{{.Value}}"
+
+[cloud_plan_storage]
+other = "每日存储上限：{{.Value}} CNY"
+
+[cloud_plan_source]
+other = "条件来源"
+
+[cloud_plan_pending]
+other = "仍需在线核对：{{.Value}}"
+
+[cloud_reject_storage_price]
+other = "每日存储价格超出上限"
+
+[cloud_reject_storage_price_unknown]
+other = "每日存储价格未知"
+
+[cloud_coverage_complete]
+other = "完整"
+
+[cloud_coverage_partial]
+other = "部分"
+
+[cloud_choice_invalid]
+other = "请选择有效的选项编号。"
+
+[cloud_select_help]
+other = "↑↓ 选择 · / 搜索 · Enter 继续 · Ctrl+C 取消"
+
+[cloud_multi_help]
+other = "↑↓ 移动 · 空格勾选 · / 搜索 · Enter 继续 · Ctrl+C 取消"
+
+[cloud_multi_plain]
+other = "用逗号分隔编号；0 清空；Enter 保留选择。"
+
+[cloud_catalog_unsupported]
+other = "此产品或镜像来源暂不支持只读目录。"
+
+[cloud_instance_required]
+other = "请选择一个明确的已有实例。"
+
+[cloud_wizard_instance]
+other = "选择已有实例"
+
+[cloud_progress_stopping]
+other = "正在等待实例关机……"
+
+[cloud_profile_scopes]
+other = "个人：{{.Value}} · 项目：{{.Mode}}"
+
+[cloud_image_refine]
+other = "请缩小镜像搜索范围："
+
+[cloud_plan_resources]
+other = "下限：单卡显存 {{.Count}} GiB · CPU {{.Total}} · 内存 {{.Value}} GiB · 磁盘 {{.Mode}} GiB"
+
+[cloud_wizard_context]
+other = "{{.Account}}／{{.Product}} · {{.Target}} · 按量计费"
+
+[cloud_progress_conditions]
+other = "{{.Value}} × {{.Count}} · 计算价格上限 {{.Price}}"
+
+[cloud_progress_authorized]
+other = "条件已确认，正在准备获取资源……"
+
+[cloud_host_details]
+other = "显存 {{.GPU}} GiB/卡 · CPU {{.CPU}} 核 · 内存 {{.Memory}} GiB · 磁盘 {{.Disk}} GiB\n驱动 {{.Driver}} · 最高 CUDA {{.CUDA}}"
+
+[cloud_wizard_spec]
+other = "选择 Pro 规格（汇总库存，非预留主机）"
+
+[cloud_plan_inherited]
+other = "实时校验后从克隆源继承：{{.Value}}"
+
+[cloud_help_common]
+other = "常用选择"
+
+[cloud_help_environment]
+other = "环境与存储"
+
+[cloud_help_conditions]
+other = "硬筛选条件"
+
+[cloud_help_advanced]
+other = "高级与观察"
+
+[cloud_help_global]
+other = "作用域与全局选项"
+
+[cloud_profile_replace]
+other = "替换个人模板 {{.Value}}？"
+
+[cloud_ui_form_help]
+other = "Enter 继续 · Shift+Tab 返回 · Ctrl+C 取消"
+
+[cloud_ui_product_standard]
+other = "AutoDL 普通实例"
+
+[cloud_ui_product_pro]
+other = "AutoDL Pro"
+
+[cloud_ui_any_gpu]
+other = "按资源条件匹配"
+
+[cloud_ui_any_region]
+other = "平台支持的地区"
+
+[cloud_ui_hourly_cap]
+other = "整机 ≤ ¥{{.Value}} / 小时"
+
+[cloud_ui_daily_cap]
+other = "≤ ¥{{.Value}} / 天"
+
+[cloud_ui_data_disk]
+other = "数据盘 +{{.Count}} GB"
+
+[cloud_ui_system_disk]
+other = "系统盘 +{{.Count}} GB"
+
+[cloud_ui_min_gpu_memory]
+other = "显存 ≥ {{.Count}} GiB/卡"
+
+[cloud_ui_min_cpus]
+other = "CPU ≥ {{.Count}} 核"
+
+[cloud_ui_min_memory]
+other = "内存 ≥ {{.Count}} GiB"
+
+[cloud_ui_min_disk]
+other = "磁盘 ≥ {{.Count}} GiB"
+
+[cloud_ui_wait_continuous]
+other = "直到成功或取消"
+
+[cloud_ui_wait_once]
+other = "只尝试一次"
+
+[cloud_ui_coverage_partial]
+other = "已检查 {{.Count}} 个候选 · 部分库存"
+
+[cloud_ui_coverage_complete]
+other = "已检查 {{.Count}} 个候选 · 查询完整"
+
+[cloud_ui_cancel]
+other = "Ctrl+C 取消"
+
+[cloud_ui_result_ready]
+other = "✓ {{.Target}} 已就绪"
+
+[cloud_ui_result_ready_partial]
+other = "! {{.Target}} 已就绪，后续操作未完成"
+
+[cloud_ui_result_connect]
+other = "! 机器已获取，接入尚未完成"
+
+[cloud_ui_result_copying]
+other = "机器已获取，磁盘仍在复制"
+
+[cloud_ui_result_copy_failed]
+other = "! 机器已获取，磁盘复制失败"
+
+[cloud_ui_result_uncertain]
+other = "! 创建结果待核对"
+
+[cloud_ui_connect_recovery]
+other = "先检查 SSH 连接与主机信任，再继续接入原实例。"
+
+[cloud_ui_copy_recovery]
+other = "用原请求继续观察复制，不重新租用。"
+
+[cloud_ui_copy_failed_recovery]
+other = "请先在 AutoDL 检查复制结果，再恢复此实例。"
+
+[cloud_ui_billing_active]
+other = "实例已保留，可能正在计费。"
+
+[cloud_ui_check_console]
+other = "先核对原请求与 AutoDL 控制台，确认前不要重复租用。"
+
+[cloud_ui_power_observe]
+other = "平台已接受请求，尚未确认完成。"
+
+[cloud_ui_next]
+other = "下一步"
+
+[cloud_ui_resume]
+other = "继续接入"
+
+[cloud_ui_inspect]
+other = "查看原请求"
+
+[cloud_ui_use]
+other = "选用机器"
+
+[cloud_ui_approve_acquire]
+other = "确认租用"
+
+[cloud_ui_approve_start]
+other = "确认开机"
+
+[cloud_ui_approve_stop]
+other = "确认关机"
+
+[cloud_ui_approve_no-instance]
+other = "确认未创建实例"
+
+[cloud_ui_notice_acquire]
+other = "仅授权一台。存储另计，不设总费用上限，需自行关机。"
+
+[cloud_ui_notice_start]
+other = "开机会恢复整机计算计费。"
+
+[cloud_ui_notice_stop]
+other = "关机会中断整机所有任务，存储可能继续计费。"
+
+[cloud_ui_notice_no-instance]
+other = "只有在 AutoDL 确认此请求未创建实例后才能继续；这会解除重复租用保护。"
+
+[cloud_ui_clone_notice]
+other = "复制系统盘和数据盘，保留源实例。"
+
+[cloud_ui_type_yes]
+other = "输入 yes 确认"
+
+[cloud_ui_elapsed]
+other = "本阶段耗时"
+
+[cloud_ui_progress_keys]
+other = "Tab 详情  ·  Ctrl+C 停止观察"
+
+[cloud_ui_progress_back]
+other = "Tab 返回概览  ·  Ctrl+C 停止观察"
+
+[cloud_ui_details]
+other = "操作详情"
+
+[cloud_ui_poll]
+other = "第 {{.Count}} 轮 · 申请尝试 {{.Value}} 次"
+
+[cloud_ui_read_retry]
+other = "查询暂时失败，将自动重试。"
+
+[cloud_ui_creating_notice]
+other = "请求已保存，正在申请一台实例。"
+
+[cloud_ui_instance_created]
+other = "✓ 实例已创建"
+
+[cloud_ui_instance_saved]
+other = "✓ 原实例已保留"
+
+[cloud_ui_rejections]
+other = "候选未匹配的主要原因"
+
+[cloud_ui_cancelled]
+other = "已取消租用"
+
+[cloud_ui_not_sent]
+other = "未发送租用请求。"
+
+[cloud_ui_label_gpu]
+other = "算力"
+
+[cloud_ui_label_region]
+other = "地区"
+
+[cloud_ui_label_budget]
+other = "计算价上限"
+
+[cloud_ui_label_storage_price]
+other = "存储价上限"
+
+[cloud_ui_label_source]
+other = "克隆源"
+
+[cloud_ui_label_image]
+other = "环境"
+
+[cloud_ui_label_disk]
+other = "扩容"
+
+[cloud_ui_label_minimum]
+other = "资源下限"
+
+[cloud_ui_label_spec]
+other = "规格"
+
+[cloud_ui_label_wait]
+other = "等待"
+
+[cloud_ui_label_vendor]
+other = "GPU 厂商"
+
+[cloud_ui_label_instance]
+other = "实例"
+
+[cloud_ui_label_request]
+other = "请求"
+
+[cloud_ui_label_image_id]
+other = "镜像 ID"
+
+[cloud_ui_stage_authorized]
+other = "正在查找符合条件的算力"
+
+[cloud_ui_stage_waiting]
+other = "等待可用算力"
+
+[cloud_ui_stage_retrying]
+other = "等待重新查询库存"
+
+[cloud_ui_stage_creating]
+other = "正在申请实例"
+
+[cloud_ui_stage_allocation_attempt]
+other = "正在尝试分配"
+
+[cloud_ui_stage_created]
+other = "正在准备机器"
+
+[cloud_ui_stage_starting]
+other = "等待实例启动"
+
+[cloud_ui_stage_copying]
+other = "正在复制磁盘"
+
+[cloud_ui_stage_connecting]
+other = "正在验证 SSH 连接"
+
+[cloud_ui_stage_stopping]
+other = "等待实例关机"
+
+[cloud_ui_stage_ready]
+other = "连接已就绪"
+
+[cloud_ui_result_start_accepted]
+other = "开机请求已接受"
+
+[cloud_ui_result_start_completed]
+other = "开机已完成"
+
+[cloud_ui_result_start_unconfirmed]
+other = "开机结果待核对"
+
+[cloud_ui_result_stop_accepted]
+other = "关机请求已接受"
+
+[cloud_ui_result_stop_completed]
+other = "关机已完成"
+
+[cloud_ui_result_stop_unconfirmed]
+other = "关机结果待核对"
+
+[cloud_ui_label_offer]
+other = "指定候选"
+
+[cloud_ui_result_bind]
+other = "! 接入尚未完成"
+
+[cloud_ui_result_not_created]
+other = "已确认未创建实例"
+
+[cloud_ui_result_start_rejected]
+other = "开机请求被拒绝"
+
+[cloud_ui_result_stop_rejected]
+other = "关机请求被拒绝"
+
+[cloud_flow_mode]
+other = "方式"
+
+[cloud_flow_compute]
+other = "算力"
+
+[cloud_flow_candidate]
+other = "主机/条件"
+
+[cloud_flow_environment]
+other = "环境/磁盘"
+
+[cloud_flow_approval]
+other = "授权"
+
+[cloud_flow_connection]
+other = "接入"
+
+[cloud_flow_acquisition]
+other = "获取"
+
+[cloud_region_all]
+other = "{{.Value}}（全部）"
+
+[cloud_region_exact]
+other = "{{.Value}}（指定：{{.Region}}）"
+
+[cloud_connect_trust_hint]
+other = "通过原生 SSH 核验主机指纹，再检查同一实例，不会重新租卡。"
+
+[cloud_connect_changed_hint]
+other = "主机密钥已变化。请独立核验后再处理信任记录，原实例会保留。"
+
+[cloud_connect_auth_hint]
+other = "SSH 认证失败。请检查实例凭据或 SSH 配置，再接入同一实例。"
+
+[cloud_recover_title]
+other = "继续接入已有实例"
+
+[cloud_recover_trust]
+other = "通过原生 SSH 核验指纹并继续"
+
+[cloud_recover_retry]
+other = "再检查此实例，最多等待 5 分钟"
+
+[cloud_recover_connection]
+other = "查看连接信息（密码隐藏）"
+
+[cloud_recover_leave]
+other = "保留实例并退出"
+
+[cloud_failure_host_trust]
+other = "需要核验主机指纹。"
+
+[cloud_failure_authentication]
+other = "需要处理 SSH 认证。"
+
+[cloud_failure_configuration]
+other = "需要检查 SSH 配置。"
+
+[cloud_failure_name_resolution]
+other = "SSH 地址解析失败。"
+
+[cloud_failure_connection_refused]
+other = "SSH 暂未接受连接。"
+
+[cloud_failure_connection_timeout]
+other = "SSH 连接超时，将再次检查。"
+
+[cloud_failure_connection_reset]
+other = "SSH 连接被重置。"
+
+[cloud_failure_connection_closed]
+other = "SSH 连接已断开。"
+
+[cloud_failure_cloud_transport]
+other = "平台连接信息暂不可用。"
+
+[cloud_failure_ssh_transport]
+other = "SSH 连接尚未确认。"
+
+[cloud_failure_observation_timeout]
+other = "本次观察时间已到。"
+
+[cloud_probe_count]
+other = "SSH 探测：{{.Count}} 次"
+
+[cloud_profile_save_short]
+other = "离线保存生效的资源偏好"
+
+[cloud_profile_remove_short]
+other = "删除个人资源模板"
+
+[cloud_profile_remove_confirm]
+other = "删除个人模板 {{.Target}}？项目模板和实例会保留。"
+
+[cloud_hub_title]
+other = "云资源"
+
+[cloud_hub_loading]
+other = "正在读取实例"
+
+[cloud_hub_count]
+other = "当前范围内有 {{.Count}} 个实例"
+
+[cloud_hub_no_account]
+other = "尚未选择账号，可进入“账号与模板”登录。"
+
+[cloud_hub_instances]
+other = "我的实例"
+
+[cloud_hub_market]
+other = "找算力／租用"
+
+[cloud_hub_requests]
+other = "待处理请求"
+
+[cloud_hub_settings]
+other = "账号与模板"
+
+[cloud_hub_scope]
+other = "切换账号／产品"
+
+[cloud_hub_exit]
+other = "退出"
+
+[cloud_hub_back]
+other = "返回"
+
+[cloud_hub_refresh]
+other = "刷新"
+
+[cloud_hub_filter]
+other = "按状态筛选"
+
+[cloud_hub_all]
+other = "全部状态"
+
+[cloud_hub_product]
+other = "计算产品"
+
+[cloud_hub_result]
+other = "操作结果"
+
+[cloud_hub_instance]
+other = "实例操作"
+
+[cloud_hub_info]
+other = "查看详情"
+
+[cloud_hub_bind]
+other = "接入／重试接入"
+
+[cloud_hub_connection]
+other = "连接信息（密码隐藏）"
+
+[cloud_hub_ssh]
+other = "打开原生 SSH"
+
+[cloud_hub_use]
+other = "为当前项目选用"
+
+[cloud_hub_start]
+other = "启动实例"
+
+[cloud_hub_stop]
+other = "关闭实例"
+
+[cloud_hub_clone]
+other = "克隆系统盘和数据盘"
+
+[cloud_hub_acquire]
+other = "选卡或抢卡"
+
+[cloud_hub_catalog_gpu]
+other = "浏览 GPU 型号"
+
+[cloud_hub_catalog_region]
+other = "浏览地区"
+
+[cloud_hub_catalog_image]
+other = "浏览镜像"
+
+[cloud_hub_search]
+other = "查询当前库存（只读）"
+
+[cloud_hub_watch]
+other = "观察库存（只读）"
+
+[cloud_hub_request]
+other = "请求恢复"
+
+[cloud_hub_request_info]
+other = "查看已保存的事实"
+
+[cloud_hub_resume]
+other = "继续接入原实例"
+
+[cloud_hub_associate]
+other = "关联已核实的实例 ID"
+
+[cloud_hub_absent]
+other = "确认没有创建实例"
+
+[cloud_hub_observe]
+other = "观察原电源操作"
+
+[cloud_hub_associate_id]
+other = "在平台核实的实例 ID"
+
+[cloud_hub_login]
+other = "登录／重新认证"
+
+[cloud_hub_default]
+other = "设为默认账号／产品"
+
+[cloud_hub_profiles]
+other = "资源模板"
+
+[cloud_hub_logout]
+other = "注销凭据"
+
+[cloud_hub_remove_account]
+other = "移除账号配置"
+
+[cloud_hub_confirm_logout]
+other = "注销 {{.Account}} 的凭据？使用此凭据的连接可能需要重新登录。"
+
+[cloud_hub_confirm_remove_account]
+other = "移除账号 {{.Account}} 的配置？凭据、实例和冻结绑定会保留。"
+
+[cloud_hub_profile_info]
+other = "查看生效偏好及来源"
+
+[cloud_hub_profile_rent]
+other = "用此模板租用"
+
+[cloud_hub_profile_remove]
+other = "删除个人模板副本"
+
+[operation_stage_cloud_readiness]
+other = "检查实例接入状态"
+
+[cloud_candidates_columns]
+other = "价格/时 · GPU × 卡数 · 显存 GiB · CPU · 内存 GiB · 地区 · ID"
+
+[cloud_candidates_refresh]
+other = "刷新当前窗口"
+
+[cloud_candidate_refresh]
+other = "刷新镜像"
+
+[cloud_candidates_sort]
+other = "候选排序"
+
+[cloud_candidates_more]
+other = "加载下一批库存"
+
+[cloud_candidates_sort_price]
+other = "价格：从低到高"
+
+[cloud_candidates_sort_cpu]
+other = "CPU：从多到少"
+
+[cloud_candidates_sort_memory]
+other = "内存：从大到小"
+
+[cloud_image_switch_private]
+other = "切换到我的镜像"
+
+[cloud_image_switch_base]
+other = "切换到基础镜像"
+
+[cloud_image_search]
+other = "搜索镜像版本"
+
+[cloud_compatibility_unknown]
+other = "兼容性待确认"
+
+[cloud_review_command]
+other = "查看等价命令"
+
+[cloud_review_save]
+other = "只保存模板，不租用"
+
+[cloud_profile_save_name]
+other = "个人模板名称"
+
+[cloud_profile_source_user]
+other = "个人"
+
+[cloud_profile_source_project]
+other = "项目"
+
+[cloud_profile_user_overridden]
+other = "覆盖同名个人字段"
+
+[cloud_profile_create]
+other = "新建模板"
+
+[cloud_hub_profile_edit]
+other = "修改并保存偏好"
+
+[cloud_ui_edit_keys]
+other = "e 修改条件 · Tab 详情 · Ctrl+C 停止等待"
+
+[cloud_ui_blocker]
+other = "主要等待原因：{{.Value}}（{{.Count}} 个候选）"
+
+[cloud_ui_scan_window]
+other = "当前巡检从第 {{.Count}} 条开始；各轮库存可能变化。"
+
+[cloud_optional_price]
+other = "每小时价格上限（可留空）"
+
+[cloud_models_any]
+other = "不勾选表示不限 GPU 型号。"
+
+[cloud_trust_confirmed]
+other = "指纹核验完成，正在使用实例凭据验证 SSH。"
+
+[cloud_scope_environment_reset]
+other = "已重置不适用于当前产品的环境默认值。"
+
+[cloud_page_count]
+other = "第 {{.Count}} / {{.Value}} 页"
+
+[cloud_page_next]
+other = "下一页"
+
+[cloud_page_previous]
+other = "上一页"
+
+[cloud_browse_actions]
+other = "操作"
+
+[cloud_readonly_no_allocation]
+other = "只读查询，不租用实例。"
+
+[cloud_failure_cloud_api]
+other = "平台暂时无法提供实例或连接信息。"

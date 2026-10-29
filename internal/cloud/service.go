@@ -11,12 +11,22 @@ import (
 
 // Event is human progress or a machine-readable monitoring change.
 type Event struct {
-    Type        string        `json:"type"`
-    At          time.Time     `json:"at"`
-    Observation *SearchResult `json:"observation,omitempty"`
-    RequestID   string        `json:"request_id,omitempty"`
-    Instance    *Ref          `json:"instance,omitempty"`
-    NextCheckAt *time.Time    `json:"next_check_at,omitempty"`
+    ProbeAttempts int           `json:"probe_attempts,omitempty"`
+    FailureKind   string        `json:"failure_kind,omitempty"`
+    FailureReason string        `json:"failure_reason,omitempty"`
+    Plan          *Plan         `json:"plan,omitempty"`
+    Account       string        `json:"account,omitempty"`
+    Target        string        `json:"target,omitempty"`
+    PollCount     int           `json:"poll_count,omitempty"`
+    Attempts      int           `json:"allocation_attempts,omitempty"`
+    ElapsedMS     int64         `json:"elapsed_ms,omitempty"`
+    Code          string        `json:"code,omitempty"`
+    Type          string        `json:"type"`
+    At            time.Time     `json:"at"`
+    Observation   *SearchResult `json:"observation,omitempty"`
+    RequestID     string        `json:"request_id,omitempty"`
+    Instance      *Ref          `json:"instance,omitempty"`
+    NextCheckAt   *time.Time    `json:"next_check_at,omitempty"`
 }
 
 // Service owns bounded policy and write-ahead intent, not HTTP or SSH execution.
@@ -66,9 +76,11 @@ func (s *Service) Watch(ctx context.Context, p Provider, plan Plan, limit int, e
     if wait <= 0 {
         return SearchResult{}, invalid()
     }
-    if _, ok := p.(Inventory); !ok {
+    inventory, ok := p.(Inventory)
+    if !ok {
         return SearchResult{}, &APIError{Code: "UNSUPPORTED_CAPABILITY"}
     }
+    scan := inventoryScan{provider: inventory}
     watch, cancel := context.WithTimeout(ctx, wait)
     defer cancel()
     interval, _ := time.ParseDuration(plan.PollInterval)
@@ -78,9 +90,17 @@ func (s *Service) Watch(ctx context.Context, p Provider, plan Plan, limit int, e
     failures := 0
     succeeded := false
     for {
-        observed, err := s.Search(watch, p, plan, limit)
+        if err := watch.Err(); err != nil {
+            if ctx.Err() != nil {
+                return last, ctx.Err()
+            }
+            return last, nil
+        }
+        page, err := scan.read(watch, plan, limit)
+        observed := Select(page, plan)
         delay := backoff(interval, 0, nil)
         if err == nil {
+            scan.advance(page)
             succeeded = true
             last = observed
             failures = 0
@@ -141,6 +161,11 @@ type AcquireInput struct {
 // Acquire preserves the request ID on all outcomes. A lost create response is
 // never retried; later invocations require explicit receipt reconciliation.
 func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event) error) (Receipt, error) {
+    if in.Plan.Continuous || in.Plan.OfferID != "" {
+        if err := ValidateAcquisition(in.Plan, in.Settings.Credential.Mode); err != nil {
+            return Receipt{}, err
+        }
+    }
     if !ValidProduct(in.Plan.Product) {
         return Receipt{}, invalid()
     }
@@ -203,7 +228,11 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
             wait, _ := time.ParseDuration(in.Plan.WaitTimeout)
             interval, _ := time.ParseDuration(in.Plan.PollInterval)
             now := time.Now().UTC()
-            result, err = s.Receipts.New(Receipt{Operation: "acquire", Account: in.Account, Settings: in.Settings, Target: in.Target, RemoteBase: in.RemoteBase, Plan: in.Plan, AllowUnquoted: in.AllowUnquoted, CreatedAt: now, Deadline: now.Add(wait), Status: "not_created"})
+            deadline := now.Add(wait)
+            if in.Plan.Continuous {
+                deadline = time.Time{}
+            }
+            result, err = s.Receipts.New(Receipt{Operation: "acquire", Account: in.Account, Settings: in.Settings, Target: in.Target, RemoteBase: in.RemoteBase, Plan: in.Plan, AllowUnquoted: in.AllowUnquoted, CreatedAt: now, Deadline: deadline, Status: "not_created"})
             if err != nil {
                 return err
             }
@@ -223,13 +252,15 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
             // Even a zero monitoring window permits one bounded API attempt.
             window := ctx
             cancel := func() {}
-            if wait > 0 {
+            if wait > 0 && !in.Plan.Continuous {
                 window, cancel = context.WithDeadline(ctx, result.Deadline)
             }
             defer cancel()
             failures := 0
             progressKey := ""
             lastProgress := time.Time{}
+            polls := 0
+            scan := inventoryScan{provider: inventory, offset: in.Plan.InventoryOffset}
             for {
                 if err := window.Err(); err != nil {
                     return fault.Wrap("NO_MATCH", "cloud_no_match", err)
@@ -237,15 +268,25 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                 var selected *Offer
                 var readErr error
                 if hasInventory {
-                    page, err := inventory.Search(window, in.Plan, in.Limit)
+                    polls++
+                    page, err := scan.read(window, in.Plan, in.Limit)
                     readErr = err
                     if err == nil {
                         found := Select(page, in.Plan)
+                        if in.Plan.OfferID != "" {
+                            kept := found.Matches[:0]
+                            for _, offer := range found.Matches {
+                                if offer.ID == in.Plan.OfferID {
+                                    kept = append(kept, offer)
+                                }
+                            }
+                            found.Matches = kept
+                        }
                         if len(found.Matches) > 0 {
                             // Inventory is not a reservation. A second fresh
                             // query must still contain the same eligible offer.
                             id := found.Matches[0].ID
-                            fresh, e := inventory.Search(window, in.Plan, in.Limit)
+                            fresh, e := scan.read(window, in.Plan, in.Limit)
                             readErr = e
                             if e == nil {
                                 found = Select(fresh, in.Plan)
@@ -259,10 +300,13 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                         }
                         key := observationKey(found)
                         if key != progressKey || time.Since(lastProgress) >= time.Minute {
-                            if err := emitEvent(emit, Event{Type: "waiting", Observation: &found, RequestID: result.ID}); err != nil {
+                            if err := emitEvent(emit, Event{Type: "waiting", Observation: &found, RequestID: result.ID, PollCount: polls, Attempts: result.Attempts, ElapsedMS: time.Since(now).Milliseconds()}); err != nil {
                                 return err
                             }
                             progressKey, lastProgress = key, time.Now()
+                        }
+                        if in.Plan.OfferID == "" {
+                            scan.advance(page)
                         }
                     }
                 }
@@ -272,7 +316,7 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                         return readErr
                     }
                     failures++
-                    if failures >= 5 {
+                    if failures >= 5 && !in.Plan.Continuous {
                         return readErr
                     }
                 } else {
@@ -291,7 +335,7 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                     if err := s.Receipts.Save(result); err != nil {
                         return err
                     }
-                    if err := emitEvent(emit, Event{Type: "creating", RequestID: result.ID}); err != nil {
+                    if err := emitEvent(emit, Event{Type: "creating", RequestID: result.ID, PollCount: polls, Attempts: result.Attempts, ElapsedMS: time.Since(now).Milliseconds()}); err != nil {
                         result.Status = "not_created"
                         _ = s.Receipts.Save(result)
                         return err
@@ -309,31 +353,49 @@ func (s *Service) Acquire(ctx context.Context, in AcquireInput, emit func(Event)
                         if saveErr := s.Receipts.Save(result); saveErr != nil {
                             return fault.Wrap("CLOUD_UNCONFIRMED", "cloud_unconfirmed", saveErr)
                         }
-                        return emitEvent(emit, Event{Type: "created", RequestID: result.ID, Instance: &ref})
+                        return emitEvent(emit, Event{Type: "created", RequestID: result.ID, Instance: &ref, PollCount: polls, Attempts: result.Attempts, ElapsedMS: time.Since(now).Milliseconds()})
                     }
                     var api *APIError
                     if errors.As(err, &api) && !api.Unconfirmed {
+                        retryRead := in.Plan.Continuous && api.BeforeMutation && api.Transient
                         result.Status = "rejected"
+                        if retryRead {
+                            result.Status = "not_created"
+                            failures++
+                        }
                         if api.NoStock {
                             result.Status = "no_stock"
                         }
                         if saveErr := s.Receipts.Save(result); saveErr != nil {
                             return saveErr
                         }
-                        if !api.NoStock {
+                        if !api.NoStock && !retryRead {
                             return err
                         }
-                        readErr = err // Honor Retry-After on a confirmed no-stock response.
+                        readErr = err // Honor Retry-After on confirmed no-stock or pre-mutation reads.
                     } else {
                         result.Status = "uncertain"
                         _ = s.Receipts.Save(result) // The durable intent already blocks repeats.
                         return fault.Wrap("CLOUD_UNCONFIRMED", "cloud_unconfirmed", err)
                     }
                 }
-                if wait == 0 {
+                if wait == 0 && !in.Plan.Continuous {
                     return fault.New("NO_MATCH", "cloud_no_match", nil)
                 }
-                if err := s.pause(window, backoff(interval, failures, readErr)); err != nil {
+                delay := backoff(interval, failures, readErr)
+                next := time.Now().Add(delay).UTC()
+                code := ""
+                if readErr != nil {
+                    code = "CLOUD_READ_RETRY"
+                    var api *APIError
+                    if errors.As(readErr, &api) && api.NoStock {
+                        code = "NO_STOCK"
+                    }
+                }
+                if err := emitEvent(emit, Event{Type: "poll", RequestID: result.ID, PollCount: polls, Attempts: result.Attempts, ElapsedMS: time.Since(now).Milliseconds(), NextCheckAt: &next, Code: code}); err != nil {
+                    return err
+                }
+                if err := s.pause(window, delay); err != nil {
                     return fault.Wrap("NO_MATCH", "cloud_no_match", err)
                 }
             }
@@ -376,8 +438,14 @@ func validateCreate(p Plan, mode string) error {
 }
 
 // Power submits once and observes the same resource. Accepted is not completed.
-func (s *Service) Power(ctx context.Context, b Binding, on bool, wait time.Duration) (Receipt, error) {
+func (s *Service) Power(ctx context.Context, b Binding, on bool, wait time.Duration, progress ...func(Event) error) (Receipt, error) {
     var result Receipt
+    notify := func(stage string) error {
+        if len(progress) == 0 || progress[0] == nil {
+            return nil
+        }
+        return emitEvent(progress[0], Event{Type: stage, RequestID: result.ID, Instance: &b.Ref})
+    }
     err := s.Receipts.Lock(ctx, "power-"+b.Ref.Account+"-"+b.Ref.ID, func() error {
         if err := s.Receipts.pending(b.Ref.Account, b.Ref.ID); err != nil {
             return err
@@ -433,6 +501,13 @@ func (s *Service) Power(ctx context.Context, b Binding, on bool, wait time.Durat
         window, cancel := context.WithDeadline(ctx, result.Deadline)
         defer cancel()
         for {
+            stage := "stopping"
+            if on {
+                stage = "starting"
+            }
+            if err := notify(stage); err != nil {
+                return fault.Wrap("CLOUD_UNCONFIRMED", "cloud_unconfirmed", err)
+            }
             current, err := p.Get(window, b.Ref)
             if err != nil {
                 return fault.Wrap("CLOUD_UNCONFIRMED", "cloud_unconfirmed", err)

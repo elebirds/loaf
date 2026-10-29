@@ -2,6 +2,7 @@ package client
 
 import (
     "context"
+    "sort"
     "time"
 
     "github.com/elebirds/loaf/internal/cloud"
@@ -54,7 +55,30 @@ func (c *Resources) CloudList(ctx context.Context, in CloudSelect, limit int) (c
         return cloud.Page{}, cloud.Failure(err)
     }
     result, err := p.List(ctx, limit)
+    result.Account, result.Product = name, selectedProduct(in, a, "")
+    for i := range result.Instances {
+        row := &result.Instances[i]
+        for alias, t := range c.Settings.Targets {
+            if t.Cloud != nil && t.Cloud.Ref == row.Ref && sameCloudPrincipal(t.Cloud.Settings, a) {
+                row.Aliases = append(row.Aliases, alias)
+            }
+        }
+        sort.Strings(row.Aliases)
+    }
     return result, cloud.Failure(err)
+}
+
+// Convenience defaults and session renewal do not change a verified principal.
+// Unverified environment credentials can only be associated by their exact ref.
+func sameCloudPrincipal(a, b cloud.Account) bool {
+    if a.Provider != b.Provider || a.Credential.Mode != b.Credential.Mode {
+        return false
+    }
+    x, y := a.Credential.Identity, b.Credential.Identity
+    if x.Kind != "" && y.Kind != "" {
+        return x.Kind == y.Kind && x.ID == y.ID
+    }
+    return a.Credential == b.Credential
 }
 
 // CloudInfo resolves aliases using the saved instance identity.
@@ -77,6 +101,10 @@ func (c *Resources) CloudCredentials(ctx context.Context, in CloudInstanceInput)
     if err != nil {
         return CloudCredentials{}, err
     }
+    return c.cloudCredentials(ctx, b, in.ShowPassword)
+}
+
+func (c *Resources) cloudCredentials(ctx context.Context, b cloud.Binding, showPassword bool) (CloudCredentials, error) {
     p, err := c.Cloud.Open(ctx, b.Ref.Account, b.Settings, b.Ref.Product)
     if err != nil {
         return CloudCredentials{}, cloud.Failure(err)
@@ -86,7 +114,7 @@ func (c *Resources) CloudCredentials(ctx context.Context, in CloudInstanceInput)
         return CloudCredentials{}, cloud.Failure(err)
     }
     result := CloudCredentials{Instance: b.Ref, Connection: conn}
-    if in.ShowPassword {
+    if showPassword {
         password := conn.Password
         result.Password = &password
     }
@@ -121,7 +149,7 @@ func (c *Resources) CloudPower(ctx context.Context, in CloudPowerInput, approve 
     if err = approveCloud(ctx, in.Yes, approve, CloudApproval{Operation: op, InstanceID: b.Ref.ID, Account: b.Ref.Account, Product: b.Ref.Product, Target: in.ID}); err != nil {
         return result, err
     }
-    r, err := c.Cloud.Power(ctx, b, in.Start, in.Wait)
+    r, err := c.Cloud.Power(ctx, b, in.Start, in.Wait, in.Progress)
     result.Receipt = &r
     return result, err
 }
@@ -132,7 +160,7 @@ func (c *Resources) CloudSearch(ctx context.Context, in CloudSearchInput) (cloud
     if err != nil {
         return cloud.SearchResult{}, err
     }
-    result, err := c.Cloud.Search(ctx, p, plan, in.Limit)
+    result, err := c.Cloud.SearchWindow(ctx, p, plan, in.Limit, in.Offset)
     return result, cloud.Failure(err)
 }
 

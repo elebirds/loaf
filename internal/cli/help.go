@@ -14,16 +14,22 @@ import (
 )
 
 type helpValue struct {
-    Name         string `json:"name"`
-    Type         string `json:"type"`
-    Description  string `json:"description"`
-    Required     bool   `json:"required"`
-    Variadic     bool   `json:"variadic,omitempty"`
-    Repeatable   bool   `json:"repeatable"`
-    ListFormat   string `json:"list_format,omitempty"`
-    Default      any    `json:"default,omitempty"`
-    Configurable bool   `json:"configurable"`
-    ConfigKey    string `json:"config_key,omitempty"`
+    Group          string   `json:"group,omitempty"`
+    Requires       []string `json:"requires,omitempty"`
+    ConflictsWith  []string `json:"conflicts_with,omitempty"`
+    ExactlyOneOf   []string `json:"exactly_one_of,omitempty"`
+    ApplicableWhen []string `json:"applicable_when,omitempty"`
+    Enum           []string `json:"enum,omitempty"`
+    Name           string   `json:"name"`
+    Type           string   `json:"type"`
+    Description    string   `json:"description"`
+    Required       bool     `json:"required"`
+    Variadic       bool     `json:"variadic,omitempty"`
+    Repeatable     bool     `json:"repeatable"`
+    ListFormat     string   `json:"list_format,omitempty"`
+    Default        any      `json:"default,omitempty"`
+    Configurable   bool     `json:"configurable"`
+    ConfigKey      string   `json:"config_key,omitempty"`
 }
 type helpChild struct {
     Name        string `json:"name"`
@@ -69,7 +75,15 @@ func valueType(v *kong.Value) string {
 func describeValue(v *kong.Value, l *i18n.Localizer) helpValue {
     kind := valueType(v)
     h := helpValue{Name: v.Name, Type: kind, Description: helpText(v.Help, l), Required: v.Required, Repeatable: v.IsCumulative(), ConfigKey: v.Tag.Get("config")}
+    h.Group = v.Tag.Get("ux-group")
     h.Configurable = h.ConfigKey != ""
+    h.Requires = strings.Fields(v.Tag.Get("requires"))
+    h.ConflictsWith = strings.Fields(v.Tag.Get("conflicts-with"))
+    h.ExactlyOneOf = strings.Fields(v.Tag.Get("exactly-one-of"))
+    h.ApplicableWhen = strings.Fields(v.Tag.Get("applicable-when"))
+    if values := v.Tag.Get("enum"); values != "" {
+        h.Enum = strings.Split(values, ",")
+    }
     if kind == "csv" {
         h.ListFormat = "csv"
         h.Repeatable = true
@@ -197,10 +211,32 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
             fmt.Fprintln(out, "  "+strings.Join(example, " "))
         }
     }
-    if len(h.Flags) > 0 {
+    grouped := node.Path() == "cloud acquire"
+    if len(h.Flags) > 0 && !grouped {
         fmt.Fprintln(out, "\n"+l.Text("flags"))
     }
-    for _, flag := range h.Flags {
+    flags := h.Flags
+    if grouped {
+        flags = nil
+        for _, group := range []string{"common", "environment", "conditions", "advanced", "global"} {
+            for _, flag := range h.Flags {
+                current := flag.Group
+                if current == "" {
+                    current = "global"
+                }
+                if current == group {
+                    flag.Group = group
+                    flags = append(flags, flag)
+                }
+            }
+        }
+    }
+    group := ""
+    for _, flag := range flags {
+        if grouped && group != flag.Group {
+            group = flag.Group
+            fmt.Fprintln(out, "\n"+l.Text("cloud_help_"+group))
+        }
         label := "--" + flag.Name
         original := findFlag(node, label)
         if original.Short != 0 {

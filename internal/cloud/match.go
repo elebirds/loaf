@@ -104,6 +104,13 @@ func Match(o Offer, r Requirements) []string {
             reasons = append(reasons, "price")
         }
     }
+    if r.MaxStorageDailyPrice != nil {
+        if o.StorageDailyPrice == nil {
+            reasons = append(reasons, "storage_price_unknown")
+        } else if o.StorageDailyPrice.Currency != r.MaxStorageDailyPrice.Currency || Less(*r.MaxStorageDailyPrice, *o.StorageDailyPrice) {
+            reasons = append(reasons, "storage_price")
+        }
+    }
     return reasons
 }
 

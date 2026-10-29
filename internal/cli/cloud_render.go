@@ -6,12 +6,60 @@ import (
     "sort"
     "strings"
 
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/i18n"
 )
 
 func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
     switch r := data.(type) {
+    case client.CloudPreview:
+        fmt.Fprintf(out, "%s/%s  %s  %s\n", r.Account, r.Plan.Product, r.AuthMode, r.Target)
+        printCloud(out, r.Plan, l)
+        if r.CloneSource != nil {
+            printCloud(out, *r.CloneSource, l)
+        }
+        if len(r.Inherited) > 0 {
+            fmt.Fprintln(out, l.Text("cloud_plan_inherited", map[string]any{"Value": strings.Join(r.Inherited, ", ")}))
+        }
+        fmt.Fprintln(out, l.Text("cloud_plan_source"))
+        keys := make([]string, 0, len(r.Sources))
+        for k := range r.Sources {
+            keys = append(keys, k)
+        }
+        sort.Strings(keys)
+        for _, k := range keys {
+            fmt.Fprintf(out, "  %s: %s\n", k, r.Sources[k])
+        }
+        fmt.Fprintln(out, l.Text("cloud_plan_pending", map[string]any{"Value": strings.Join(r.PendingChecks, ", ")}))
+    case cloud.CatalogPage:
+        fmt.Fprintf(out, "%s/%s  %s\n", r.Account, r.Product, r.Category)
+        for _, item := range r.Items {
+            fmt.Fprintf(out, "%s  %s\n", item.Name, item.ID)
+        }
+        fmt.Fprintln(out, l.Text("cloud_coverage", map[string]any{"Count": r.Examined, "Value": r.Complete}))
+    case cloudProfilesResult:
+        for _, row := range r.Profiles {
+            source := l.Text("cloud_profile_source_user")
+            if row.Project {
+                source = l.Text("cloud_profile_source_project")
+                if row.User {
+                    source += " · " + l.Text("cloud_profile_user_overridden")
+                }
+            }
+            fmt.Fprintln(out, row.Name, "·", source)
+            if row.Plan != nil {
+                printCloud(out, *row.Plan, l)
+            }
+            keys := []string{}
+            for key := range row.Sources {
+                keys = append(keys, key)
+            }
+            sort.Strings(keys)
+            for _, key := range keys {
+                fmt.Fprintf(out, "  %s: %s\n", key, row.Sources[key])
+            }
+        }
     case loginResult:
         fmt.Fprintln(out, l.Text("cloud_login_done", map[string]any{"Account": r.Account, "Username": r.Identity.Username}))
     case logoutResult:
@@ -44,6 +92,9 @@ func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
         fmt.Fprintln(out, l.Text("cloud_coverage", map[string]any{"Count": r.Examined, "Value": r.Complete}))
     case cloud.Instance:
         fmt.Fprintf(out, "%s  %s/%s  %s  %s\n", r.Ref.ID, r.Ref.Account, r.Ref.Product, l.Text("cloud_status_"+r.Status), r.Region)
+        if len(r.Aliases) > 0 {
+            fmt.Fprintln(out, strings.Join(r.Aliases, ", "))
+        }
         if r.CloneDataStatus != "" {
             fmt.Fprintln(out, l.Text("cloud_clone_data_"+r.CloneDataStatus))
         }
@@ -91,21 +142,41 @@ func printCloud(out io.Writer, data any, l *i18n.Localizer) bool {
         if req.MaxComputeHourlyPrice != nil {
             price = req.MaxComputeHourlyPrice.Amount + " " + req.MaxComputeHourlyPrice.Currency
         }
-        fmt.Fprintln(out, l.Text("cloud_plan_summary", map[string]any{"Count": req.GPUCount, "Value": price, "Mode": r.WaitTimeout}))
+        wait := r.WaitTimeout
+        if r.Continuous {
+            wait = l.Text("cloud_wait_continuous")
+        }
+        fmt.Fprintln(out, l.Text("cloud_plan_summary", map[string]any{"Count": req.GPUCount, "Value": price, "Mode": wait}))
+        if r.OfferID != "" {
+            fmt.Fprintln(out, l.Text("cloud_plan_offer", map[string]any{"ID": r.OfferID}))
+        }
         if len(req.GPUModels) > 0 {
             fmt.Fprintln(out, strings.Join(req.GPUModels, ", "))
         }
         if req.GPUVendor != "" {
             fmt.Fprintln(out, "--gpu-vendor", req.GPUVendor)
         }
-        fmt.Fprintf(out, "--min-gpu-memory %dGiB  --min-cpus %d  --min-memory %dGiB  --min-disk %dGiB\n", req.MinGPUMemoryGiB, req.MinCPUs, req.MinMemoryGiB, req.MinDiskGiB)
+        if req.MinGPUMemoryGiB > 0 || req.MinCPUs > 0 || req.MinMemoryGiB > 0 || req.MinDiskGiB > 0 {
+            fmt.Fprintln(out, l.Text("cloud_plan_resources", map[string]any{"Count": req.MinGPUMemoryGiB, "Total": req.MinCPUs, "Value": req.MinMemoryGiB, "Mode": req.MinDiskGiB}))
+        }
         if len(req.Regions) > 0 {
             fmt.Fprintln(out, "--region", strings.Join(req.Regions, ","))
         }
         if r.Clone != nil {
             fmt.Fprintln(out, l.Text("cloud_clone_summary", map[string]any{"ID": r.Clone.Instance.ID, "Region": r.Clone.Region}))
+            fmt.Fprintln(out, l.Text("cloud_plan_image", map[string]any{"Value": r.Clone.Image}))
         } else {
-            fmt.Fprintln(out, "--image", r.AutoDL.Image)
+            image := r.AutoDL.Image
+            if r.AutoDL.PrivateImageUUID != "" {
+                image = l.Text("cloud_image_private") + ": " + r.AutoDL.PrivateImageUUID
+            }
+            if r.AutoDL.Name != "" {
+                image = r.AutoDL.Name + " (" + image + ")"
+            }
+            fmt.Fprintln(out, l.Text("cloud_plan_image", map[string]any{"Value": image}))
+        }
+        if req.MaxStorageDailyPrice != nil {
+            fmt.Fprintln(out, l.Text("cloud_plan_storage", map[string]any{"Value": req.MaxStorageDailyPrice.Amount}))
         }
         if r.AutoDL.GPUSpecID != 0 {
             fmt.Fprintln(out, "--gpu-spec-id", r.AutoDL.GPUSpecID)

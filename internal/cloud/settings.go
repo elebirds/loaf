@@ -12,7 +12,7 @@ import (
 type Settings struct {
     DefaultAccount  string             `toml:"default_account,omitempty"`
     CredentialStore string             `toml:"credential_store,omitempty"`
-    Defaults        Profile            `toml:"defaults,omitempty"`
+    Defaults        Profile            `toml:"defaults,omitzero"`
     Safety          Ceiling            `toml:"safety,omitempty"`
     Accounts        map[string]Account `toml:"accounts,omitempty"`
 }
@@ -25,15 +25,17 @@ type Ceiling struct {
 
 // Profile stores optional per-field overrides; nil and explicit zero differ.
 type Profile struct {
+    Continuous            *bool         `toml:"continuous,omitempty"`
+    MaxStorageDailyPrice  *string       `toml:"max_storage_daily_price,omitempty"`
     Product               *string       `toml:"product,omitempty"`
     GPUVendor             *string       `toml:"gpu_vendor,omitempty"`
-    GPUModels             []string      `toml:"gpu_models,omitempty"`
+    GPUModels             []string      `toml:"gpu_models,omitzero"`
     GPUCount              *int          `toml:"gpu_count,omitempty"`
     MinGPUMemoryGiB       *int          `toml:"min_gpu_memory_gib,omitempty"`
     MinCPUs               *int          `toml:"min_cpus,omitempty"`
     MinMemoryGiB          *int          `toml:"min_memory_gib,omitempty"`
     MinDiskGiB            *int          `toml:"min_disk_gib,omitempty"`
-    Regions               []string      `toml:"regions,omitempty"`
+    Regions               []string      `toml:"regions,omitzero"`
     MaxComputeHourlyPrice *string       `toml:"max_compute_hourly_price,omitempty"`
     Currency              *string       `toml:"currency,omitempty"`
     WaitTimeout           *string       `toml:"wait_timeout,omitempty"`
@@ -54,6 +56,7 @@ type AutoDLProfile struct {
 
 // Requirements are hard filters, not preferences that can be silently relaxed.
 type Requirements struct {
+    MaxStorageDailyPrice  *Money   `json:"max_storage_daily_price,omitempty"`
     GPUVendor             string   `json:"gpu_vendor,omitempty"`
     GPUModels             []string `json:"gpu_models,omitempty"`
     GPUCount              int      `json:"gpu_count"`
@@ -67,23 +70,36 @@ type Requirements struct {
 
 // ImageOptions are data, not a platform startup command for running training.
 type ImageOptions struct {
-    Image              string `json:"image,omitempty"`
-    PrivateImageUUID   string `json:"private_image_uuid,omitempty"`
-    GPUSpecID          int    `json:"gpu_spec_id,omitempty"`
-    GPUSpecUUID        string `json:"gpu_spec_uuid,omitempty"`
-    CUDAFrom           int    `json:"cuda_from,omitempty"`
-    ExpandSystemDiskGB int    `json:"expand_system_disk_gb"`
-    ExpandDataDiskGB   int    `json:"expand_data_disk_gb"`
+    Name               string              `json:"name,omitempty"`
+    Compatibility      *ImageCompatibility `json:"compatibility,omitempty"`
+    Image              string              `json:"image,omitempty"`
+    PrivateImageUUID   string              `json:"private_image_uuid,omitempty"`
+    GPUSpecID          int                 `json:"gpu_spec_id,omitempty"`
+    GPUSpecUUID        string              `json:"gpu_spec_uuid,omitempty"`
+    CUDAFrom           int                 `json:"cuda_from,omitempty"`
+    ExpandSystemDiskGB int                 `json:"expand_system_disk_gb"`
+    ExpandDataDiskGB   int                 `json:"expand_data_disk_gb"`
+}
+
+// ImageCompatibility comes from a selected catalog entry, not a guessed UUID.
+type ImageCompatibility struct {
+    Vendor       string `json:"gpu_vendor,omitempty"`
+    Architecture string `json:"architecture,omitempty"`
+    CUDA         string `json:"cuda,omitempty"`
 }
 
 // Plan is frozen before monitoring or authorizing a purchase.
 type Plan struct {
-    Product      string       `json:"product"`
-    Requirements Requirements `json:"requirements"`
-    AutoDL       ImageOptions `json:"autodl"`
-    WaitTimeout  string       `json:"wait_timeout"`
-    PollInterval string       `json:"poll_interval"`
-    Clone        *CloneSource `json:"clone,omitempty"`
+    // InventoryOffset is an ephemeral candidate location, not durable intent.
+    InventoryOffset int          `json:"-"`
+    Continuous      bool         `json:"continuous,omitempty"`
+    OfferID         string       `json:"offer_id,omitempty"`
+    Product         string       `json:"product"`
+    Requirements    Requirements `json:"requirements"`
+    AutoDL          ImageOptions `json:"autodl"`
+    WaitTimeout     string       `json:"wait_timeout"`
+    PollInterval    string       `json:"poll_interval"`
+    Clone           *CloneSource `json:"clone,omitempty"`
 }
 
 func invalid() error { return fault.New("BAD_CONFIG", "cloud_config", nil) }
@@ -134,6 +150,20 @@ func Resolve(safety Ceiling, layers ...Profile) (Plan, error) {
     p := Plan{WaitTimeout: "0s", PollInterval: "10s"}
     price, currency := "", "CNY"
     for _, v := range layers {
+        if v.Continuous != nil {
+            p.Continuous = *v.Continuous
+        }
+        if v.MaxStorageDailyPrice != nil {
+            if *v.MaxStorageDailyPrice == "" {
+                r.MaxStorageDailyPrice = nil
+            } else {
+                m, err := ParseMoney(*v.MaxStorageDailyPrice, "CNY")
+                if err != nil {
+                    return p, err
+                }
+                r.MaxStorageDailyPrice = &m
+            }
+        }
         if v.Product != nil {
             if !ValidProduct(*v.Product) {
                 return p, invalid()

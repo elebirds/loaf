@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "os"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
 
@@ -29,6 +30,9 @@ func TestResourceProbePreservesUnitsAndUnknowns(t *testing.T) {
 }
 
 func TestProbeScriptProducesStructuredObservationAndMinimalSkipsGPU(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("executes the Linux environment probe; covered by Linux SSH integration")
+    }
     bin := t.TempDir()
     write := func(name, body string) string {
         path := filepath.Join(bin, name)

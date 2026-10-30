@@ -8,13 +8,13 @@ import (
     "encoding/json"
     "errors"
     "fmt"
-    "net/url"
     "os"
     "path/filepath"
-    "syscall"
     "time"
 
     "github.com/elebirds/loaf/internal/event"
+    "github.com/elebirds/loaf/internal/localpath"
+    "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/state/eventlog"
     "github.com/elebirds/loaf/internal/wire"
     "modernc.org/sqlite"
@@ -74,10 +74,10 @@ func Initialize(root, project string) error {
         return errors.New("PROJECT_UNOWNED")
     }
     dir := filepath.Join(root, Namespace)
-    if err := os.Mkdir(dir, 0700); err != nil {
+    if err := privatefs.Mkdir(dir); err != nil {
         return errors.New("PROJECT_BUSY")
     }
-    file, err := os.OpenFile(Path(root), os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+    file, err := privatefs.Create(Path(root))
     if err != nil {
         return errors.New("WRITE_FAILED")
     }
@@ -104,16 +104,8 @@ func Initialize(root, project string) error {
         return errors.New("WRITE_FAILED")
     }
     // The directory entry is part of the durable initial ownership claim.
-    for _, name := range []string{dir, root} {
-        f, err := os.Open(name)
-        if err != nil {
-            return errors.New("WRITE_FAILED")
-        }
-        err = f.Sync()
-        f.Close()
-        if err != nil {
-            return errors.New("WRITE_FAILED")
-        }
+    if err := privatefs.SyncAncestors(Path(root), root); err != nil {
+        return errors.New("WRITE_FAILED")
     }
     return nil
 }
@@ -123,27 +115,24 @@ func Open(root string, writable bool) (*Store, error) { return open(root, writab
 
 func open(root string, writable, fresh bool) (*Store, error) {
     for _, name := range []string{filepath.Join(root, Namespace), Path(root), Path(root) + "-wal", Path(root) + "-shm"} {
-        info, err := os.Lstat(name)
+        err := privatefs.Check(name, name == filepath.Join(root, Namespace))
         if errors.Is(err, os.ErrNotExist) && (name == Path(root)+"-wal" || name == Path(root)+"-shm") {
             continue
         }
+        if errors.Is(err, privatefs.ErrUnsafe) {
+            return nil, errors.New("BAD_FORMAT")
+        }
         if err != nil {
             return nil, errors.New("PROJECT_MISMATCH")
-        }
-        stat, ok := info.Sys().(*syscall.Stat_t)
-        if !ok || stat.Uid != uint32(os.Geteuid()) {
-            return nil, errors.New("BAD_FORMAT")
-        }
-        if info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 || (name != filepath.Join(root, Namespace) && !info.Mode().IsRegular()) || (name == filepath.Join(root, Namespace) && !info.IsDir()) {
-            return nil, errors.New("BAD_FORMAT")
         }
     }
     mode := "ro"
     if writable {
         mode = "rw"
     }
-    dsn := (&url.URL{Scheme: "file", Path: Path(root), RawQuery: "mode=" + mode + "&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_txlock=immediate"}).String()
-    db, err := sql.Open("sqlite", dsn)
+    uri := localpath.FileURL(Path(root))
+    uri.RawQuery = "mode=" + mode + "&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_txlock=immediate"
+    db, err := sql.Open("sqlite", uri.String())
     if err != nil {
         return nil, errors.New("BAD_FORMAT")
     }

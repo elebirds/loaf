@@ -9,10 +9,11 @@ import (
     "path/filepath"
 
     "github.com/elebirds/loaf/internal/atomicfile"
+    "github.com/elebirds/loaf/internal/privatefs"
 )
 
 // File stores unencrypted credentials in a dedicated private user directory.
-// Unix permissions protect against other users, not code running as the owner.
+// OS permissions protect against other users, not code running as the owner.
 type File struct{ Dir string }
 
 func (s File) directory(create bool) error {
@@ -20,26 +21,32 @@ func (s File) directory(create bool) error {
         return ErrUnavailable
     }
     if create {
-        if err := os.MkdirAll(s.Dir, 0700); err != nil {
+        if err := privatefs.MkdirAll(s.Dir); err != nil {
             return ErrUnavailable
         }
     }
-    info, err := os.Lstat(s.Dir)
+    err := privatefs.Check(s.Dir, true)
     if errors.Is(err, fs.ErrNotExist) {
         return fs.ErrNotExist
     }
-    if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+    if err != nil {
         return ErrUnavailable
     }
     return nil
 }
 
 func (s File) inspect(key string) (fs.FileInfo, error) {
+    if err := privatefs.Check(filepath.Join(s.Dir, key+".json"), false); err != nil {
+        if errors.Is(err, fs.ErrNotExist) {
+            return nil, fs.ErrNotExist
+        }
+        return nil, ErrUnavailable
+    }
     info, err := os.Lstat(filepath.Join(s.Dir, key+".json"))
     if errors.Is(err, fs.ErrNotExist) {
         return nil, fs.ErrNotExist
     }
-    if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 16*1024 {
+    if err != nil || !info.Mode().IsRegular() || info.Size() > 16*1024 {
         return nil, ErrUnavailable
     }
     return info, nil
@@ -124,20 +131,7 @@ func (s File) Delete(ctx context.Context, key string) error {
         }
         return err
     }
-    root, err := os.OpenRoot(s.Dir)
-    if err != nil {
-        return ErrUnavailable
-    }
-    defer root.Close()
-    if err := root.Remove(key + ".json"); err != nil && !errors.Is(err, fs.ErrNotExist) {
-        return ErrUnavailable
-    }
-    dir, err := root.Open(".")
-    if err != nil {
-        return ErrUnavailable
-    }
-    defer dir.Close()
-    if dir.Sync() != nil {
+    if err := privatefs.Remove(filepath.Join(s.Dir, key+".json")); err != nil && !errors.Is(err, fs.ErrNotExist) {
         return ErrUnavailable
     }
     return nil

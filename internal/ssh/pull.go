@@ -4,14 +4,9 @@ import (
     "bytes"
     "context"
     "encoding/json"
-    "errors"
     "fmt"
-    "os"
-    "os/exec"
     "regexp"
     "strings"
-    "syscall"
-    "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
@@ -83,6 +78,7 @@ type PullInput struct {
     Root, ProjectID, RunID string
     Paths                  []string
     Checksum               bool
+    DestinationFS          *wire.OutputFilesystem
 }
 
 // Pull updates a checked local destination without mirror deletion or in-place
@@ -130,7 +126,15 @@ func (r Rsync) pull(ctx context.Context, target config.Target, runner, destinati
     if err != nil {
         return result, err
     }
-    sender, err := r.receiverCommand(ctx, []string{runner, "__send", wire.Version, input.Root, input.ProjectID, input.RunID, string(paths)})
+    words := []string{runner, "__send", wire.Version, input.Root, input.ProjectID, input.RunID, string(paths)}
+    if input.DestinationFS != nil {
+        descriptor, err := json.Marshal(input.DestinationFS)
+        if err != nil {
+            return result, err
+        }
+        words = append(words, "--destination-filesystem="+string(descriptor))
+    }
+    sender, err := r.receiverCommand(ctx, words)
     if err != nil {
         return result, pullFailure("PULL_FAILED", err, "")
     }
@@ -139,24 +143,18 @@ func (r Rsync) pull(ctx context.Context, target config.Target, runner, destinati
     if input.Checksum {
         args = append(args, "--checksum")
     }
-    args = append(args, "--", host+":.", destination+"/")
-    cmd := exec.CommandContext(ctx, r.Binary, args...)
+    local, err := r.Client.localTransferPath(ctx, destination)
+    if err != nil {
+        return result, err
+    }
+    args = append(args, "--", host+":.", local+"/")
+    cmd := commandContext(ctx, r.Binary, args...)
     cmd.Env = session.env
     cmd.Stdin = strings.NewReader(strings.Join(input.Paths, "\x00") + "\x00")
     var changes changeCounter
     diagnostic := &diagnosticTail{}
     cmd.Stdout, cmd.Stderr = &changes, diagnostic
-    cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-    cmd.WaitDelay = 2 * time.Second
-    cmd.Cancel = func() error {
-        // Let native rsync remove its current temporary file before resorting
-        // to os/exec's bounded wait/kill. Completed destination files stay put.
-        err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-        if errors.Is(err, syscall.ESRCH) {
-            return os.ErrProcessDone
-        }
-        return err
-    }
+    cancelTransfer(cmd, true)
     err = cmd.Run()
     if ctx.Err() != nil {
         return result, pullFailure("PULL_CANCELED", ctx.Err(), diagnostic.String())

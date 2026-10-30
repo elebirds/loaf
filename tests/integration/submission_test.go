@@ -4,7 +4,6 @@ import (
     "bytes"
     "encoding/json"
     "os"
-    "os/exec"
     "path/filepath"
     "strings"
     "testing"
@@ -24,41 +23,10 @@ func TestLostSubmissionConfirmationUsesTheOriginalID(t *testing.T) {
             t.Fatal(code, string(out))
         }
     }
-    realSSH, err := exec.LookPath("ssh")
-    if err != nil {
-        t.Fatal(err)
-    }
-    bin := filepath.Join(f.dir, "fault-bin")
-    if err := os.Mkdir(bin, 0700); err != nil {
-        t.Fatal(err)
-    }
+    bin := t.TempDir()
     marker := filepath.Join(bin, "drop-status")
     counter := filepath.Join(bin, "launch-count")
-    // Test-only failure injection leaves the native rsync stream untouched. A
-    // start is executed normally, but its confirmation is deliberately dropped.
-    script := `#!/bin/sh
-for argument do
-    case "$argument" in *'__receive'*|*'/bin/sh -s --'*|*'umask 077'*|-V) exec ` + ssh.Quote(realSSH) + ` "$@" ;; esac
-done
-payload=$(mktemp)
-trap 'rm -f "$payload"' EXIT HUP INT TERM
-cat >"$payload"
-if grep -q '"action":"launch"' "$payload"; then
-    printf 'launch\n' >>` + ssh.Quote(counter) + `
-    ` + ssh.Quote(realSSH) + ` "$@" <"$payload" >/dev/null
-    exit 255
-fi
-if [ -e ` + ssh.Quote(marker) + ` ] && grep -q '"action":"status"' "$payload"; then
-    ` + ssh.Quote(realSSH) + ` "$@" <"$payload" >/dev/null
-    exit 255
-fi
-` + ssh.Quote(realSSH) + ` "$@" <"$payload"
-exit $?
-`
-    if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0700); err != nil {
-        t.Fatal(err)
-    }
-    t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+    useTransportProxy(t, transportFault{DropAction: "launch", DropRead: "status", Marker: marker, Counter: counter})
     recovered := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo once >> launch-count; echo recovered")
     f.shell(`test "$(wc -l <"$1/runs/$2/work/launch-count")" -eq 1`, recovered.RemoteDir, recovered.ID)
     calls, err := os.ReadFile(counter)

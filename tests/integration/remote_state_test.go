@@ -2,6 +2,7 @@ package integration
 
 import (
     "database/sql"
+    "path"
     "strings"
 
     remotestate "github.com/elebirds/loaf/internal/state/remote"
@@ -24,14 +25,17 @@ func (f *fixture) managedRemote(root string) {
     }
     database.Close()
     f.shell(`mkdir -m 700 -p "$1/.loaf-control-v2" "$1/cache"`, root)
-    command(f.t, "docker", "cp", remotestate.Path(local), f.id+":"+remotestate.Path(root))
-    command(f.t, "docker", "exec", f.id, "chown", "researcher:researcher", remotestate.Path(root))
-    command(f.t, "docker", "exec", f.id, "chmod", "0600", remotestate.Path(root))
+    remotePath := path.Join(root, ".loaf-control-v2", "state.sqlite3")
+    command(f.t, "docker", "cp", remotestate.Path(local), f.id+":"+remotePath)
+    command(f.t, "docker", "exec", f.id, "chown", "researcher:researcher", remotePath)
+    command(f.t, "docker", "exec", f.id, "chmod", "0600", remotePath)
 }
 
 func (f *fixture) remoteSQL(root, query string) string {
     f.t.Helper()
-    return f.shell(`sqlite3 -readonly "$1/.loaf-control-v2/state.sqlite3" "$2"`, root, query)
+    // Observers may open while a writer briefly holds the WAL recovery lock.
+    // Bound that wait instead of treating a transient lock as a test failure.
+    return f.shell(`sqlite3 -readonly -cmd '.timeout 1000' "$1/.loaf-control-v2/state.sqlite3" "$2"`, root, query)
 }
 
 func (f *fixture) remoteRecord(root, id string) string {

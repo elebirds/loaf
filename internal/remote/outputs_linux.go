@@ -36,6 +36,9 @@ func Outputs(ctx context.Context, req wire.Request) (wire.OutputSelection, error
     if len(req.Outputs) == 0 {
         return selection, errors.New("BAD_REQUEST")
     }
+    if req.DestinationFS != nil && req.DestinationFS.Name != "windows-ntfs" {
+        return selection, errors.New("BAD_REQUEST")
+    }
     for _, name := range req.Outputs {
         if !wire.ValidOutputPath(name) {
             return selection, &outputError{"UNSAFE_PATH", name}
@@ -91,6 +94,28 @@ func Outputs(ctx context.Context, req wire.Request) (wire.OutputSelection, error
             selection.Available = append(selection.Available, name)
         }
     }
+    names := map[string]wire.OutputName{}
+    checkName := func(name, kind string) error {
+        if req.DestinationFS == nil {
+            return nil
+        }
+        if !wire.WindowsOutputPath(name) {
+            return &outputError{"UNSAFE_PATH", name}
+        }
+        key := strings.ToUpper(name)
+        if prior, exists := names[key]; exists && (prior.Path != name || prior.Kind != kind) {
+            return &outputError{"UNSAFE_PATH", name}
+        }
+        names[key] = wire.OutputName{Path: name, Kind: kind}
+        return nil
+    }
+    for _, name := range selection.Available {
+        for parent := path.Dir(name); parent != "."; parent = path.Dir(parent) {
+            if err := checkName(parent, "directory"); err != nil {
+                return selection, err
+            }
+        }
+    }
     visit := func(name string, entry fs.DirEntry, err error) error {
         if ctx.Err() != nil {
             return errors.New("PULL_CANCELED")
@@ -98,14 +123,29 @@ func Outputs(ctx context.Context, req wire.Request) (wire.OutputSelection, error
         if err != nil {
             return &outputError{"OUTPUT_READ_FAILED", name}
         }
+        kind := "file"
+        if entry.IsDir() {
+            kind = "directory"
+        } else if entry.Type()&os.ModeSymlink != 0 {
+            kind = "symlink"
+        }
+        if err := checkName(name, kind); err != nil {
+            return err
+        }
         if entry.IsDir() {
             return nil
         }
         if entry.Type()&os.ModeSymlink != 0 {
+            if req.DestinationFS != nil && !req.DestinationFS.Symlinks {
+                return &outputError{"UNSAFE_PATH", name}
+            }
             target, err := root.Readlink(name)
             resolved, resolveErr := filepath.EvalSymlinks(filepath.Join(work, filepath.FromSlash(name)))
             rel, relErr := filepath.Rel(work, resolved)
             if err != nil || filepath.IsAbs(target) || resolveErr != nil || relErr != nil || !withinOutputs(filepath.ToSlash(rel), selection.Available) {
+                return &outputError{"UNSAFE_PATH", name}
+            }
+            if req.DestinationFS != nil && (strings.Contains(target, `\`) || !wire.WindowsOutputPath(filepath.ToSlash(rel))) {
                 return &outputError{"UNSAFE_PATH", name}
             }
             // Root.Stat also confines every link in a chain to work.
@@ -134,6 +174,16 @@ func Outputs(ctx context.Context, req wire.Request) (wire.OutputSelection, error
         }
         if err != nil {
             return selection, err
+        }
+    }
+    if req.DestinationFS != nil {
+        for _, name := range names {
+            selection.Names = append(selection.Names, name)
+        }
+        slices.SortFunc(selection.Names, func(a, b wire.OutputName) int { return strings.Compare(a.Path, b.Path) })
+        selection.Namespace = wire.OutputNamespace(selection.Names)
+        if expected := req.DestinationFS.Namespace; expected != "" && expected != selection.Namespace {
+            return selection, errors.New("UNSAFE_PATH")
         }
     }
     return selection, nil
@@ -170,6 +220,16 @@ func sendOutputs(in io.Reader, out, diagnostic io.Writer, args []string) error {
         return errors.New("BAD_SENDER")
     }
     native := args[5:]
+    if strings.HasPrefix(native[0], "--destination-filesystem=") {
+        req.DestinationFS = &wire.OutputFilesystem{}
+        if json.Unmarshal([]byte(strings.TrimPrefix(native[0], "--destination-filesystem=")), req.DestinationFS) != nil {
+            return errors.New("BAD_SENDER")
+        }
+        native = native[1:]
+    }
+    if len(native) < 4 {
+        return errors.New("BAD_SENDER")
+    }
     if native[0] != "--server" || native[1] != "--sender" || native[len(native)-2] != "." || native[len(native)-1] != "." {
         return errors.New("BAD_SENDER")
     }

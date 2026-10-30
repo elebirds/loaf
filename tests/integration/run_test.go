@@ -117,6 +117,7 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
     cmd := exec.CommandContext(streamCtx, os.Getenv("LOAF_BIN"), "logs", long.ID, "-f", "--json")
     cmd.Dir = project
     cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+filepath.Join(project, "config"), "XDG_STATE_HOME="+filepath.Join(project, "state"), "LOAF_LANG=en")
+    interruptibleCommand(cmd)
     pipe, err := cmd.StdoutPipe()
     if err != nil {
         t.Fatal(err)
@@ -133,7 +134,7 @@ func TestProjectRunWaitSetupAndRecovery(t *testing.T) {
         _ = cmd.Wait()
         t.Fatal("no JSON stream chunk", scanner.Err(), diagnostic.String())
     }
-    if err := cmd.Process.Signal(os.Interrupt); err != nil {
+    if err := interruptCommand(t, cmd); err != nil {
         t.Fatal(err)
     }
     sawCanceled := false

@@ -34,7 +34,7 @@ and come back to the same task ID for its status, logs, and outputs.
 
 ## Get started
 
-[Install Loaf](manual/en/installation.md) on macOS or Linux. Have a Linux machine
+[Install Loaf](manual/en/installation.md) on macOS, Linux, native Windows x64, or WSL2. Have a Linux machine
 ready that you can reach with SSH; Loaf uses your existing SSH configuration.
 
 The archive and source tree both include a small CPU example. From either one,

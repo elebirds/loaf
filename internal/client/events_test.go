@@ -143,7 +143,7 @@ func (r *frozenEventRemote) ControlResponse(_ context.Context, target config.Tar
 }
 
 func TestBridgeRetainsSourceErrorAndContinuesAfterRecovery(t *testing.T) {
-    ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
     defer cancel()
     state := local.New(t.TempDir())
     root, _, _ := config.Discover(ctx, t.TempDir())

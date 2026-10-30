@@ -1,5 +1,9 @@
 [root_short]
 other = "在 SSH 机器上运行你的项目。"
+[msys2_missing]
+other = "Windows 原生版需要同一套 MSYS2 中的 SSH、rsync 和 cygpath。"
+[msys2_hint]
+other = "请在 MSYS2 中安装 openssh 和 rsync，并将 LOAF_MSYS2_ROOT 设为安装根目录（例如 C:\\msys64），或将其 usr\\bin 加入 PATH。不能混用 Windows OpenSSH、Git SSH 或 WSL 工具。"
 [exec_short]
 other = "在所选机器上执行前台命令。"
 [exec_args]
@@ -2082,6 +2086,9 @@ other = "未知"
 
 [async_failed]
 other = "异步操作未能完成。重试前请检查已保存的请求或投递记录。"
+
+[notify_destination_unsupported]
+other = "此通知适配器不支持当前平台。请使用 Webhook，或在受支持的环境中使用已验证的适配器。"
 
 [probe_component_cpu]
 other = "CPU 数量"

@@ -41,9 +41,15 @@ func main() {
     out := flag.String("out", "", "package staging directory")
     version := flag.String("version", "", "software version")
     checksums := flag.String("checksums", "", "write SHA-256 download checksums instead of package metadata")
+    zipPath := flag.String("zip", "", "collect one already built staging directory into a ZIP archive")
+    tarPath := flag.String("tar-gz", "", "collect one already built staging directory into a tar.gz archive")
     flag.Parse()
     var err error
-    if *checksums != "" {
+    if *tarPath != "" && len(flag.Args()) == 1 {
+        err = writeTarGZ(*tarPath, flag.Arg(0))
+    } else if *zipPath != "" && len(flag.Args()) == 1 {
+        err = writeZIP(*zipPath, flag.Arg(0))
+    } else if *checksums != "" {
         err = writeChecksums(*checksums, flag.Args())
     } else if *out == "" || *version == "" || len(flag.Args()) == 0 {
         err = errors.New("provide -out, -version, client binary and embedded runner paths")

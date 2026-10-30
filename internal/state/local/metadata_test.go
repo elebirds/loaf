@@ -2,6 +2,7 @@ package local
 
 import (
     "context"
+    "github.com/elebirds/loaf/internal/testutil"
     "os"
     "reflect"
     "slices"
@@ -70,10 +71,7 @@ func TestRunMetadataIsSeparatePrivateImmutableAndConcurrent(t *testing.T) {
     if err != nil || got.Name != m.Name || !slices.Equal(got.Tags, []string{"ablation", "seed1"}) {
         t.Fatal(got, err)
     }
-    info, err := os.Stat(store.Path)
-    if err != nil || info.Mode().Perm() != 0600 {
-        t.Fatal(info, err)
-    }
+    testutil.Private(t, store.Path, false)
     after, _ := store.Runs(ref.ProjectID)
     if !reflect.DeepEqual(after, original) {
         t.Fatal("annotations changed locator")

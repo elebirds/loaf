@@ -11,6 +11,9 @@ import (
     "strings"
     "testing"
 
+    "github.com/elebirds/loaf/internal/privatefs"
+    "github.com/elebirds/loaf/internal/testutil"
+
     "github.com/zalando/go-keyring"
 )
 
@@ -87,10 +90,9 @@ func TestPrivateFilesAndDeletionIsolation(t *testing.T) {
             t.Fatal(err)
         }
     }
-    for path, perm := range map[string]fs.FileMode{s.Dir: 0700, filepath.Join(s.Dir, "one.json"): 0600} {
-        info, err := os.Stat(path)
-        if err != nil || info.Mode().Perm() != perm {
-            t.Fatal(path, info, err)
+    for path, directory := range map[string]bool{s.Dir: true, filepath.Join(s.Dir, "one.json"): false} {
+        if err := privatefs.Check(path, directory); err != nil {
+            t.Fatal(path, err)
         }
     }
     if err := s.Set(ctx, "one", "replaced"); err != nil {
@@ -130,16 +132,18 @@ func TestFileStoreRejectsUnsafePathsWithoutMutation(t *testing.T) {
                 os.WriteFile(other, []byte("sentinel"), 0600)
                 os.Remove(path)
                 if err := os.Symlink(other, path); err != nil {
-                    t.Fatal(err)
+                    t.Skipf("symbolic links unavailable: %v", err)
                 }
             case "file-permission":
-                os.Chmod(path, 0644)
+                defer testutil.Public(t, path)()
             case "directory-permission":
-                os.Chmod(s.Dir, 0755)
+                defer testutil.Public(t, s.Dir)()
             case "directory-symlink":
                 actual := filepath.Join(root, "actual")
                 os.Rename(s.Dir, actual)
-                os.Symlink(actual, s.Dir)
+                if err := os.Symlink(actual, s.Dir); err != nil {
+                    t.Skipf("symbolic links unavailable: %v", err)
+                }
             case "oversize":
                 os.WriteFile(path, []byte(strings.Repeat("x", 16*1024+1)), 0600)
             }

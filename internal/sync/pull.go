@@ -3,6 +3,7 @@ package sync
 import (
     "context"
     "errors"
+    "io"
     "io/fs"
     "os"
     "path/filepath"
@@ -12,10 +13,11 @@ import (
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/filelock"
+    "github.com/elebirds/loaf/internal/localpath"
     "github.com/elebirds/loaf/internal/ssh"
     "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
-    "golang.org/x/sys/unix"
 )
 
 // OutputRemote is the read-only SSH seam needed to retrieve an existing run.
@@ -99,6 +101,10 @@ func (s PullService) Pull(ctx context.Context, ref task.RunRef, destination stri
     if err != nil {
         return result, err
     }
+    if localpath.Supported(destination) != nil || !validDestinationPaths(result.Paths) {
+        return result, fault.New("UNSAFE_PATH", "pull_destination", nil)
+    }
+    filesystem := destinationFilesystem(destination)
     preflight, cancel := context.WithTimeout(ctx, 30*time.Second)
     arch, err := s.Remote.RunnerArch(preflight, ref.Connection, batch)
     var runner string
@@ -109,7 +115,7 @@ func (s PullService) Pull(ctx context.Context, ref task.RunRef, destination stri
     if err != nil {
         return result, err
     }
-    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "outputs", Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Outputs: result.Paths}
+    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "outputs", Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Outputs: result.Paths, DestinationFS: filesystem}
     selected, err := s.Remote.Outputs(ctx, ref.Connection, runner, req, batch)
     if err != nil {
         return result, err
@@ -124,8 +130,11 @@ func (s PullService) Pull(ctx context.Context, ref task.RunRef, destination stri
             return result, err
         }
         defer lock.Close()
+        if err := validateDestinationNamespace(destination, selected, filesystem); err != nil {
+            return result, err
+        }
         // No persistent download state or per-run remote execution lock is used.
-        transferred, err := s.Receive.Pull(ctx, ref.Connection, runner, destination, ssh.PullInput{Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Paths: selected.Available, Checksum: policy.Checksum}, batch)
+        transferred, err := s.Receive.Pull(ctx, ref.Connection, runner, destination, ssh.PullInput{Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Paths: selected.Available, Checksum: policy.Checksum, DestinationFS: filesystem}, batch)
         if err != nil {
             return result, err
         }
@@ -173,6 +182,9 @@ func Destination(project, cwd, to, id string, policy config.PullPolicy) (string,
         return "", fault.New("BAD_CONFIG", "pull_destination", nil)
     }
     destination = filepath.Clean(destination)
+    if err := localpath.Supported(destination); err != nil {
+        return "", fault.Wrap("UNSAFE_PATH", "pull_destination", err)
+    }
     info, err := os.Lstat(destination)
     if err == nil && !info.IsDir() || err != nil && !errors.Is(err, fs.ErrNotExist) {
         return "", fault.New("UNSAFE_PATH", "pull_destination", nil)
@@ -181,7 +193,7 @@ func Destination(project, cwd, to, id string, policy config.PullPolicy) (string,
     parent := filepath.Dir(destination)
     suffix := filepath.Base(destination)
     for {
-        real, err := filepath.EvalSymlinks(parent)
+        real, err := localpath.Canonical(parent)
         if err == nil {
             destination = filepath.Join(real, suffix)
             break
@@ -199,14 +211,17 @@ func Destination(project, cwd, to, id string, policy config.PullPolicy) (string,
     if destination == home {
         return "", fault.New("UNSAFE_PATH", "pull_destination", nil)
     }
-    if rel, err := filepath.Rel(destination, project); err != nil || filepath.IsLocal(rel) {
+    if localpath.Contains(destination, project) {
         return "", fault.New("UNSAFE_PATH", "pull_destination", nil)
     }
     return destination, nil
 }
 
-func openDestination(destination string, paths []string) (*os.File, error) {
-    failure := func(err error) (*os.File, error) {
+func openDestination(destination string, paths []string) (io.Closer, error) {
+    if localpath.Supported(destination) != nil || !validDestinationPaths(paths) {
+        return nil, fault.New("UNSAFE_PATH", "pull_destination", nil)
+    }
+    failure := func(err error) (io.Closer, error) {
         f := fault.Wrap("PULL_FAILED", "pull_write", err)
         f.Hint = "pull_retry"
         f.Params = map[string]any{"Detail": err.Error()}
@@ -219,13 +234,9 @@ func openDestination(destination string, paths []string) (*os.File, error) {
     if err != nil || real != destination {
         return nil, fault.New("UNSAFE_PATH", "pull_destination", nil)
     }
-    lock, err := os.OpenFile(destination, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY, 0)
+    lock, err := lockDestination(destination)
     if err != nil {
-        return failure(err)
-    }
-    if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-        lock.Close()
-        if errors.Is(err, unix.EWOULDBLOCK) {
+        if errors.Is(err, filelock.ErrBusy) {
             return nil, fault.New("PULL_BUSY", "pull_busy", nil)
         }
         return failure(err)

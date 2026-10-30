@@ -117,6 +117,7 @@ func stopCLICommand(ctx context.Context, project string, args ...string) *exec.C
     cmd := exec.CommandContext(ctx, os.Getenv("LOAF_BIN"), args...)
     cmd.Dir = project
     cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+filepath.Join(project, "config"), "XDG_STATE_HOME="+filepath.Join(project, "state"), "LOAF_LANG=en")
+    interruptibleCommand(cmd)
     return cmd
 }
 
@@ -235,7 +236,7 @@ func TestCanceledStopKeepsAcceptedRequest(t *testing.T) {
     wait(t, 5*time.Second, func() bool {
         return f.remoteSQL(started.RemoteDir, "SELECT count(*) FROM stop_requests WHERE run_id='"+started.ID+"'") == "1"
     })
-    if err := cmd.Process.Signal(os.Interrupt); err != nil {
+    if err := interruptCommand(t, cmd); err != nil {
         t.Fatal(err)
     }
     err := cmd.Wait()
@@ -283,40 +284,10 @@ func TestLostStopConfirmationQueriesWithoutReplaying(t *testing.T) {
     }
     f := newFixture(t)
     project := stopProject(t, f)
-    realSSH, err := exec.LookPath("ssh")
-    if err != nil {
-        t.Fatal(err)
-    }
-    bin := filepath.Join(f.dir, "stop-fault-bin")
-    if err := os.Mkdir(bin, 0700); err != nil {
-        t.Fatal(err)
-    }
+    bin := t.TempDir()
     counter := filepath.Join(bin, "requests")
     marker := filepath.Join(bin, "drop-observation")
-    script := `#!/bin/sh
-for argument do
-    case "$argument" in *'__receive'*|*'/bin/sh -s --'*|*'umask 077'*|-V) exec ` + ssh.Quote(realSSH) + ` "$@" ;; esac
-done
-payload=$(mktemp)
-trap 'rm -f "$payload"' EXIT HUP INT TERM
-cat >"$payload"
-if grep -q '"action":"stop"' "$payload"; then
-    printf 'stop\n' >>` + ssh.Quote(counter) + `
-    ` + ssh.Quote(realSSH) + ` "$@" <"$payload" >/dev/null
-    exit 255
-fi
-if [ -e ` + ssh.Quote(marker) + ` ] && grep -q '"action":"observe"' "$payload"; then
-    ` + ssh.Quote(realSSH) + ` "$@" <"$payload" >/dev/null
-    exit 255
-fi
-` + ssh.Quote(realSSH) + ` "$@" <"$payload"
-exit $?
-`
-    if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0700); err != nil {
-        t.Fatal(err)
-    }
-    originalPATH := os.Getenv("PATH")
-    t.Setenv("PATH", bin+string(os.PathListSeparator)+originalPATH)
+    useTransportProxy(t, transportFault{DropAction: "stop", DropRead: "observe", Marker: marker, Counter: counter})
     for _, loseObservation := range []bool{false, true} {
         started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", "echo ready >ready; while :; do sleep .02; done")
         waitRunFile(t, f, started, "work/ready")

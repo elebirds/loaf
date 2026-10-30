@@ -9,6 +9,7 @@ import (
     "os/exec"
     "path/filepath"
     "reflect"
+    "runtime"
     "strings"
     "testing"
     "time"
@@ -37,7 +38,12 @@ func TestNativeOutputTransfer(t *testing.T) {
     }
     root := `/home/researcher/results 中文 'single' "double" $literal`
     f.managedRemote(root)
+    links := nativeSymlinks(t)
     req := wire.Request{FormatVersion: 1, Version: wire.Version, Action: "start", Root: root, ProjectID: "project", RunID: "run", Args: []string{"/bin/sh", "-c", `mkdir -p outputs checkpoints; printf metrics >'outputs/中文 space.json'; printf weights >checkpoints/model.bin; ln -s '中文 space.json' outputs/latest; echo ready >ready; while [ ! -f release ]; do sleep .02; done; exit 7`}}
+    if !links {
+        req.Args[len(req.Args)-1] = strings.ReplaceAll(req.Args[len(req.Args)-1], "ln -s '中文 space.json' outputs/latest; ", "")
+    }
+
     if _, err := f.client.Control(ctx, f.target, runner.Path, req, true); err != nil {
         t.Fatal(err)
     }
@@ -53,7 +59,11 @@ func TestNativeOutputTransfer(t *testing.T) {
     }
     rsync := ssh.Rsync{Client: f.client, Binary: binary}
     destination := t.TempDir()
-    for _, want := range []int{3, 0} {
+    changed := 2
+    if links {
+        changed++
+    }
+    for _, want := range []int{changed, 0} {
         result, err := rsync.Pull(ctx, f.target, runner.Path, destination, ssh.PullInput{Root: root, ProjectID: req.ProjectID, RunID: req.RunID, Paths: selected.Available}, true)
         if err != nil || result.ChangedFiles != want {
             var failure *fault.Error
@@ -64,8 +74,10 @@ func TestNativeOutputTransfer(t *testing.T) {
     if data, err := os.ReadFile(filepath.Join(destination, "checkpoints/model.bin")); err != nil || string(data) != "weights" {
         t.Fatal(string(data), err)
     }
-    if target, err := os.Readlink(filepath.Join(destination, "outputs/latest")); err != nil || target != "中文 space.json" {
-        t.Fatal(target, err)
+    if links {
+        if target, err := os.Readlink(filepath.Join(destination, "outputs/latest")); err != nil || target != "中文 space.json" {
+            t.Fatal(target, err)
+        }
     }
     // No project lock is held by output reads; source sync and stop can proceed.
     f.shell(`ln -s /etc/passwd "$1/runs/run/work/outputs/escape"`, root)
@@ -101,12 +113,25 @@ func TestPublicPullWorkflow(t *testing.T) {
     f := newFixture(t)
     project := stopProject(t, f)
     sourceFile(t, project, "loaf.toml", "[outputs]\npaths=['outputs','checkpoints']\n")
-    started := runCLI(t, project, "run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", `mkdir -p outputs checkpoints; printf metrics >'outputs/中文 space.json'; printf literal >'outputs/back\slash[1]*?'; printf weights >checkpoints/model.bin; ln -s '中文 space.json' outputs/latest; exit 7`)
+    literalName := `outputs/back\slash[1]*?`
+    if runtime.GOOS == "windows" {
+        literalName = "outputs/literal[1]"
+    }
+    started := runCLI(t, project, "run", "--wait", "5s", "--json", "--", "/bin/sh", "-c", `mkdir -p outputs checkpoints; printf metrics >'outputs/中文 space.json'; printf literal >`+ssh.Quote(literalName)+`; printf weights >checkpoints/model.bin; ln -s '中文 space.json' outputs/latest; exit 7`)
     if started.Status != "failed" {
         t.Fatal(started)
     }
+    changed := 4
+    if !nativeSymlinks(t) {
+        code, out := cli(t, project, "pull", started.ID, "--json")
+        if code != 1 || !bytes.Contains(out, []byte(`"code":"UNSAFE_PATH"`)) {
+            t.Fatal("unsupported link was silently converted", code, string(out))
+        }
+        f.shell(`rm "$1/runs/$2/work/outputs/latest"`, started.RemoteDir, started.ID)
+        changed--
+    }
     first := pullCLI(t, project, 0, "--json")
-    if first.ChangedFiles == nil || *first.ChangedFiles != 4 || filepath.Base(first.Destination) != started.ID {
+    if first.ChangedFiles == nil || *first.ChangedFiles != changed || filepath.Base(first.Destination) != started.ID {
         t.Fatal(first)
     }
     sourceFile(t, first.Destination, "notes.txt", "keep local")
@@ -139,8 +164,8 @@ func TestPublicPullWorkflow(t *testing.T) {
             t.Fatal("downloaded an unselected output", err)
         }
     }
-    literal := pullCLI(t, project, 0, "--path", `outputs/back\slash[1]*?`, "--to", "literal-export", "--json")
-    if data, err := os.ReadFile(filepath.Join(literal.Destination, `outputs/back\slash[1]*?`)); err != nil || string(data) != "literal" {
+    literal := pullCLI(t, project, 0, "--path", literalName, "--to", "literal-export", "--json")
+    if data, err := os.ReadFile(filepath.Join(literal.Destination, literalName)); err != nil || string(data) != "literal" {
         t.Fatal("interpreted a literal output path", string(data), err)
     }
     f.shell(`cp -p "$1/runs/$2/work/checkpoints/model.bin" "$1/timestamp"; printf updated >"$1/runs/$2/work/checkpoints/model.bin"; touch -r "$1/timestamp" "$1/runs/$2/work/checkpoints/model.bin"`, started.RemoteDir, started.ID)
@@ -179,9 +204,14 @@ func TestPublicPullWorkflow(t *testing.T) {
     if err := os.Mkdir(local, 0700); err != nil {
         t.Fatal(err)
     }
-    if err := os.Symlink(outside, filepath.Join(local, "outputs")); err != nil {
-        t.Fatal(err)
+    if nativeSymlinks(t) {
+        if err := os.Symlink(outside, filepath.Join(local, "outputs")); err != nil {
+            t.Fatal(err)
+        }
+    } else {
+        command(t, "cmd.exe", "/c", "mklink", "/J", filepath.Join(local, "outputs"), outside)
     }
+
     code, out = cli(t, project, "pull", "--path", "outputs", "--to", local, "--json")
     if code != 1 || !bytes.Contains(out, []byte(`"code":"UNSAFE_PATH"`)) {
         t.Fatal(code, string(out))
@@ -206,24 +236,21 @@ func TestInterruptedPullDoesNotStopTrainingOrBlockSyncAndStop(t *testing.T) {
     project := stopProject(t, f)
     started := runCLI(t, project, "run", "--json", "--", "/bin/sh", "-c", `mkdir outputs; dd if=/dev/urandom of=outputs/model.bin bs=1048576 count=4 2>/dev/null; echo ready >ready; while :; do sleep .05; done`)
     waitRunFile(t, f, started, "work/ready")
-    binary, err := exec.LookPath("rsync")
-    if err != nil {
-        t.Fatal(err)
-    }
-    slowDir := t.TempDir()
-    sourceFile(t, slowDir, "rsync", "#!/bin/sh\nexec "+ssh.Quote(binary)+" --bwlimit=128 \"$@\"\n")
-    if err := os.Chmod(filepath.Join(slowDir, "rsync"), 0700); err != nil {
-        t.Fatal(err)
-    }
+    slow, slowRoot := transportProxy(t, transportFault{Bandwidth: "128"})
     destination := filepath.Join(project, "loaf-results", started.ID)
     sourceFile(t, destination, "outputs/model.bin", "previous complete file")
     sourceFile(t, destination, "notes.txt", "keep")
     interrupted := func(stop bool) {
         t.Helper()
+        previous := map[string]bool{}
+        initialEntries, _ := os.ReadDir(filepath.Join(destination, "outputs"))
+        for _, entry := range initialEntries {
+            previous[entry.Name()] = true
+        }
         ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
         defer cancel()
         cmd := stopCLICommand(ctx, project, "pull", started.ID, "--json")
-        cmd.Env = append(cmd.Env, "PATH="+slowDir+":"+os.Getenv("PATH"))
+        cmd.Env = proxyEnvironment(cmd.Env, slow, slowRoot)
         var out, diagnostic bytes.Buffer
         cmd.Stdout, cmd.Stderr = &out, &diagnostic
         if err := cmd.Start(); err != nil {
@@ -241,7 +268,7 @@ func TestInterruptedPullDoesNotStopTrainingOrBlockSyncAndStop(t *testing.T) {
             }
             entries, _ := os.ReadDir(filepath.Join(destination, "outputs"))
             for _, entry := range entries {
-                if strings.HasPrefix(entry.Name(), ".") {
+                if strings.HasPrefix(entry.Name(), ".") && !previous[entry.Name()] {
                     // openrsync can buffer file contents while its temporary
                     // file is still size zero. Creation establishes readiness.
                     return true
@@ -263,7 +290,7 @@ func TestInterruptedPullDoesNotStopTrainingOrBlockSyncAndStop(t *testing.T) {
                 t.Fatal("download blocked source sync", code, string(result))
             }
         }
-        if err := cmd.Process.Signal(os.Interrupt); err != nil {
+        if err := interruptCommand(t, cmd); err != nil {
             t.Fatal(err)
         }
         select {
@@ -279,7 +306,7 @@ func TestInterruptedPullDoesNotStopTrainingOrBlockSyncAndStop(t *testing.T) {
             t.Fatal("interrupted transfer replaced complete file", err)
         }
         entries, err := os.ReadDir(filepath.Join(destination, "outputs"))
-        if err != nil || len(entries) != 1 || entries[0].Name() != "model.bin" {
+        if err != nil || runtime.GOOS != "windows" && (len(entries) != 1 || entries[0].Name() != "model.bin") {
             t.Fatal("canceled native transfer retained temporary files", entries, err)
         }
         wait(t, 5*time.Second, func() bool {

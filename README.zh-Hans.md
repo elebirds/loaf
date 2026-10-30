@@ -26,7 +26,7 @@ Loaf 把机器接入、代码同步、后台执行和结果回收串成一个命
 
 ## 开始使用
 
-在 macOS 或 Linux 上[安装 Loaf](manual/zh-Hans/installation.md)，
+在 macOS、Linux、原生 Windows x64 或 WSL2 上[安装 Loaf](manual/zh-Hans/installation.md)，
 准备一台可通过 SSH 访问的 Linux 机器。Loaf 沿用你已有的 SSH 配置。
 
 发行包和源码都包含一个小型 CPU 示例。在其中任一目录下，

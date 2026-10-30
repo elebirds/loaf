@@ -7,6 +7,7 @@ import (
     "errors"
     "net"
     "net/url"
+    "path"
     "path/filepath"
     "strings"
     "unicode"
@@ -35,14 +36,14 @@ type Destination struct {
 func (d Destination) Validate() error {
     switch d.Kind {
     case "codex-desktop":
-        if !validID(d.SessionID) || !filepath.IsAbs(d.Endpoint) || d.CWD != "" {
+        if !validID(d.SessionID) || !absoluteDestinationPath(d.Endpoint) || d.CWD != "" {
             return ErrDestination
         }
     case "codex", "claude-channel", "claude-resume":
         if !validID(d.SessionID) {
             return ErrDestination
         }
-        if d.Endpoint != "" && !filepath.IsAbs(d.Endpoint) {
+        if d.Endpoint != "" && !absoluteDestinationPath(d.Endpoint) {
             return ErrDestination
         }
         if d.Kind == "claude-channel" && d.Endpoint == "" {
@@ -69,11 +70,15 @@ func (d Destination) Validate() error {
     if strings.ContainsAny(d.Endpoint+d.CWD+d.BearerRef, "\x00\r\n") {
         return ErrDestination
     }
-    if d.CWD != "" && !filepath.IsAbs(d.CWD) {
+    if d.CWD != "" && !absoluteDestinationPath(d.CWD) {
         return ErrDestination
     }
     return nil
 }
+
+// A destination may describe a Unix adapter even when the inspecting client is
+// Windows. Validation is distinct from platform availability; Probe reports it.
+func absoluteDestinationPath(value string) bool { return path.IsAbs(value) || filepath.IsAbs(value) }
 
 // Capabilities reports evidence a particular destination can actually provide.
 type Capabilities struct {

@@ -4,6 +4,7 @@ import (
     "context"
     "os"
     "os/exec"
+    "runtime"
     "testing"
     "time"
 
@@ -11,6 +12,9 @@ import (
 )
 
 func TestHostNativeScopedRecovery(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("native Windows uses independent connections; covered by TestWindowsFrozenCloudConnections")
+    }
     binary := os.Getenv("LOAF_HOST_SSH_TEST")
     if os.Getenv("LOAF_INTEGRATION") != "1" || binary == "" {
         t.Skip("run bash scripts/integration.sh")

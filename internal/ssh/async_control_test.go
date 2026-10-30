@@ -4,9 +4,6 @@ import (
     "context"
     "encoding/json"
     "errors"
-    "fmt"
-    "os"
-    "path/filepath"
     "testing"
 
     "github.com/elebirds/loaf/internal/config"
@@ -36,11 +33,7 @@ func TestControlResponseRetainsUnconfirmedQueueIdentity(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    fake := filepath.Join(t.TempDir(), "ssh")
-    script := fmt.Sprintf("#!/bin/sh\ncat >/dev/null\nprintf '%%s' %s\nexit 1\n", Quote(string(data)))
-    if err := os.WriteFile(fake, []byte(script), 0700); err != nil {
-        t.Fatal(err)
-    }
+    fake := fixtureProcess(t, processFixture{Stdout: string(data), Exit: 1})
     client := &Client{Binary: fake}
     got, err := client.ControlResponse(context.Background(), config.Target{Destination: "fixture"}, "/runner", wire.Request{Version: wire.Version, Action: "queue", Queue: &queue.Command{Action: "enqueue"}}, true)
     var remote *RemoteError
@@ -58,11 +51,7 @@ func TestControlDoesNotExposeUnverifiedResponseRecord(t *testing.T) {
         if err != nil {
             t.Fatal(err)
         }
-        fake := filepath.Join(t.TempDir(), "ssh")
-        script := fmt.Sprintf("#!/bin/sh\ncat >/dev/null\nprintf '%%s' %s\n", Quote(string(data)))
-        if err := os.WriteFile(fake, []byte(script), 0700); err != nil {
-            t.Fatal(err)
-        }
+        fake := fixtureProcess(t, processFixture{Stdout: string(data)})
         record, err := (&Client{Binary: fake}).Control(context.Background(), config.Target{Destination: "fixture"}, "/runner", wire.Request{Version: wire.Version, Action: "status"}, true)
         if err == nil || record != nil {
             t.Fatalf("unverified result exposed: %#v %v", record, err)

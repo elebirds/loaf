@@ -39,6 +39,7 @@ type Request struct {
     Tail           int               `json:"tail,omitempty"`
     GraceMillis    *int64            `json:"grace_millis,omitempty"`
     Outputs        []string          `json:"outputs,omitempty"`
+    DestinationFS  *OutputFilesystem `json:"destination_filesystem,omitempty"`
     Depth          int               `json:"depth,omitempty"`
     Limit          int               `json:"limit,omitempty"`
     Resume         string            `json:"resume,omitempty"`
@@ -88,6 +89,9 @@ type Response struct {
 type OutputSelection struct {
     Available []string `json:"available"`
     Missing   []string `json:"missing"`
+    // Names and Namespace are transient Windows pull validation, never records.
+    Names     []OutputName `json:"names,omitempty"`
+    Namespace string       `json:"namespace,omitempty"`
 }
 
 // LogChunk is a bounded UTF-8 view of the durable log; offset counts source bytes.

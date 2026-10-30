@@ -6,7 +6,6 @@ import (
     "io"
     "os"
     "path"
-    "path/filepath"
     "slices"
     "time"
 
@@ -66,6 +65,9 @@ func (s *eventServices) Channel(ctx context.Context, in ChannelInput, streams St
         return asyncError("BAD_CONFIG", nil)
     }
     if err := agentdelivery.RunClaudeChannel(ctx, in.Socket, in.SessionID, input, streams.Out); err != nil {
+        if errors.Is(err, agentdelivery.ErrUnsupported) {
+            return asyncError("DESTINATION_UNSUPPORTED", err)
+        }
         if errors.Is(err, agentdelivery.ErrDestination) {
             return asyncError("BAD_CONFIG", err)
         }
@@ -75,6 +77,9 @@ func (s *eventServices) Channel(ctx context.Context, in ChannelInput, streams St
 }
 
 func asyncError(code string, cause error) error {
+    if code == "DESTINATION_UNSUPPORTED" {
+        return fault.Wrap(code, "notify_destination_unsupported", cause)
+    }
     var existing *fault.Error
     if errors.As(cause, &existing) {
         return cause
@@ -183,7 +188,7 @@ func (s *eventServices) read(ctx context.Context, sub notifications.Source, in e
     if d.Remote == nil {
         return event.Page{}, asyncError("EVENT_FAILED", nil)
     }
-    if ref.Runner == "" || !filepath.IsAbs(ref.RemoteDir) {
+    if ref.Runner == "" || !path.IsAbs(ref.RemoteDir) {
         if d.Runs == nil || d.Runs.Check == nil || d.Runs.Runner == nil {
             return event.Page{}, asyncError("EVENT_FAILED", nil)
         }
@@ -295,6 +300,9 @@ func (s *eventServices) BindCurrent(ctx context.Context, in BindCurrentInput) (C
         return result, fault.New("CURRENT_SESSION_UNAVAILABLE", "notify_current_context_required", nil)
     }
     capabilities, err := s.dependencies.Sender.Probe(ctx, destination)
+    if errors.Is(err, agentdelivery.ErrUnsupported) {
+        return result, asyncError("DESTINATION_UNSUPPORTED", err)
+    }
     if err != nil || !capabilities.Available || !capabilities.ExistingSession {
         return result, fault.Wrap("CURRENT_SESSION_UNAVAILABLE", "notify_current_unavailable", err)
     }

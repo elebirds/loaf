@@ -96,11 +96,7 @@ func TestReadRecoveryNeverReplaysMutations(t *testing.T) {
         t.Run(action, func(t *testing.T) {
             count := filepath.Join(t.TempDir(), "calls")
             t.Setenv("COUNT_FILE", count)
-            fake := filepath.Join(t.TempDir(), "ssh")
-            script := "#!/bin/sh\ncat >/dev/null\necho call >>\"$COUNT_FILE\"\necho 'Connection closed by fixture' >&2\nexit 255\n"
-            if err := os.WriteFile(fake, []byte(script), 0700); err != nil {
-                t.Fatal(err)
-            }
+            fake := fixtureProcess(t, processFixture{Count: count, Stderr: "Connection closed by fixture", Exit: 255})
             c := &Client{Binary: fake}
             _, err := c.Control(context.Background(), config.Target{Destination: "fixture"}, "/runner", wire.Request{Version: wire.Version, Action: action}, true)
             data, readErr := os.ReadFile(count)
@@ -126,35 +122,19 @@ func TestDownloadRecoveryKeepsCompletedFilesAndDoesNotReplaySourceSync(t *testin
         completed := filepath.Join(dir, "completed.txt")
         t.Setenv("COUNT_FILE", count)
         t.Setenv("COMPLETED_FILE", completed)
-        binary := filepath.Join(dir, "rsync")
-        script := `#!/bin/sh
-if [ "$1" = --version ]; then echo 'rsync version fixture'; exit; fi
-cat >/dev/null
-if [ ! -f "$COUNT_FILE" ]; then
-    echo first > "$COUNT_FILE"
-    printf preserved > "$COMPLETED_FILE"
-    echo 'Connection closed by fixture: unexpected end of file' >&2
-    exit 255
-fi
-test "$(cat "$COMPLETED_FILE")" = preserved || exit 1
-echo second >> "$COUNT_FILE"
-echo 'LOAF_CHANGE:>f+++++++++'
-`
-        if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
-            t.Fatal(err)
-        }
-        r := Rsync{Client: &Client{Binary: "ssh"}, Binary: binary}
+        binary := fixtureProcess(t, processFixture{Count: count, Retry: "download", Completed: completed})
+        r := Rsync{Client: &Client{Binary: "ssh", Cygpath: binary}, Binary: binary}
         target := config.Target{Destination: "fixture"}
         if download {
             result, err := r.Pull(context.Background(), target, "/runner", dir, PullInput{Root: "/root", ProjectID: "project", RunID: "run", Paths: []string{"outputs"}}, true)
             calls, readErr := os.ReadFile(count)
-            if err != nil || readErr != nil || !result.Retried || result.ChangedFiles != 1 || !strings.Contains(string(calls), "second") {
+            if err != nil || readErr != nil || !result.Retried || result.ChangedFiles != 1 || strings.Count(string(calls), "call") != 2 {
                 t.Fatal(result, err, readErr, string(calls))
             }
         } else {
             _, err := r.Sync(context.Background(), target, "/runner", dir, SyncInput{Root: "/root", ProjectID: "project", Mode: "mirror", Paths: []string{"source.py"}}, true)
             calls, readErr := os.ReadFile(count)
-            if err == nil || readErr != nil || strings.Contains(string(calls), "second") || fault.Stage(err) != "sync" {
+            if err == nil || readErr != nil || strings.Count(string(calls), "call") != 1 || fault.Stage(err) != "sync" {
                 t.Fatal(err, readErr, string(calls))
             }
         }
@@ -169,11 +149,7 @@ func TestReadRecoveryRetainsAResponseWhenReconnectReturnsNoData(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    fake := filepath.Join(dir, "ssh")
-    script := "#!/bin/sh\ncat >/dev/null\nif [ ! -f " + Quote(marker) + " ]; then\n: >" + Quote(marker) + "\nprintf '%s' " + Quote(string(response)) + "\necho 'Connection closed by fixture' >&2\nelse\necho 'Connection refused' >&2\nfi\nexit 255\n"
-    if err := os.WriteFile(fake, []byte(script), 0700); err != nil {
-        t.Fatal(err)
-    }
+    fake := fixtureProcess(t, processFixture{Count: marker, Stdout: string(response), Stderr: "Connection closed by fixture", Exit: 255, Retry: "response"})
     client := &Client{Binary: fake}
     record, err := client.Control(context.Background(), config.Target{Destination: "fixture"}, "/runner", wire.Request{Version: wire.Version, Action: "status"}, true)
     if err == nil || record == nil || record.Status != "failed" || record.ExitCode == nil || *record.ExitCode != 7 {

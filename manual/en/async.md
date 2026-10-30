@@ -6,6 +6,8 @@ Use a notification to deliver a saved result after a task finishes. Use a queue
 when cooperating projects share a machine. A direct Run or cloud operation can
 notify you without ever entering a queue.
 
+Native Windows supports persistent events, the foreground Bridge, Webhooks and remote queues. The `codex`, `codex-desktop` and `claude-channel` Unix-socket adapters return `DESTINATION_UNSUPPORTED` there. Their examples below apply to verified Unix/WSL environments; WSL does not imply access to a Windows desktop session.
+
 ## Send notifications back to the current Codex desktop chat
 
 Ask the Agent in the intended Codex desktop chat to run once:

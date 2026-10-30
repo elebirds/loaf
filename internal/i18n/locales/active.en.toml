@@ -1,5 +1,9 @@
 [root_short]
 other = "Run your projects on SSH machines."
+[msys2_missing]
+other = "Native Windows requires SSH, rsync and cygpath from the same MSYS2 installation."
+[msys2_hint]
+other = "Install openssh and rsync in MSYS2. Set LOAF_MSYS2_ROOT to its root (for example C:\\msys64), or put its usr\\bin directory on PATH. Windows OpenSSH, Git SSH and WSL tools cannot be mixed with this installation."
 [exec_short]
 other = "Run a foreground command on the selected machine."
 [exec_args]
@@ -2082,6 +2086,9 @@ other = "unknown"
 
 [async_failed]
 other = "The asynchronous operation could not be completed. Inspect its saved request or delivery before retrying."
+
+[notify_destination_unsupported]
+other = "This notification adapter is unsupported on this platform. Use a Webhook or a verified adapter in a supported environment."
 
 [probe_component_cpu]
 other = "CPU count"

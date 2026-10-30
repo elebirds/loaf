@@ -6,7 +6,6 @@ import (
     "encoding/json"
     "errors"
     "io"
-    "os/exec"
     "strings"
 
     "github.com/elebirds/loaf/internal/config"
@@ -86,7 +85,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     }
     streamCtx, cancel := context.WithCancel(ctx)
     defer cancel()
-    cmd := exec.CommandContext(streamCtx, c.Binary, arguments(target, Quote(runner), batch)...)
+    cmd := commandContext(streamCtx, c.Binary, arguments(target, Quote(runner), batch)...)
     cmd.Env = session.env
     cmd.Stdin = bytes.NewReader(data)
     var diagnostic bytes.Buffer
@@ -95,6 +94,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     if err != nil {
         return err
     }
+    defer output.Close()
     if err := cmd.Start(); err != nil {
         return err
     }

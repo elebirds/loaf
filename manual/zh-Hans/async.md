@@ -5,6 +5,8 @@
 任务结束后需要交付结果，使用通知；协作项目需要共享机器，使用队列。
 直接 Run 和云资源操作不需要经过队列，也能发送通知。
 
+原生 Windows 支持事件持久化、前台 Bridge、Webhook 和远端队列。基于 Unix socket 的 `codex`、`codex-desktop`、`claude-channel` 适配器在该平台返回 `DESTINATION_UNSUPPORTED`；下面的相关示例适用于已验证的 Unix／WSL 环境，WSL 不代表能够访问 Windows 桌面会话。
+
 ## 将通知送回当前 Codex 桌面会话
 
 在希望接收通知的 Codex 桌面会话中，让 Agent 执行一次：

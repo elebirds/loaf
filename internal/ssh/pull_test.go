@@ -6,6 +6,7 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
     "time"
@@ -16,6 +17,9 @@ import (
 
 func nativePullFixture(t *testing.T) (Rsync, string, string, string) {
     t.Helper()
+    if runtime.GOOS == "windows" {
+        t.Skip("POSIX local sender fixture; Windows native downloads are covered by SSH integration")
+    }
     binary, err := exec.LookPath("rsync")
     if err != nil {
         t.Skip("system rsync is unavailable")

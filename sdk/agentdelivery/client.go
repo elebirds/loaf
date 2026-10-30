@@ -1,6 +1,9 @@
 package agentdelivery
 
-import "context"
+import (
+    "context"
+    "runtime"
+)
 
 // Client manually composes the supported concrete adapters. It has no registry,
 // background retry, persistent store or implicit new-session fallback.
@@ -9,6 +12,9 @@ type Client struct {
 }
 
 func (c Client) sender(d Destination) Sender {
+    if runtime.GOOS == "windows" && d.Kind != "webhook" {
+        return nil
+    }
     switch d.Kind {
     case "codex":
         return Codex{}

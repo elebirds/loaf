@@ -28,6 +28,7 @@ func TestPackagedLinuxClientWithNativeGNUrsync(t *testing.T) {
     }
     command(t, "docker", "cp", config, f.id+":/tmp/linux-client/config")
     command(t, "docker", "exec", f.id, "chown", "-R", "researcher:researcher", "/tmp/linux-client")
+    command(t, "docker", "exec", f.id, "chmod", "0600", "/tmp/linux-client/identity")
     root := "/home/researcher/linux 'quoted' mirror space"
     f.shell(`set -eu; tar -xzf /tmp/linux-client/package.tar.gz -C /tmp/linux-client; cd /tmp/linux-project; printf code >'中文 space.py'; printf literal >'back\slash[1]*?.py'; printf secret >.env; ln -s '中文 space.py' linked.py; printf 'remote_dir = "%s"\n' "$1" >loaf.toml`, root)
     invokeRaw := func(args ...string) []byte {

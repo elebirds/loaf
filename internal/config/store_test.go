@@ -2,6 +2,7 @@ package config
 
 import (
     "context"
+    "github.com/elebirds/loaf/internal/testutil"
     "os"
     "os/exec"
     "path/filepath"
@@ -38,10 +39,7 @@ func TestSelectionsAndPrecedence(t *testing.T) {
     if err := s.Add(ctx, "a", Target{Destination: "new", RemoteBase: "~/new"}, true); err != nil {
         t.Fatal(err)
     }
-    mode, _ := os.Stat(s.ConfigFile)
-    if mode.Mode().Perm() != 0600 {
-        t.Fatal(mode.Mode())
-    }
+    testutil.Private(t, s.ConfigFile, false)
 }
 
 func TestDiscovery(t *testing.T) {

@@ -4,7 +4,7 @@ import (
     "context"
     "database/sql"
     "fmt"
-    "os"
+    "github.com/elebirds/loaf/internal/testutil"
     "path/filepath"
     "slices"
     "sync"
@@ -29,7 +29,7 @@ func newStore(t *testing.T) *Store {
 func prepare(t *testing.T, s *Store, id, project string) Entry {
     t.Helper()
     now := time.Now().UTC()
-    e, err := s.Prepare(context.Background(), queue.Request{FormatVersion: 1, ID: id, ProjectID: project, RunID: "r_" + id, TargetID: s.TargetID, CreatedAt: now}, queue.Execution{Version: "test", Root: filepath.Join(t.TempDir(), project), Args: []string{"python3", "train.py"}, Env: map[string]string{"SECRET": "private"}, Outputs: []string{"outputs"}})
+    e, err := s.Prepare(context.Background(), queue.Request{FormatVersion: 1, ID: id, ProjectID: project, RunID: "r_" + id, TargetID: s.TargetID, CreatedAt: now}, queue.Execution{Version: "test", Root: "/remote/" + project, Args: []string{"python3", "train.py"}, Env: map[string]string{"SECRET": "private"}, Outputs: []string{"outputs"}})
     if err != nil {
         t.Fatal(err)
     }
@@ -172,10 +172,7 @@ func TestQueueDatabasePrivateAndUnknownSchemaUnchanged(t *testing.T) {
     s := newStore(t)
     path := s.Path
     s.Close()
-    info, err := os.Stat(path)
-    if err != nil || info.Mode().Perm() != 0600 {
-        t.Fatalf("permission=%v error=%v", info, err)
-    }
+    testutil.Private(t, path, false)
     database, err := sql.Open("sqlite", path)
     if err != nil {
         t.Fatal(err)

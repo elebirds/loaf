@@ -75,7 +75,7 @@ func TestPackagedMetadataAndDependencyNotices(t *testing.T) {
             t.Fatal("linked dependency missing or mismatched", module.Path)
         }
     }
-    expected := map[string]bool{"loaf": true, "LICENSE": true, "README.md": true, "README.zh-Hans.md": true, "BUILD.json": true, "THIRD_PARTY_LICENSES": true, "skills": true, "examples": true, "manual": true}
+    expected := map[string]bool{filepath.Base(os.Getenv("LOAF_BIN")): true, "LICENSE": true, "README.md": true, "README.zh-Hans.md": true, "BUILD.json": true, "THIRD_PARTY_LICENSES": true, "skills": true, "examples": true, "manual": true}
     entries, err := os.ReadDir(directory)
     if err != nil || len(entries) != len(expected) {
         t.Fatal("unexpected package inventory", entries, err)

@@ -171,6 +171,9 @@ func (c *desktopIPC) owner(ctx context.Context, d Destination) (string, error) {
 func (CodexDesktop) Probe(ctx context.Context, d Destination) (Capabilities, error) {
     c, err := openDesktopIPC(ctx, d)
     if err != nil {
+        if errors.Is(err, ErrUnsupported) {
+            return Capabilities{Experimental: true, ReasonCode: "DESTINATION_UNSUPPORTED"}, err
+        }
         return Capabilities{Experimental: true, ReasonCode: "CODEX_DESKTOP_UNAVAILABLE"}, err
     }
     defer c.connection.Close()
@@ -192,6 +195,9 @@ func (CodexDesktop) Deliver(ctx context.Context, d Destination, m Message) (Rece
     if err != nil {
         receipt.ReasonCode = "CODEX_DESKTOP_UNAVAILABLE"
         receipt.RetrySafe = !errors.Is(err, ErrDestination)
+        if errors.Is(err, ErrUnsupported) {
+            receipt.ReasonCode, receipt.RetrySafe = "DESTINATION_UNSUPPORTED", false
+        }
         return receipt, err
     }
     defer c.connection.Close()

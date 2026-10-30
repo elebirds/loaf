@@ -3,10 +3,14 @@ package sync
 import (
     "context"
     "errors"
+    "github.com/elebirds/loaf/internal/testutil"
+    "github.com/elebirds/loaf/internal/wire"
     "os"
     "os/exec"
     "path/filepath"
     "reflect"
+    "runtime"
+    "slices"
     "strings"
     "testing"
 
@@ -135,9 +139,7 @@ func TestLinksDoNotUploadExcludedOrExternalTargets(t *testing.T) {
     outside := t.TempDir()
     put(t, outside, "private", "private")
     for name, target := range map[string]string{"relative.py": "src/中文 文件.py", "absolute.py": filepath.Join(root, "src/中文 文件.py"), "src-link": "src", "chain.py": "relative.py", "secret": ".env", "outside": outside, "broken": "missing", "root-link": "."} {
-        if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
-            t.Fatal(err)
-        }
+        testutil.Symlink(t, target, filepath.Join(root, name))
     }
     p, err := Select(context.Background(), root, SelectOptions{})
     if err != nil {
@@ -200,6 +202,9 @@ func TestProjectSubdirectoryAndCanceledSelection(t *testing.T) {
 func TestSelectionIncludesLiteralUnusualNames(t *testing.T) {
     root := t.TempDir()
     want := []string{"#hash.py", "-flag.py", ";semi.py", "line\nbreak.py", "name[1]*?.py", "中文 文件.py"}
+    if runtime.GOOS == "windows" {
+        want = slices.DeleteFunc(want, func(name string) bool { return !wire.WindowsOutputPath(name) })
+    }
     for _, name := range want {
         put(t, root, name, "data")
     }

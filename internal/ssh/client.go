@@ -15,6 +15,9 @@ import (
 // Client invokes a specific system SSH executable. Streams are supplied by the caller.
 type Client struct {
     Binary            string
+    RsyncBinary       string
+    Cygpath           string
+    ToolError         error
     Resolve           ResolveConnection
     AskpassExecutable string
     SensitiveEnv      []string
@@ -33,7 +36,7 @@ func (c *Client) Execute(ctx context.Context, target config.Target, command stri
     }
     defer session.close()
     target, noninteractive = session.target, session.batch
-    cmd := exec.CommandContext(ctx, c.Binary, arguments(target, command, noninteractive)...)
+    cmd := commandContext(ctx, c.Binary, arguments(target, command, noninteractive)...)
     cmd.Env = session.env
     cmd.Stdin = input
     var stderr bytes.Buffer
@@ -98,19 +101,26 @@ func (c *Client) check(ctx context.Context, target config.Target, remoteDir stri
     finish := c.Trace.stage("preflight")
     defer func() { finish(err) }()
     r = Report{Local: map[string]Tool{}, Remote: map[string]Tool{}, Issues: []string{}}
+    if c.ToolError != nil {
+        return r, c.ToolError
+    }
     if !config.ValidRemotePath(remoteDir) {
         return r, fault.New("BAD_CONFIG", "invalid_remote", nil)
     }
     var localVersion bytes.Buffer
-    cmd := exec.CommandContext(ctx, c.Binary, "-V")
+    cmd := commandContext(ctx, c.Binary, "-V")
     cmd.Stdout = &localVersion
     cmd.Stderr = &localVersion
     if err := cmd.Run(); err != nil {
         return r, fault.Wrap("SSH_FAILED", "ssh_failed", err)
     }
     r.Local["ssh"] = Tool{c.Binary, strings.TrimSpace(localVersion.String())}
-    if path, err := exec.LookPath("rsync"); err == nil {
-        out, err := exec.CommandContext(ctx, path, "--version").Output()
+    rsync := c.RsyncBinary
+    if rsync == "" && c.Cygpath == "" {
+        rsync, _ = exec.LookPath("rsync")
+    }
+    if path := rsync; path != "" {
+        out, err := commandContext(ctx, path, "--version").Output()
         if err == nil {
             r.Local["rsync"] = Tool{path, strings.SplitN(string(out), "\n", 2)[0]}
         } else {

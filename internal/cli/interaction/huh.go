@@ -64,7 +64,10 @@ func summaryConfirmationForm(prompt Confirmation, width int, value *string, dark
 func (s *InputSession) runForm(ctx context.Context, form *huh.Form, header ...string) error {
     runCtx, cancel := context.WithCancel(ctx)
     defer cancel()
-    input, closeInput := richInput(runCtx, s.options.In)
+    input, closeInput, err := richInput(runCtx, s.options.In)
+    if err != nil {
+        return err
+    }
     defer closeInput()
     output := &formWriter{writer: s.options.Err, cancel: cancel}
     var writer io.Writer = output
@@ -107,7 +110,7 @@ func (s *InputSession) runForm(ctx context.Context, form *huh.Form, header ...st
         }))
     stopResize := watchRichSize(program, s.options.Err)
     defer stopResize()
-    _, err := program.Run()
+    _, err = program.Run()
     if writeErr := output.failure(); writeErr != nil {
         return writeErr
     }

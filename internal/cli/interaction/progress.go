@@ -39,7 +39,12 @@ func (s *InputSession) StartProgress(ctx context.Context, cancel context.CancelF
         return nil, err
     }
     runCtx, stop := context.WithCancel(ctx)
-    input, closeInput := richInput(runCtx, s.options.In)
+    input, closeInput, err := richInput(runCtx, s.options.In)
+    if err != nil {
+        stop()
+        s.release()
+        return nil, err
+    }
     output := &formWriter{writer: s.options.Err, cancel: cancel}
     var writer io.Writer = output
     if terminal, ok := s.options.Err.(terminalOutput); ok {

@@ -16,8 +16,8 @@ import (
 
 var cancelSynchronousIO = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
-type terminalResult[T any] struct {
-    value T
+type lineResult struct {
+    value []byte
     err   error
 }
 
@@ -29,40 +29,30 @@ func readLine(ctx context.Context, input io.Reader, maxBytes int) ([]byte, error
     if !ok {
         return readLineBytes(ctx, input, maxBytes)
     }
-    value, err := terminalRead(ctx, file, func() ([]byte, error) {
-        var mode uint32
-        if windows.GetConsoleMode(windows.Handle(file.Fd()), &mode) == nil {
-            return consoleLine(windows.Handle(file.Fd()), maxBytes)
-        }
-        return readLineBytes(ctx, input, maxBytes)
-    })
-    if err != nil {
-        clear(value)
+    if err := ctx.Err(); err != nil {
         return nil, err
     }
-    return value, nil
-}
-
-func terminalRead[T any](ctx context.Context, file *os.File, read func() (T, error)) (value T, err error) {
-    if err := ctx.Err(); err != nil {
-        return value, err
-    }
     handles := make(chan windows.Handle, 1)
-    done := make(chan terminalResult[T], 1)
+    done := make(chan lineResult, 1)
     go func() {
         runtime.LockOSThread()
         defer runtime.UnlockOSThread()
         thread, err := windows.OpenThread(windows.THREAD_TERMINATE, false, windows.GetCurrentThreadId())
         handles <- thread
         if err != nil {
-            done <- terminalResult[T]{err: err}
+            done <- lineResult{err: err}
             return
         }
-        var value T
+        var value []byte
         if err = ctx.Err(); err == nil {
-            value, err = read()
+            var mode uint32
+            if windows.GetConsoleMode(windows.Handle(file.Fd()), &mode) == nil {
+                value, err = consoleLine(windows.Handle(file.Fd()), maxBytes)
+            } else {
+                value, err = readLineBytes(ctx, input, maxBytes)
+            }
         }
-        done <- terminalResult[T]{value, err}
+        done <- lineResult{value, err}
     }()
     thread := <-handles
     if thread != 0 {
@@ -71,7 +61,8 @@ func terminalRead[T any](ctx context.Context, file *os.File, read func() (T, err
     select {
     case result := <-done:
         if err := ctx.Err(); err != nil {
-            return result.value, err
+            clear(result.value)
+            return nil, err
         }
         return result.value, result.err
     case <-ctx.Done():
@@ -86,7 +77,8 @@ func terminalRead[T any](ctx context.Context, file *os.File, read func() (T, err
             }
             select {
             case result := <-done:
-                return result.value, ctx.Err()
+                clear(result.value)
+                return nil, ctx.Err()
             case <-timer.C:
             }
         }

@@ -19,12 +19,14 @@ type Console struct {
     text  strings.Builder
 }
 
+// Text returns the bounded transcript captured from this owned console.
 func (c *Console) Text() string {
     c.mu.Lock()
     defer c.mu.Unlock()
     return c.text.String()
 }
 
+// Wait waits for an observable child marker, failing with its transcript.
 func (c *Console) Wait(t testing.TB, marker string) {
     t.Helper()
     deadline := time.Now().Add(15 * time.Second)
@@ -94,6 +96,7 @@ func ConsoleProcess(t testing.TB, columns, rows int16, args ...string) *Console 
         t.Fatal(err)
     }
     windows.CloseHandle(process.Thread)
+    result := &Console{Input: inputWrite}
     t.Cleanup(func() {
         if result, _ := windows.WaitForSingleObject(process.Process, 5000); result != windows.WAIT_OBJECT_0 {
             windows.TerminateProcess(process.Process, 1)
@@ -104,10 +107,9 @@ func ConsoleProcess(t testing.TB, columns, rows int16, args ...string) *Console 
         windows.GetExitCodeProcess(process.Process, &code)
         windows.CloseHandle(process.Process)
         if code != 0 {
-            t.Errorf("console child exit %d", code)
+            t.Errorf("console child exit %d:\n%s", code, result.Text())
         }
     })
-    result := &Console{Input: inputWrite}
     done := make(chan struct{})
     drained = done
     go func() {

@@ -40,6 +40,10 @@ jobs:
                   "GOFLAGS=-p=2" >> $env:GITHUB_ENV
                   "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin" >> $env:GITHUB_PATH
                   "${{ steps.msys2.outputs.msys2-location }}\usr\bin" >> $env:GITHUB_PATH
+            - name: Check Windows native console lifecycle
+              if: runner.os == 'Windows'
+              shell: bash
+              run: go test -race ./internal/cli/interaction -run '^TestWindowsNativeHandoffRestoresConsoleAndNextForm$'
             - run: bash scripts/check.sh
               shell: bash
             - name: Check workspace declarations

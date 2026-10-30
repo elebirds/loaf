@@ -166,7 +166,9 @@ func TestBridgeRetainsSourceErrorAndContinuesAfterRecovery(t *testing.T) {
     // Bound the recovery observation, not private-state fixture construction.
     ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
     defer cancel()
-    result, err := notify.Serve(ctx, NotifyServeInput{Interval: time.Millisecond}, func(Delivery) error { cancel(); return nil })
+    // Exercise recovery without a 1 ms collector starving the independent
+    // receipt writer on durable Windows storage. This is not a throughput test.
+    result, err := notify.Serve(ctx, NotifyServeInput{Interval: 50 * time.Millisecond}, func(Delivery) error { cancel(); return nil })
     if !errors.Is(err, context.Canceled) || result.Accepted != 1 || sender.calls != 1 || remote.calls < 2 {
         t.Fatal(result, err, sender.calls, remote.calls)
     }

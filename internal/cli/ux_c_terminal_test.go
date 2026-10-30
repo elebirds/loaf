@@ -135,6 +135,15 @@ func TestUXCRichReviewAndSyncRestoreTerminal(t *testing.T) {
                 if _, err := io.WriteString(master, response); err != nil {
                     t.Fatal(err)
                 }
+                // Huh can initially render a light accent before its OSC
+                // response reaches the session. Wait for both state and view.
+                for c.input.Dark() == light {
+                    select {
+                    case <-ctx.Done():
+                        t.Fatal("terminal background response was not consumed")
+                    case <-time.After(time.Millisecond):
+                    }
+                }
                 uxCWaitFrame(t, ctx, output, offset, c.output.locale.Text("ux_c_run_review"))
                 // A pending repaint may repeat the title before the OSC reply
                 // has been processed. Observe the requested accent itself.

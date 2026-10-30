@@ -136,6 +136,19 @@ func TestUXCRichReviewAndSyncRestoreTerminal(t *testing.T) {
                     t.Fatal(err)
                 }
                 uxCWaitFrame(t, ctx, output, offset, c.output.locale.Text("ux_c_run_review"))
+                // A pending repaint may repeat the title before the OSC reply
+                // has been processed. Observe the requested accent itself.
+                accent := "38;2;94;234;212"
+                if light {
+                    accent = "38;2;15;118;110"
+                }
+                for !strings.Contains(output.screen.snapshot()[offset:], accent) {
+                    select {
+                    case <-ctx.Done():
+                        t.Fatal("terminal did not render the requested background theme")
+                    case <-time.After(time.Millisecond):
+                    }
+                }
                 if c.input.Dark() == light {
                     t.Fatal("terminal background response was not consumed")
                 }

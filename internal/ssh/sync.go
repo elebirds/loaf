@@ -3,16 +3,12 @@ package ssh
 import (
     "bytes"
     "context"
-    "errors"
     "io/fs"
     "net/url"
-    "os"
-    "os/exec"
     "path"
     "regexp"
     "sort"
     "strings"
-    "syscall"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
@@ -83,21 +79,18 @@ func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root stri
     default:
         return result, fault.New("BAD_CONFIG", "sync_mode", nil)
     }
-    args = append(args, "--", root+"/", destination+":cache")
-    cmd := exec.CommandContext(ctx, r.Binary, args...)
+    local, err := r.Client.localTransferPath(ctx, root)
+    if err != nil {
+        return result, err
+    }
+    args = append(args, "--", local+"/", destination+":cache")
+    cmd := commandContext(ctx, r.Binary, args...)
     cmd.Env = session.env
     cmd.Stdin = strings.NewReader(filters)
     var output, diagnostic bytes.Buffer
     cmd.Stdout, cmd.Stderr = &output, &diagnostic
     // This group contains only this sender and its SSH transport, not any run.
-    cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-    cmd.Cancel = func() error {
-        err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-        if errors.Is(err, syscall.ESRCH) {
-            return os.ErrProcessDone
-        }
-        return err
-    }
+    cancelTransfer(cmd, false)
     err = cmd.Run()
     if ctx.Err() != nil {
         f := fault.Wrap("SYNC_CANCELED", "sync_canceled", ctx.Err())
@@ -117,7 +110,7 @@ func (r Rsync) Sync(ctx context.Context, target config.Target, runner, root stri
 }
 
 func (r Rsync) receiverCommand(ctx context.Context, words []string) (string, error) {
-    version, err := exec.CommandContext(ctx, r.Binary, "--version").CombinedOutput()
+    version, err := commandContext(ctx, r.Binary, "--version").CombinedOutput()
     if err != nil {
         return "", syncFailure(err, string(version))
     }
@@ -156,7 +149,7 @@ func (r Rsync) remoteShell(target config.Target, batch bool) (string, string) {
         target.Args = append(append([]string(nil), target.Args...), "-l", destination[:at])
         destination = destination[at+1:]
     }
-    argv := append([]string{r.Client.Binary}, options(target, batch)...)
+    argv := append([]string{r.Client.sshTransferPath()}, options(target, batch)...)
     argv = append(argv, "--")
     for i := range argv {
         argv[i] = quoteRsync(argv[i])

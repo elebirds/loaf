@@ -26,6 +26,12 @@ and the distinction between transport, acceptance and processing results.
 
 ## Four adapters are implemented
 
+Native Windows supports the Webhook adapter. The three Unix-socket Agent
+adapters and the Claude Channel server return `ErrUnsupported` there, with
+`DESTINATION_UNSUPPORTED` where a capability or receipt carries a reason code.
+WSL2 uses Linux socket semantics and requires an endpoint reachable and verified
+inside that environment; a Windows desktop session is not implicitly accessible.
+
 | Kind | Mechanism | Strongest automatic evidence |
 | --- | --- | --- |
 | `codex` | A private Unix WebSocket connects to an already running local App Server; a standalone tool result targets the exact loaded thread | `accepted` with an App Server turn ID |

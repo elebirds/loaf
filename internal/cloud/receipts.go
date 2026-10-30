@@ -6,8 +6,8 @@ import (
     "crypto/rand"
     "encoding/hex"
     "encoding/json"
+    "errors"
     "io"
-    "os"
     "path/filepath"
     "regexp"
     "sort"
@@ -15,8 +15,9 @@ import (
 
     "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/filelock"
+    "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/state/receipts"
-    "golang.org/x/sys/unix"
 )
 
 // Receipt is a minimal write-ahead intent and current result. It contains no
@@ -191,18 +192,17 @@ func (s Receipts) Lock(ctx context.Context, scope string, fn func() error) error
     if err := ctx.Err(); err != nil {
         return err
     }
-    if err := os.MkdirAll(s.Dir, 0700); err != nil {
+    if err := privatefs.MkdirAll(s.Dir); err != nil {
         return err
     }
-    file, err := os.OpenFile(filepath.Join(s.Dir, scope+".lock"), os.O_CREATE|os.O_RDWR, 0600)
+    file, err := filelock.Acquire(ctx, filepath.Join(s.Dir, scope+".lock"), 0)
     if err != nil {
+        if errors.Is(err, filelock.ErrBusy) {
+            return fault.New("CLOUD_BUSY", "cloud_busy", nil)
+        }
         return err
     }
     defer file.Close()
-    if err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-        return fault.New("CLOUD_BUSY", "cloud_busy", nil)
-    }
-    defer unix.Flock(int(file.Fd()), unix.LOCK_UN)
     return fn()
 }
 

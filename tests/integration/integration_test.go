@@ -10,6 +10,7 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "runtime"
     "strings"
     "sync"
     "testing"
@@ -31,6 +32,9 @@ type fixture struct {
 
 func command(t *testing.T, name string, args ...string) string {
     t.Helper()
+    if name == "tar" && runtime.GOOS == "windows" {
+        name = filepath.Join(os.Getenv("SystemRoot"), "System32", "tar.exe")
+    }
     out, err := exec.Command(name, args...).CombinedOutput()
     if err != nil {
         t.Fatalf("%s %v: %v\n%s", name, args, err, out)
@@ -44,7 +48,11 @@ func newFixture(t *testing.T) *fixture {
 
 func newSSHFixture(t *testing.T, password bool) *fixture {
     t.Helper()
-    f := &fixture{t: t, dir: t.TempDir(), client: &ssh.Client{Binary: "ssh"}}
+    tools, err := ssh.DiscoverTools()
+    if err != nil {
+        t.Fatal(err)
+    }
+    f := &fixture{t: t, dir: t.TempDir(), client: &ssh.Client{Binary: tools.SSH, RsyncBinary: tools.Rsync, Cygpath: tools.Cygpath}}
     keyDir := filepath.Join(f.dir, "SSH 中文 config")
     if err := os.Mkdir(keyDir, 0700); err != nil {
         t.Fatal(err)
@@ -52,7 +60,11 @@ func newSSHFixture(t *testing.T, password bool) *fixture {
     f.key = filepath.Join(keyDir, "identity")
     f.config = filepath.Join(f.dir, "config")
     f.known = filepath.Join(keyDir, "known_hosts")
-    command(t, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", f.key)
+    keygen := filepath.Join(filepath.Dir(tools.SSH), "ssh-keygen")
+    if filepath.Ext(tools.SSH) == ".exe" {
+        keygen += ".exe"
+    }
+    command(t, keygen, "-q", "-t", "ed25519", "-N", "", "-f", filepath.ToSlash(f.key))
     containerArgs := []string{"run", "-d", "--init", "--rm", "--tmpfs", "/tmp/loaf-full:rw,size=1m,mode=0777", "-p", "127.0.0.1::22", "loaf-sshd-test:local"}
     if password {
         containerArgs = append(containerArgs, "/bin/sh", "-c", "ssh-keygen -A && printf 'researcher:loaf-fixture-password\\n' | chpasswd && exec /usr/sbin/sshd -D -e -o PasswordAuthentication=yes -o PermitRootLogin=no -o AllowTcpForwarding=yes -o AuthorizedKeysFile=.ssh/authorized_keys")
@@ -92,7 +104,7 @@ func newSSHFixture(t *testing.T, password bool) *fixture {
     if err := os.WriteFile(f.known, []byte("[127.0.0.1]:"+port+" "+hostKey+"\n127.0.0.1 "+hostKey+"\n"), 0600); err != nil {
         t.Fatal(err)
     }
-    contents := fmt.Sprintf("Host fixture\n    HostName 127.0.0.1\n    Port %s\nHost jumped\n    HostName 127.0.0.1\n    Port 22\n    ProxyJump fixture\nHost *\n    User researcher\n    IdentityFile %q\n    IdentityAgent none\n    IdentitiesOnly yes\n    UserKnownHostsFile %q\n    GlobalKnownHostsFile /dev/null\n    StrictHostKeyChecking yes\n    ControlMaster no\n", port, f.key, f.known)
+    contents := fmt.Sprintf("Host fixture\n    HostName 127.0.0.1\n    Port %s\nHost jumped\n    HostName 127.0.0.1\n    Port 22\n    ProxyJump fixture\nHost *\n    User researcher\n    IdentityFile %q\n    IdentityAgent none\n    IdentitiesOnly yes\n    UserKnownHostsFile %q\n    GlobalKnownHostsFile /dev/null\n    StrictHostKeyChecking yes\n    ControlMaster no\n", port, filepath.ToSlash(f.key), filepath.ToSlash(f.known))
     if err := os.WriteFile(f.config, []byte(contents), 0600); err != nil {
         t.Fatal(err)
     }
@@ -316,13 +328,13 @@ func TestSSHAndDetachedRunner(t *testing.T) {
             t.Fatal(err)
         }
         if kind == "auth" {
-            data = bytes.ReplaceAll(data, []byte(f.key), []byte(filepath.Join(f.dir, "missing-key")))
+            data = bytes.ReplaceAll(data, []byte(filepath.ToSlash(f.key)), []byte(filepath.ToSlash(filepath.Join(f.dir, "missing-key"))))
         } else {
             empty := filepath.Join(f.dir, "empty-known-hosts")
             if err := os.WriteFile(empty, nil, 0600); err != nil {
                 t.Fatal(err)
             }
-            data = bytes.ReplaceAll(data, []byte(f.known), []byte(empty))
+            data = bytes.ReplaceAll(data, []byte(filepath.ToSlash(f.known)), []byte(filepath.ToSlash(empty)))
         }
         broken := filepath.Join(f.dir, kind+"-config")
         if err := os.WriteFile(broken, data, 0600); err != nil {
@@ -346,4 +358,16 @@ func TestSSHAndDetachedRunner(t *testing.T) {
         command(t, "docker", "cp", remoteTest, f.id+":/tmp/remote.test")
         command(t, "docker", "exec", "--user", "researcher", f.id, "/tmp/remote.test", "-test.v")
     }
+}
+
+// Probe the actual test volume instead of assuming Developer Mode or elevation.
+func nativeSymlinks(t *testing.T) bool {
+    t.Helper()
+    dir := t.TempDir()
+    sourceFile(t, dir, "target", "target")
+    err := os.Symlink("target", filepath.Join(dir, "link"))
+    if err != nil && runtime.GOOS != "windows" {
+        t.Fatal(err)
+    }
+    return err == nil
 }

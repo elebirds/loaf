@@ -71,7 +71,7 @@ func TestPublicLogCursorAcrossProcessesAndChangedLogs(t *testing.T) {
     if cursor == "" {
         t.Fatal("no confirmed initial cursor", scanner.Err())
     }
-    if err := original.Process.Signal(os.Interrupt); err != nil {
+    if err := interruptCommand(t, original); err != nil {
         t.Fatal(err)
     }
     canceled := false

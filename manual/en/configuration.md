@@ -29,6 +29,8 @@ project-selection action. A review page does not save its draft into TOML.
 
 User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v3/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
 
+Native Windows defaults to `%APPDATA%\loaf\config.toml` and `%LOCALAPPDATA%\loaf\state-v3\state.db`. XDG overrides take precedence and append `loaf` to the base. Configuration, state, credentials and locks use private Windows ACLs; existing unsafe permissions are rejected. Keep WSL state and credentials in its own Linux home, separate from Windows. `LOAF_MSYS2_ROOT` selects the paired native transport installation; see [installation](installation.md).
+
 See [upgrading](upgrading.md) for the v0.6 state boundary and matching old CLIs.
 
 Each new remote project keeps its schema-2 control database in `<remote-project>/.loaf-control-v2/state.sqlite3`; sources, per-run working copies, logs and outputs remain ordinary files. Both databases use private permissions, WAL, FULL synchronization and bounded lock waits. Unknown schemas fail explicitly. Software, CLI schema, wire record and database schema versions are independent.

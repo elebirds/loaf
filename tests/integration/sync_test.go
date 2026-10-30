@@ -7,6 +7,7 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
     "time"
@@ -36,15 +37,22 @@ func TestRsyncWorkingSources(t *testing.T) {
     }
     f := newFixture(t)
     project := t.TempDir()
-    for _, name := range []string{"train.py", "旧 源码.py", "#hash.py", ";semi.py", "line\nbreak.py", "literal[1]*?.py", "src/中文.py"} {
+    newline, literal := "line\nbreak.py", "literal[1]*?.py"
+    if runtime.GOOS == "windows" {
+        newline, literal = "line-break.py", "literal[1].py"
+    }
+    for _, name := range []string{"train.py", "旧 源码.py", "#hash.py", ";semi.py", newline, literal, "src/中文.py"} {
         sourceFile(t, project, name, "print(1)\n")
     }
     sourceFile(t, project, ".env", "SECRET=not-uploaded")
     sourceFile(t, project, ".venv/bin/python", "not-uploaded")
     sourceFile(t, project, "checkpoints/model.pt", "not-uploaded")
     sourceFile(t, project, "outputs/result.json", "not-uploaded")
-    if err := os.Symlink("src/中文.py", filepath.Join(project, "linked.py")); err != nil {
-        t.Fatal(err)
+    links := nativeSymlinks(t)
+    if links {
+        if err := os.Symlink("src/中文.py", filepath.Join(project, "linked.py")); err != nil {
+            t.Fatal(err)
+        }
     }
     root := "/home/researcher/sync space 中文 'quote' ;literal"
     binary, err := exec.LookPath("rsync")
@@ -75,7 +83,10 @@ func TestRsyncWorkingSources(t *testing.T) {
         return result
     }
     first := syncProject()
-    f.shell(`test -f "$1/cache/train.py"; test -f "$1/cache/#hash.py"; test -f "$1/cache/;semi.py"; test -f "$1/cache/literal[1]*?.py"; test ! -e "$1/cache/.env"; test ! -e "$1/cache/.venv"; test ! -e "$1/cache/outputs"; test ! -e "$1/cache/checkpoints"; test "$(readlink "$1/cache/linked.py")" = 'src/中文.py'`, root)
+    f.shell(`test -f "$1/cache/train.py"; test -f "$1/cache/#hash.py"; test -f "$1/cache/;semi.py"; test -f "$1/cache/$2"; test ! -e "$1/cache/.env"; test ! -e "$1/cache/.venv"; test ! -e "$1/cache/outputs"; test ! -e "$1/cache/checkpoints"`, root, literal)
+    if links {
+        f.shell(`test "$(readlink "$1/cache/linked.py")" = 'src/中文.py'`, root)
+    }
     unchanged := syncProject()
     if first.ChangedFiles < 1 || unchanged.ChangedFiles != 0 {
         t.Fatal(first, unchanged)
@@ -259,10 +270,7 @@ func TestInterruptedSyncKeepsCacheUnavailableAndReleasesLock(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    slow := filepath.Join(t.TempDir(), "slow rsync")
-    if err := os.WriteFile(slow, []byte("#!/bin/sh\nexec "+ssh.Quote(binary)+" --bwlimit=64 \"$@\"\n"), 0700); err != nil {
-        t.Fatal(err)
-    }
+    slow, _ := transportProxy(t, transportFault{Bandwidth: "64"})
     ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer cancel()
     bootstrap := execution.Bootstrap{Remote: f.client}
@@ -289,7 +297,7 @@ func TestInterruptedSyncKeepsCacheUnavailableAndReleasesLock(t *testing.T) {
     defer abort()
     done := make(chan error, 1)
     go func() {
-        _, err := (ssh.Rsync{Client: f.client, Binary: slow}).Sync(transferCtx, f.target, runner.Path, project, input, true)
+        _, err := (ssh.Rsync{Client: f.client, Binary: slow.Rsync}).Sync(transferCtx, f.target, runner.Path, project, input, true)
         done <- err
     }()
     wait(t, 10*time.Second, func() bool {

@@ -10,6 +10,7 @@ import (
 
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/localpath"
 )
 
 // ProjectFile is the optional shared project configuration.
@@ -37,7 +38,7 @@ func Discover(ctx context.Context, cwd string) (projectRoot string, c ProjectFil
             err = locateConfig(file, err)
         }
     }()
-    root, err := filepath.EvalSymlinks(cwd)
+    root, err := localpath.Canonical(cwd)
     if err != nil {
         return "", c, err
     }
@@ -90,7 +91,10 @@ func Discover(ctx context.Context, cwd string) (projectRoot string, c ProjectFil
     }
     cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--show-toplevel")
     if out, err := cmd.Output(); err == nil {
-        root = strings.TrimSpace(string(out))
+        root, err = localpath.Canonical(strings.TrimSpace(string(out)))
+        if err != nil {
+            return "", c, err
+        }
     }
     return root, c, nil
 }

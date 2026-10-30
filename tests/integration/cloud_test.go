@@ -53,7 +53,7 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 if err != nil {
                     t.Fatal(err)
                 }
-                contents = bytes.ReplaceAll(contents, []byte(f.key), []byte(filepath.Join(f.dir, "no-private-key")))
+                contents = bytes.ReplaceAll(contents, []byte(filepath.ToSlash(f.key)), []byte(filepath.ToSlash(filepath.Join(f.dir, "no-private-key"))))
                 if err := os.WriteFile(f.config, contents, 0600); err != nil {
                     t.Fatal(err)
                 }
@@ -200,7 +200,7 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
                 info, err := bootstrap.Verify(ctx, target, arch, batch)
                 return info.Path, err
             }
-            sender := ssh.Rsync{Client: f.client, Binary: "rsync"}
+            sender := ssh.Rsync{Client: f.client, Binary: f.client.RsyncBinary}
             runs := &execution.Service{Index: state, Metadata: state, Observations: state, Check: integrationPreflight{f.client}, Runner: prepare, Send: sender, Remote: f.client}
             dependencies := application.Dependencies{Config: store, State: state, Auth: auth, Cloud: &cloud.Service{Open: factory.Open, Receipts: cloud.Receipts{Dir: filepath.Dir(state.Path)}}, Runs: runs, Checker: f.client, Runner: bootstrap, Operations: f.client, Puller: sources.PullService{Remote: f.client, Runner: prepare, Receive: sender}, CWD: project}
             o := commands.Options{Env: map[string]string{"LANG": "C"}, In: strings.NewReader("")}

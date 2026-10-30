@@ -19,6 +19,12 @@ queries even when an interactive overview offers more actions. Use
 connecting. Read-only lists have no `--dry-run`; previews belong to operations
 such as `queue submit`, `queue clean` and `notify prune`.
 
+Native Windows supports persistent events, the foreground Bridge, Webhooks and
+remote queues. The `codex`, `codex-desktop` and `claude-channel` Unix-socket
+adapters return `DESTINATION_UNSUPPORTED` there. Their examples below apply to
+verified Unix/WSL environments; WSL does not imply access to a Windows desktop
+session.
+
 ## Send notifications back to the current Codex desktop chat
 
 Ask the Agent in the intended Codex desktop chat to run once:

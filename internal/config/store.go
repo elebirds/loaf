@@ -10,13 +10,13 @@ import (
     "path/filepath"
     "regexp"
     "strings"
-    "time"
 
     "github.com/elebirds/loaf/internal/atomicfile"
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/filelock"
+    "github.com/elebirds/loaf/internal/privatefs"
     "github.com/pelletier/go-toml/v2"
-    "golang.org/x/sys/unix"
 )
 
 // Target is a static SSH connection or an immutable cloud instance binding.
@@ -53,15 +53,29 @@ type Project struct {
 // Store reads and writes user TOML; runtime state has a separate store.
 type Store struct{ ConfigFile, StateDir string }
 
-// New uses XDG directory overrides, or their documented home-relative defaults.
+// New uses explicit directory overrides, or platform home-relative defaults.
+// It is independent of the process environment, including in isolated tests.
 func New(home, configHome, stateHome string) *Store {
+    defaultConfig, defaultState := defaultDirectories(home)
     if configHome == "" {
-        configHome = filepath.Join(home, ".config")
+        configHome = defaultConfig
     }
     if stateHome == "" {
-        stateHome = filepath.Join(home, ".local", "state")
+        stateHome = defaultState
     }
     return &Store{filepath.Join(configHome, "loaf", "config.toml"), filepath.Join(stateHome, "loaf")}
+}
+
+// NewUser resolves the current user's platform directories and XDG overrides.
+func NewUser(home string) *Store {
+    configHome, stateHome := userDirectories(home)
+    if value := os.Getenv("XDG_CONFIG_HOME"); value != "" {
+        configHome = value
+    }
+    if value := os.Getenv("XDG_STATE_HOME"); value != "" {
+        stateHome = value
+    }
+    return New(home, configHome, stateHome)
 }
 
 func decodeTOML(data []byte, dst any) error {
@@ -191,28 +205,13 @@ func Resolve(explicit string, personal Project, file ProjectFile, global Global)
 }
 
 func locked(ctx context.Context, path string, fn func() error) error {
-    if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+    if err := privatefs.MkdirAll(filepath.Dir(path)); err != nil {
         return err
     }
-    f, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+    f, err := filelock.Acquire(ctx, path+".lock", -1)
     if err != nil {
         return err
     }
     defer f.Close()
-    for {
-        err = unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-        if err == nil {
-            break
-        }
-        if !errors.Is(err, unix.EWOULDBLOCK) {
-            return err
-        }
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-time.After(10 * time.Millisecond):
-        }
-    }
-    defer unix.Flock(int(f.Fd()), unix.LOCK_UN)
     return fn()
 }

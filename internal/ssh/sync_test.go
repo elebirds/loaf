@@ -7,6 +7,7 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
 
@@ -15,6 +16,9 @@ import (
 )
 
 func TestNativeRsyncUsesLiteralSSHAndReceiverArguments(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("POSIX local receiver fixture; Windows native transfer is covered by SSH integration")
+    }
     binary, err := exec.LookPath("rsync")
     if err != nil {
         t.Skip("system rsync is unavailable")
@@ -63,6 +67,9 @@ func TestNativeRsyncUsesLiteralSSHAndReceiverArguments(t *testing.T) {
 }
 
 func TestNativeRsyncFiltersMirrorOnlySelectedWorkingFiles(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("POSIX local receiver fixture; Windows native transfer is covered by SSH integration")
+    }
     binary, err := exec.LookPath("rsync")
     if err != nil {
         t.Skip("system rsync is unavailable")

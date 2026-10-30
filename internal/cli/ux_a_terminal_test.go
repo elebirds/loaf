@@ -1,3 +1,5 @@
+//go:build !windows
+
 package cli
 
 import (
@@ -265,6 +267,34 @@ func TestUXATerminalAddAndPickerCancel(t *testing.T) {
             }
             if _, err := os.Stat(c.app.Machines.State.Path); !os.IsNotExist(err) {
                 t.Fatal("terminal registration or picker created a project choice", err)
+            }
+        })
+    }
+}
+
+func TestUXAEntryPlainTerminalModes(t *testing.T) {
+    for _, mode := range []string{"NO_COLOR", "TERM=dumb"} {
+        t.Run(mode, func(t *testing.T) {
+            c, master, output, ctx := uxAOpenTerminal(t, "zh-Hans", 80, 18, false)
+            options := c.options
+            options.App, options.TerminalError, options.TerminalOutput = c.app, true, true
+            options.Env = map[string]string{"TERM": "xterm-256color"}
+            if mode == "NO_COLOR" {
+                options.Env["NO_COLOR"] = "1"
+            } else {
+                options.Env["TERM"] = "dumb"
+            }
+            done, joined := make(chan int, 1), make(chan struct{})
+            go func() {
+                defer close(joined)
+                done <- Execute(ctx, []string{"-i", "--lang", "zh-Hans", "machine"}, options)
+            }()
+            t.Cleanup(func() { output.cancel(); <-joined })
+            uxAWaitTerminal(t, ctx, output, 0, "> ")
+            uxACaptureTerminal(t, output, "entry-"+mode+"-80x18")
+            uxAKeys(t, master, "4\n", output)
+            if code := <-done; code != 0 || strings.Contains(output.raw(), "\x1b[") {
+                t.Fatal(code, output.raw())
             }
         })
     }

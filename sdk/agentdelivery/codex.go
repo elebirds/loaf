@@ -3,6 +3,7 @@ package agentdelivery
 import (
     "context"
     "encoding/json"
+    "errors"
     "path/filepath"
 
     "github.com/pmenglund/codex-sdk-go/rpc"
@@ -19,7 +20,7 @@ func (c Codex) connect(ctx context.Context, d Destination) (*rpc.Client, error) 
     if err := d.Validate(); err != nil || d.Kind != "codex" {
         return nil, ErrDestination
     }
-    if d.Endpoint != "" && !filepath.IsAbs(d.Endpoint) {
+    if d.Endpoint != "" && !absoluteDestinationPath(d.Endpoint) {
         return nil, ErrDestination
     }
     if err := ctx.Err(); err != nil {
@@ -33,6 +34,9 @@ func (c Codex) connect(ctx context.Context, d Destination) (*rpc.Client, error) 
         transport, err = openCodexSocket(ctx, d.Endpoint)
     }
     if err != nil {
+        if errors.Is(err, ErrUnsupported) {
+            return nil, err
+        }
         return nil, ErrUnavailable
     }
     client, err := rpc.NewClientChecked(transport, rpc.ClientOptions{MaxMessageBytes: 1 << 20})
@@ -81,6 +85,9 @@ func codexThread(ctx context.Context, c *rpc.Client, d Destination) (Capabilitie
 func (c Codex) Probe(ctx context.Context, d Destination) (Capabilities, error) {
     client, err := c.connect(ctx, d)
     if err != nil {
+        if errors.Is(err, ErrUnsupported) {
+            return Capabilities{ReasonCode: "DESTINATION_UNSUPPORTED"}, err
+        }
         return Capabilities{ReasonCode: "CODEX_UNAVAILABLE"}, err
     }
     defer client.Close()
@@ -101,6 +108,9 @@ func (c Codex) Deliver(ctx context.Context, d Destination, m Message) (Receipt, 
             receipt.RetrySafe = false
         }
         receipt.ReasonCode = "CODEX_UNAVAILABLE"
+        if errors.Is(err, ErrUnsupported) {
+            receipt.ReasonCode, receipt.RetrySafe = "DESTINATION_UNSUPPORTED", false
+        }
         return receipt, err
     }
     defer client.Close()

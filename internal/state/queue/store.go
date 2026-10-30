@@ -9,13 +9,15 @@ import (
     "errors"
     "net/url"
     "os"
+    "path"
     "path/filepath"
     "regexp"
     "slices"
-    "syscall"
     "time"
 
     "github.com/elebirds/loaf/internal/event"
+    "github.com/elebirds/loaf/internal/localpath"
+    "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/queue"
     "github.com/elebirds/loaf/internal/state/eventlog"
     _ "modernc.org/sqlite"
@@ -58,19 +60,18 @@ func Open(ctx context.Context, path string, identity Identity, write bool) (*Sto
         return nil, errors.New("QUEUE_IDENTITY_MISMATCH")
     }
     if write {
-        if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+        if err := privatefs.MkdirAll(filepath.Dir(path)); err != nil {
             return nil, err
         }
     }
-    dir, err := os.Lstat(filepath.Dir(path))
-    if err != nil {
+    if err := privatefs.Check(filepath.Dir(path), true); err != nil {
+        if errors.Is(err, privatefs.ErrUnsafe) {
+            return nil, errors.New("QUEUE_UNSAFE_STATE")
+        }
         return nil, err
     }
-    if !dir.IsDir() || dir.Mode().Perm()&0077 != 0 {
-        return nil, errors.New("QUEUE_UNSAFE_STATE")
-    }
     if write {
-        file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+        file, err := privatefs.Create(path)
         if err == nil {
             err = file.Close()
         }
@@ -79,19 +80,18 @@ func Open(ctx context.Context, path string, identity Identity, write bool) (*Sto
         }
     }
     for _, name := range []string{filepath.Dir(path), path, path + "-wal", path + "-shm"} {
-        info, err := os.Lstat(name)
+        err := privatefs.Check(name, name == filepath.Dir(path))
         if errors.Is(err, os.ErrNotExist) && (name == path+"-wal" || name == path+"-shm") {
             continue
+        }
+        if errors.Is(err, privatefs.ErrUnsafe) {
+            return nil, errors.New("QUEUE_UNSAFE_STATE")
         }
         if err != nil {
             return nil, err
         }
-        owner, ok := info.Sys().(*syscall.Stat_t)
-        if !ok || owner.Uid != uint32(os.Geteuid()) || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 || name != filepath.Dir(path) && !info.Mode().IsRegular() {
-            return nil, errors.New("QUEUE_UNSAFE_STATE")
-        }
     }
-    u := url.URL{Scheme: "file", Path: path}
+    u := localpath.FileURL(path)
     mode := "ro"
     if write {
         mode = "rw"
@@ -174,16 +174,8 @@ func Open(ctx context.Context, path string, identity Identity, write bool) (*Sto
         }
     }
     if write {
-        for _, name := range []string{filepath.Dir(path), filepath.Dir(filepath.Dir(path))} {
-            directory, err := os.Open(name)
-            if err != nil {
-                return fail(err)
-            }
-            err = directory.Sync()
-            directory.Close()
-            if err != nil {
-                return fail(err)
-            }
+        if err := privatefs.SyncAncestors(path, filepath.Dir(filepath.Dir(path))); err != nil {
+            return fail(err)
         }
     }
     return s, nil
@@ -234,7 +226,7 @@ func (s *Store) SetPaused(ctx context.Context, paused bool) (queue.Status, error
 
 // Prepare durably binds one request and Run before any source side effect.
 func (s *Store) Prepare(ctx context.Context, r queue.Request, e queue.Execution) (Entry, error) {
-    if r.FormatVersion != queue.Version || !idPattern.MatchString(r.ID) || !idPattern.MatchString(r.RunID) || !idPattern.MatchString(r.ProjectID) || r.TargetID != s.TargetID || r.CreatedAt.IsZero() || !filepath.IsAbs(e.Root) || e.Version == "" {
+    if r.FormatVersion != queue.Version || !idPattern.MatchString(r.ID) || !idPattern.MatchString(r.RunID) || !idPattern.MatchString(r.ProjectID) || r.TargetID != s.TargetID || r.CreatedAt.IsZero() || !path.IsAbs(e.Root) || e.Version == "" {
         return Entry{}, errors.New("QUEUE_BAD_REQUEST")
     }
     r.State = "preparing"
@@ -530,7 +522,7 @@ func (s *Store) Cancel(ctx context.Context, id string) (Entry, error) { return s
 
 // CancelUnprepared creates a no-start tombstone even if the first prepare never arrived.
 func (s *Store) CancelUnprepared(ctx context.Context, r queue.Request, e queue.Execution) (Entry, error) {
-    if r.FormatVersion != queue.Version || !idPattern.MatchString(r.ID) || !idPattern.MatchString(r.RunID) || !idPattern.MatchString(r.ProjectID) || r.TargetID != s.TargetID || r.CreatedAt.IsZero() || !filepath.IsAbs(e.Root) || e.Version == "" {
+    if r.FormatVersion != queue.Version || !idPattern.MatchString(r.ID) || !idPattern.MatchString(r.RunID) || !idPattern.MatchString(r.ProjectID) || r.TargetID != s.TargetID || r.CreatedAt.IsZero() || !path.IsAbs(e.Root) || e.Version == "" {
         return Entry{}, errors.New("QUEUE_BAD_REQUEST")
     }
     return s.cancel(ctx, r.ID, &Entry{Request: r, Execution: e})

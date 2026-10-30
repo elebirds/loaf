@@ -9,6 +9,7 @@ import (
     "path/filepath"
     "reflect"
     "slices"
+    "strconv"
     "strings"
     "testing"
     "time"
@@ -183,7 +184,7 @@ func TestUXFOutputSelectionDownloadAndBackPreservesLiteralPaths(t *testing.T) {
         t.Fatal(b, p)
     }
     text := c.options.Err.(*bytes.Buffer).String()
-    if !strings.Contains(text, c.output.locale.Text("ux_f_selection_count", map[string]any{"Count": 1})) || !strings.Contains(text, p.destination) {
+    if !strings.Contains(text, c.output.locale.Text("ux_f_selection_count", map[string]any{"Count": 1})) || !strings.Contains(text, strconv.Quote(p.destination)) {
         t.Fatal(text)
     }
 }
@@ -242,7 +243,7 @@ func TestUXFBatchRetryRetainsSuccessfulRowsAndOriginalDestinations(t *testing.T)
         t.Fatal(puller.calls)
     }
     text := c.options.Err.(*bytes.Buffer).String()
-    if !strings.Contains(text, "2 completed · 0 failed") || !strings.Contains(text, *plan.Input.Into) || !strings.Contains(text, "PULL_PARTIAL") {
+    if !strings.Contains(text, "2 completed · 0 failed") || !strings.Contains(text, strconv.Quote(*plan.Input.Into)) || !strings.Contains(text, "PULL_PARTIAL") {
         t.Fatal(text)
     }
 }

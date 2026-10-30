@@ -1,3 +1,5 @@
+//go:build !windows
+
 package cli
 
 import (
@@ -39,7 +41,7 @@ func uxCoreWaitFrame(t *testing.T, ctx context.Context, output *wizardTerminal, 
     t.Helper()
     for {
         output.mu.Lock()
-        text := ansi.Strip(output.text.String()[offset:])
+        text := strings.ReplaceAll(ansi.Strip(output.text.String()[offset:]), "\r", "")
         output.mu.Unlock()
         start := strings.Index(text, content)
         if start >= 0 && strings.Contains(text[start+len(content):], footer) {

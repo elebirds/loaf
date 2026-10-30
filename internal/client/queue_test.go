@@ -162,7 +162,7 @@ func queueClientFixture(t *testing.T) (*Queues, *queueRemote, *queueTransfer, *q
     if err := os.WriteFile(filepath.Join(root, "input.txt"), []byte("original"), 0600); err != nil {
         t.Fatal(err)
     }
-    settings := config.Global{Targets: map[string]config.Target{"lab": {Destination: "original-host", RemoteBase: filepath.Join(t.TempDir(), "projects")}}}
+    settings := config.Global{Targets: map[string]config.Target{"lab": {Destination: "original-host", RemoteBase: "/remote/projects"}}}
     state := local.New(t.TempDir())
     order := []string{}
     transfer := &queueTransfer{order: &order, snapshots: map[string][]byte{}}

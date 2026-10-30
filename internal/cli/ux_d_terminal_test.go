@@ -1,3 +1,5 @@
+//go:build !windows
+
 package cli
 
 import (
@@ -7,10 +9,12 @@ import (
     "os"
     "path/filepath"
     "reflect"
+    "regexp"
     "strings"
     "testing"
     "time"
 
+    "github.com/charmbracelet/x/ansi"
     "github.com/creack/pty"
     "github.com/elebirds/loaf/internal/cli/interaction"
     "github.com/elebirds/loaf/internal/task"
@@ -54,6 +58,30 @@ func uxDThemeFrame(t *testing.T, ctx context.Context, output *uxDTerminal, offse
         select {
         case <-ctx.Done():
             t.Fatal("terminal did not render the requested background theme")
+        case <-time.After(time.Millisecond):
+        }
+    }
+}
+
+func uxDWaitScreen(t *testing.T, ctx context.Context, output *uxDTerminal, offset int, title, witness, footer string) {
+    t.Helper()
+    // A document title also appears as a menu choice on the preceding screen.
+    // Match a title line, not that choice or a final repaint of the old screen.
+    // A renderer can start a new title with CR rather than LF.
+    heading := regexp.MustCompile(`(?:^|[\r\n]) *` + regexp.QuoteMeta(title) + ` *\r?\n`)
+    for {
+        output.mu.Lock()
+        text := ansi.Strip(output.text.String()[offset:])
+        output.mu.Unlock()
+        if match := heading.FindStringIndex(text); match != nil {
+            body := text[match[1]:]
+            if at := strings.Index(body, witness); at >= 0 && strings.Contains(body[at+len(witness):], footer) {
+                return
+            }
+        }
+        select {
+        case <-ctx.Done():
+            t.Fatalf("missing complete screen %q: %s", title, text)
         case <-time.After(time.Millisecond):
         }
     }
@@ -144,30 +172,49 @@ func TestUXDRichBrowseDetailsRefreshCancelStop(t *testing.T) {
                 if _, err := io.WriteString(master, keys); err != nil {
                     t.Fatal(err)
                 }
-                uxCoreWaitAfter(t, ctx, &output.wizardTerminal, start, want)
+                if want == l.Text("ux_d_stop_confirm") {
+                    uxCoreWaitFrame(t, ctx, &output.wizardTerminal, start, want, l.Text("ux_core_form_help"))
+                } else {
+                    // A blurred Huh choice can lose its border while the old
+                    // form closes. Require content unique to the new screen,
+                    // not just its title (also used as that choice's label).
+                    witness := l.Text("ux_d_execution")
+                    switch want {
+                    case l.Text("ux_d_details"):
+                        witness = l.Text("ux_d_id")
+                    case l.Text("ux_d_tasks"):
+                        witness = l.Text("ux_d_column_name")
+                    case l.Text("ux_d_actions"):
+                        witness = l.Text("ux_d_wait_selection")
+                    }
+                    uxDWaitScreen(t, ctx, output, start, want, witness, l.Text("ux_core_select_help"))
+                }
                 if capture != "" {
                     uxDThemeFrame(t, ctx, output, start, entry.light)
                     uxDCapture(t, output, capture+"-"+name)
                 }
             }
-            step("\r", l.Text("ux_d_submission"), "task")
-            step("\r", l.Text("ux_d_id"), "facts")
+            // Match screen titles, not fields also present on other pages.
+            // Wait for the complete frame before sending the next key batch.
+            title := func(id string) string { return l.Text(id) }
+            step("\r", title("ux_d_task"), "task")
+            step("\r", title("ux_d_details"), "facts")
             // The document has multiple pages on short terminals; its default
             // action is always Back, independently of page count.
-            step("\r", l.Text("ux_d_submission"), "")
-            step(strings.Repeat("\x1b[B", backIndex-1)+"\r", l.Text("ux_d_column_name"), "returned")
+            step("\r", title("ux_d_task"), "")
+            step(strings.Repeat("\x1b[B", backIndex-1)+"\r", title("ux_d_tasks"), "returned")
             size := max(1, min(5, (int(entry.rows)-13)/2))
             rowCount := min(size, len(refs))
             actionIndex := rowCount
             if rowCount < len(refs) {
                 actionIndex++
             }
-            step(strings.Repeat("\x1b[B", actionIndex)+"\r", l.Text("ux_d_wait_selection"), "actions")
-            step(strings.Repeat("\x1b[A", 4)+"\r", l.Text("ux_d_column_name"), "refreshed")
-            step("\r", l.Text("ux_d_submission"), "observed-task")
+            step(strings.Repeat("\x1b[B", actionIndex)+"\r", title("ux_d_actions"), "actions")
+            step(strings.Repeat("\x1b[A", 4)+"\r", title("ux_d_tasks"), "refreshed")
+            step("\r", title("ux_d_task"), "observed-task")
             step(strings.Repeat("\x1b[B", stopIndex-1)+"\r", l.Text("ux_d_stop_confirm"), "stop-review")
-            step("\r", l.Text("ux_d_submission"), "stop-canceled")
-            step(strings.Repeat("\x1b[B", backIndex-stopIndex)+"\r", l.Text("ux_d_column_name"), "")
+            step("\r", title("ux_d_task"), "stop-canceled")
+            step(strings.Repeat("\x1b[B", backIndex-stopIndex)+"\r", title("ux_d_tasks"), "")
             if _, err := io.WriteString(master, strings.Repeat("\x1b[B", actionIndex+1)+"\r"); err != nil {
                 t.Fatal(err)
             }

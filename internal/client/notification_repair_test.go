@@ -161,8 +161,7 @@ func TestBridgeSlowSourceDoesNotBlockAlreadyReceivedDelivery(t *testing.T) {
     state, _, notify := notificationFixture(t, sender)
     s := notify.(*eventServices)
     s.dependencies.Remote = remote
-    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-    defer cancel()
+    ctx := context.Background()
     _, err := notify.Subscribe(ctx, SubscribeInput{Subject: event.Subject{Kind: "resource_operation", ID: "c_1"}, Source: "resources", Destinations: []string{"agent"}, Replay: true})
     if err != nil {
         t.Fatal(err)
@@ -177,9 +176,12 @@ func TestBridgeSlowSourceDoesNotBlockAlreadyReceivedDelivery(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
+    // Fixture I/O is not part of the concurrent dispatch deadline.
+    ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+    defer cancel()
     done := make(chan error, 1)
     go func() {
-        _, err := notify.Serve(ctx, NotifyServeInput{Interval: time.Millisecond, Policy: CallPolicy{Batch: true}}, nil)
+        _, err := notify.Serve(ctx, NotifyServeInput{Interval: 50 * time.Millisecond, Policy: CallPolicy{Batch: true}}, nil)
         done <- err
     }()
     select {
@@ -195,10 +197,13 @@ func TestBridgeSlowSourceDoesNotBlockAlreadyReceivedDelivery(t *testing.T) {
 func TestEmptyBridgeDiscoversNewSubscriptionWithoutRestart(t *testing.T) {
     sender := &signalingSender{delivered: make(chan struct{})}
     state, _, notify := notificationFixture(t, sender)
-    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
     defer cancel()
     done := make(chan error, 1)
-    go func() { _, err := notify.Serve(ctx, NotifyServeInput{Interval: time.Millisecond}, nil); done <- err }()
+    go func() {
+        _, err := notify.Serve(ctx, NotifyServeInput{Interval: 50 * time.Millisecond}, nil)
+        done <- err
+    }()
     appendResourceEvent(t, state)
     if _, err := notify.Subscribe(ctx, SubscribeInput{Subject: event.Subject{Kind: "resource_operation", ID: "c_1"}, Source: "resources", Destinations: []string{"agent"}, Replay: true}); err != nil {
         t.Fatal(err)

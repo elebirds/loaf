@@ -11,24 +11,60 @@ permissions:
 jobs:
     check:
         strategy:
+            fail-fast: false
             matrix:
-                os: [ubuntu-latest, macos-latest]
+                os: [ubuntu-latest, macos-latest, windows-latest]
         runs-on: ${{ matrix.os }}
-        timeout-minutes: 15
+        timeout-minutes: 30
         steps:
             - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
             - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
               with:
                   go-version: '1.27.3'
+            - name: Install paired Windows tools and race compiler
+              id: msys2
+              if: runner.os == 'Windows'
+              uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+              with:
+                  msystem: UCRT64
+                  update: true
+                  path-type: inherit
+                  install: openssh rsync mingw-w64-ucrt-x86_64-gcc
+            - name: Configure native Windows tool selection
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  "LOAF_MSYS2_ROOT=${{ steps.msys2.outputs.msys2-location }}" >> $env:GITHUB_ENV
+                  # Bound simultaneous package I/O on hosted NTFS runners;
+                  # keep every test and race check enabled.
+                  "GOFLAGS=-p=2" >> $env:GITHUB_ENV
+                  "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin" >> $env:GITHUB_PATH
+                  "${{ steps.msys2.outputs.msys2-location }}\usr\bin" >> $env:GITHUB_PATH
+            - name: Check Windows native console lifecycle
+              if: runner.os == 'Windows'
+              shell: bash
+              run: go test -race ./internal/cli/interaction -run '^TestWindowsNativeHandoffRestoresConsoleAndNextForm$'
             - run: bash scripts/check.sh
-            - name: Check module declarations
-              run: go mod tidy && git diff --exit-code -- go.mod go.sum
+              shell: bash
+            - name: Check workspace declarations
+              shell: bash
+              run: go work sync && git diff --exit-code -- go.mod go.sum go.work go.work.sum sdk/agentdelivery/go.mod sdk/agentdelivery/go.sum
             - name: Build supported targets
               if: matrix.os == 'ubuntu-latest'
               env:
                   VERSION: ci-${{ github.sha }}
-                  LOAF_BUILD_TARGETS: linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+                  LOAF_BUILD_TARGETS: linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
               run: bash scripts/build.sh
+            - name: Build and exercise native Windows archive
+              if: runner.os == 'Windows'
+              shell: bash
+              run: |
+                  bash scripts/build.sh
+                  temporary=$(mktemp -d "$PWD/dist/.smoke.XXXXXX")
+                  trap 'rm -rf "$temporary"' EXIT
+                  LOAF_TEST_ARCHIVE="$(cygpath -m "$PWD/dist/loaf_$(cat dist/version)_windows_amd64.zip")" LOAF_TEST_DIRECTORY="$(cygpath -m "$temporary")" powershell.exe -NoProfile -NonInteractive -Command 'Expand-Archive -LiteralPath $env:LOAF_TEST_ARCHIVE -DestinationPath $env:LOAF_TEST_DIRECTORY -ErrorAction Stop'
+                  "$temporary/loaf.exe" version --json
+                  LOAF_INTEGRATION=1 LOAF_BIN="$(cygpath -m "$temporary/loaf.exe")" go test -run '^TestPackagedMetadataAndDependencyNotices$' -ldflags="-X github.com/elebirds/loaf/internal/wire.Version=$(cat dist/version)" ./tests/integration
     ssh:
         runs-on: ubuntu-latest
         timeout-minutes: 15

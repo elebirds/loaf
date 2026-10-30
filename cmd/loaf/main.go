@@ -3,7 +3,6 @@ package main
 import (
     "context"
     "os"
-    "os/exec"
     "os/signal"
     "path/filepath"
     "syscall"
@@ -30,6 +29,9 @@ func (unavailableSSH) Check(context.Context, config.Target, string, bool) (ssh.R
 }
 
 func main() {
+    if ssh.NativeAskpassInvocation(os.Args[1:]) {
+        os.Exit(ssh.AskpassMain(os.Args[1], os.Stdout))
+    }
     if len(os.Args) == 3 && os.Args[1] == "__ssh-askpass" {
         os.Exit(ssh.AskpassMain(os.Args[2], os.Stdout))
     }
@@ -55,7 +57,7 @@ func main() {
     var operations application.MachineOperations
     var eventRemote application.EventRemote
     var queueRemote application.QueueRemote
-    store := config.New(home, os.Getenv("XDG_CONFIG_HOME"), os.Getenv("XDG_STATE_HOME"))
+    store := config.NewUser(home)
     settings, configErr := store.Load()
     state := local.New(store.StateDir)
     authentication := &cloud.Authentication{Keyring: credentials.Keyring{}, Files: credentials.File{Dir: filepath.Join(store.StateDir, "credentials")}}
@@ -64,8 +66,9 @@ func main() {
     cloudService := &cloud.Service{Open: factory.Open, Receipts: cloud.Receipts{Dir: filepath.Dir(state.Path)}}
     connections := ssh.NewConnections()
     trace := &ssh.Trace{}
-    if binary, err := exec.LookPath("ssh"); err == nil {
-        client := &ssh.Client{Binary: binary, Connections: connections, Trace: trace}
+    {
+        tools, toolErr := ssh.DiscoverTools()
+        client := &ssh.Client{Binary: tools.SSH, RsyncBinary: tools.Rsync, Cygpath: tools.Cygpath, ToolError: toolErr, Connections: connections, Trace: trace}
         client.Resolve = cloudConnection(factory.Open)
         for _, account := range settings.Cloud.Accounts {
             if account.Credential.Env != "" {
@@ -78,7 +81,7 @@ func main() {
         queueRemote = client
         bootstrap := execution.Bootstrap{Remote: client}
         runner = bootstrap
-        rsync, _ := exec.LookPath("rsync")
+        rsync := tools.Rsync
         prepare := func(ctx context.Context, target config.Target, arch string, batch bool) (string, error) {
             if arch == "" {
                 var err error

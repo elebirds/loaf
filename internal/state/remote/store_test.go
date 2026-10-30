@@ -2,6 +2,7 @@ package remotestate
 
 import (
     "database/sql"
+    "github.com/elebirds/loaf/internal/testutil"
     "os"
     "path/filepath"
     "sync"
@@ -22,10 +23,7 @@ func fixture(t *testing.T) (string, *wire.RunRecord) {
 
 func TestPrivateReadOnlyAndUnknownSchema(t *testing.T) {
     root, _ := fixture(t)
-    info, err := os.Stat(Path(root))
-    if err != nil || info.Mode().Perm() != 0600 {
-        t.Fatal(info, err)
-    }
+    testutil.Private(t, Path(root), false)
     before, err := os.ReadDir(filepath.Join(root, Namespace))
     if err != nil {
         t.Fatal(err)

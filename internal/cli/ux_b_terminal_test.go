@@ -1,3 +1,5 @@
+//go:build !windows
+
 package cli
 
 import (
@@ -189,6 +191,9 @@ func TestUXBRichForwardReviewAndCancelDoesNotReopenForms(t *testing.T) {
             io.WriteString(master, "\x1b[A\x1b[A\r")
             select {
             case <-entered:
+                // Key movement repaints the review. Only output after native
+                // ownership begins can indicate an unintended reopened form.
+                offset = len(output.raw())
                 cancel()
             case <-ctx.Done():
                 t.Fatal("tunnel was not started", output.snapshot())
@@ -209,7 +214,7 @@ func TestUXBRichForwardReviewAndCancelDoesNotReopenForms(t *testing.T) {
                 t.Fatal("terminal not restored", err)
             }
             tail := ansi.Strip(output.raw()[offset:])
-            if strings.Count(tail, c.output.locale.Text("ux_b_forward_review")) > 1 {
+            if strings.Contains(tail, c.output.locale.Text("ux_b_forward_review")) {
                 t.Fatal("cancel reopened form", tail)
             }
         })

@@ -23,11 +23,11 @@ func TestProjectIdentityChoiceAndRemovedAlias(t *testing.T) {
     if err != nil || again != project {
         t.Fatal(again, err)
     }
-    a, err := s.Select(ctx, "/a/same", "")
+    a, err := s.Select(ctx, filepath.Join(t.TempDir(), "same"), "")
     if err != nil {
         t.Fatal(err)
     }
-    b, err := s.Select(ctx, "/b/same", "")
+    b, err := s.Select(ctx, filepath.Join(t.TempDir(), "same"), "")
     if err != nil || a.ID == b.ID {
         t.Fatal(a, b, err)
     }
@@ -82,7 +82,7 @@ func TestConcurrentProjectsAndUnknownSchema(t *testing.T) {
         t.Fatal(err)
     }
     database.Close()
-    if _, err := s.Select(context.Background(), "/new", ""); err == nil {
+    if _, err := s.Select(context.Background(), t.TempDir(), ""); err == nil {
         t.Fatal("accepted unknown schema")
     }
     if _, err := s.Existing(roots[0]); err == nil {

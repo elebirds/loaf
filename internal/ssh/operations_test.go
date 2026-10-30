@@ -8,7 +8,7 @@ import (
     "os/exec"
     "path/filepath"
     "reflect"
-    "strconv"
+    "runtime"
     "strings"
     "testing"
 
@@ -17,6 +17,9 @@ import (
 )
 
 func TestForegroundCommandPreservesArgumentsAndHome(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("executes the remote POSIX shell; covered on Linux and by SSH integration")
+    }
     home := t.TempDir()
     directory := filepath.Join(home, "work 中文 ' quote")
     if err := os.Mkdir(directory, 0700); err != nil {
@@ -69,10 +72,7 @@ func TestForegroundExitConfirmation(t *testing.T) {
         status, code int
         want         string
     }{{0, 0, ""}, {7, 7, "EXEC_FAILED"}, {254, 254, "EXEC_FAILED"}, {255, 0, "EXEC_UNCONFIRMED"}} {
-        binary := filepath.Join(t.TempDir(), "ssh")
-        if err := os.WriteFile(binary, []byte("#!/bin/sh\nprintf 'out'\nprintf 'err' >&2\nexit "+strconv.Itoa(tc.status)+"\n"), 0700); err != nil {
-            t.Fatal(err)
-        }
+        binary := fixtureProcess(t, processFixture{Stdout: "out", Stderr: "err", Exit: tc.status})
         var stdout, stderr bytes.Buffer
         result, err := (&Client{Binary: binary}).Exec(context.Background(), config.Target{Destination: "host"}, ExecInput{Args: []string{"true"}, Batch: true}, nil, &stdout, &stderr)
         var f *fault.Error

@@ -5,6 +5,7 @@ import (
     "strings"
 
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/localpath"
 )
 
 // PullSettings contains independent user/project download preferences.
@@ -44,8 +45,10 @@ func PullBase(project string, policy PullPolicy) (string, error) {
         base = filepath.Join(project, base)
     }
     base = filepath.Clean(base)
-    rel, err := filepath.Rel(base, project)
-    if err != nil || filepath.IsLocal(rel) {
+    if err := localpath.Supported(base); err != nil {
+        return "", fault.Wrap("BAD_CONFIG", "pull_base_dir", err)
+    }
+    if localpath.Contains(base, project) {
         return "", fault.New("BAD_CONFIG", "pull_base_dir", nil)
     }
     return base, nil

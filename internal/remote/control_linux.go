@@ -41,6 +41,9 @@ func Serve(in io.Reader, out io.Writer) int {
         err = errors.New("BAD_REQUEST")
     }
     response := wire.Response{FormatVersion: 1, Version: wire.Version}
+    if req.DestinationFS != nil && req.Action != "outputs" {
+        err = errors.New("BAD_REQUEST")
+    }
     if err == nil && req.Action == "queue" {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()
@@ -111,6 +114,9 @@ func Serve(in io.Reader, out io.Writer) int {
 
 // Handle is the internal control surface reused by the client execution use cases.
 func Handle(req wire.Request) (*wire.RunRecord, error) {
+    if req.DestinationFS != nil {
+        return nil, errors.New("BAD_REQUEST")
+    }
     if req.FormatVersion != wire.FormatVersion {
         return nil, errors.New("BAD_FORMAT")
     }

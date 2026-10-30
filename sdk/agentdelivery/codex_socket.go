@@ -5,7 +5,9 @@ import (
     "net"
     "net/http"
     "os"
+    "path"
     "path/filepath"
+    "runtime"
     "time"
 
     "github.com/coder/websocket"
@@ -17,6 +19,9 @@ import (
 type codexSocket struct{ connection *websocket.Conn }
 
 func openCodexSocket(ctx context.Context, endpoint string) (rpc.Transport, error) {
+    if runtime.GOOS == "windows" {
+        return nil, ErrUnsupported
+    }
     if endpoint == "" {
         home := os.Getenv("CODEX_HOME")
         if home == "" {
@@ -29,7 +34,7 @@ func openCodexSocket(ctx context.Context, endpoint string) (rpc.Transport, error
         }
         endpoint = filepath.Join(home, "app-server-control", "app-server-control.sock")
     }
-    if !filepath.IsAbs(endpoint) {
+    if !path.IsAbs(endpoint) {
         return nil, ErrDestination
     }
     if err := privateSocket(endpoint, true); err != nil {

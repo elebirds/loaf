@@ -223,7 +223,8 @@ func TestUXFBatchValidationRetainsExistingErrorData(t *testing.T) {
     if err == nil || result.Batch == nil || result.Batch.Selected != 2 || len(result.Batch.Runs) != 2 || len(puller.refs) != 0 {
         t.Fatal("batch selection failure lost its existing data", result, err)
     }
-    result, err = c.Pull(context.Background(), PullInput{IDs: []string{refs[0].ID, refs[1].ID}, Into: new("/")}, nil)
+    root := filepath.VolumeName(c.CWD) + string(filepath.Separator)
+    result, err = c.Pull(context.Background(), PullInput{IDs: []string{refs[0].ID, refs[1].ID}, Into: &root}, nil)
     if err == nil || result.Batch == nil || result.Batch.Selected != 0 || len(result.Batch.Runs) != 0 {
         t.Fatal("early destination failure changed its batch data", result, err)
     }

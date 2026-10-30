@@ -12,6 +12,7 @@ import (
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
     "github.com/elebirds/loaf/internal/task"
+    "github.com/elebirds/loaf/internal/testutil"
     "github.com/elebirds/loaf/internal/wire"
 )
 
@@ -29,7 +30,14 @@ func (r *outputRemote) RunnerArch(_ context.Context, target config.Target, batch
 
 func (r *outputRemote) Outputs(_ context.Context, _ config.Target, _ string, req wire.Request, _ bool) (wire.OutputSelection, error) {
     r.req = req
-    return r.selection, r.err
+    result := r.selection
+    if req.DestinationFS != nil {
+        for _, name := range result.Available {
+            result.Names = append(result.Names, wire.OutputName{Path: name, Kind: "directory"})
+        }
+        result.Namespace = wire.OutputNamespace(result.Names)
+    }
+    return result, r.err
 }
 
 type outputDownloader struct {
@@ -153,9 +161,7 @@ func TestLocalDownloadBoundariesAndDirectoryLock(t *testing.T) {
     }
     lock.Close()
     outside := canonicalTemp(t)
-    if err := os.Symlink(outside, filepath.Join(destination, "outputs")); err != nil {
-        t.Fatal(err)
-    }
+    testutil.Symlink(t, outside, filepath.Join(destination, "outputs"))
     for _, paths := range [][]string{{"outputs"}, {"outputs/nested/file"}} {
         if lock, err := openDestination(destination, paths); err == nil {
             lock.Close()

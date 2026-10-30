@@ -8,7 +8,9 @@ import (
     "log/slog"
     "net"
     "os"
+    "path"
     "path/filepath"
+    "runtime"
     "sync"
     "time"
 
@@ -34,7 +36,7 @@ type channelResponse struct {
 
 func channelCall(ctx context.Context, d Destination, request channelRequest) (channelResponse, error) {
     var response channelResponse
-    if d.Validate() != nil || d.Kind != "claude-channel" || !filepath.IsAbs(d.Endpoint) {
+    if d.Validate() != nil || d.Kind != "claude-channel" || !path.IsAbs(d.Endpoint) {
         return response, ErrDestination
     }
     if err := privateSocket(d.Endpoint, false); err != nil {
@@ -69,6 +71,9 @@ func channelCall(ctx context.Context, d Destination, request channelRequest) (ch
 func (ClaudeChannel) Probe(ctx context.Context, d Destination) (Capabilities, error) {
     response, err := channelCall(ctx, d, channelRequest{Action: "probe"})
     if err != nil {
+        if errors.Is(err, ErrUnsupported) {
+            return Capabilities{ReasonCode: "DESTINATION_UNSUPPORTED"}, err
+        }
         return Capabilities{ReasonCode: "CLAUDE_CHANNEL_UNAVAILABLE"}, err
     }
     if !response.Capabilities.Available {
@@ -86,6 +91,9 @@ func (c ClaudeChannel) Deliver(ctx context.Context, d Destination, m Message) (R
     }
     if capabilities, err := c.Probe(ctx, d); err != nil {
         rejected.ReasonCode = "CLAUDE_CHANNEL_UNAVAILABLE"
+        if errors.Is(err, ErrUnsupported) {
+            rejected.ReasonCode, rejected.RetrySafe = "DESTINATION_UNSUPPORTED", false
+        }
         if capabilities.ReasonCode == "DESTINATION_ID_MISMATCH" || capabilities.ReasonCode == "DESTINATION_WORKSPACE_MISMATCH" {
             rejected.ReasonCode, rejected.RetrySafe = capabilities.ReasonCode, false
         }
@@ -146,6 +154,9 @@ type channelAcknowledgement struct {
 // Serve connects one explicitly enabled Claude MCP session and serves private
 // messages. It declares no permission-relay or workload-control capability.
 func (s *ClaudeChannelServer) Serve(ctx context.Context, transport mcp.Transport) error {
+    if runtime.GOOS == "windows" {
+        return ErrUnsupported
+    }
     if !validID(s.SessionID) || !filepath.IsAbs(s.SocketPath) || transport == nil {
         return ErrDestination
     }

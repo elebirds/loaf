@@ -25,12 +25,8 @@ func TestExecConnectionClassificationIsBoundedPrivateAndNeverReplayed(t *testing
         {"Operation timed out", "connection_timeout", "connection_timeout", true},
     } {
         dir := t.TempDir()
-        binary := filepath.Join(dir, "ssh")
         count := filepath.Join(dir, "calls")
-        script := "#!/bin/sh\necho x >> '" + count + "'\nprintf '%s' '" + tc.message + " private-endpoint secret-marker' >&2\nexit 255\n"
-        if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
-            t.Fatal(err)
-        }
+        binary := fixtureProcess(t, processFixture{Count: count, Stderr: tc.message + " private-endpoint secret-marker", Exit: 255})
         result, err := (&Client{Binary: binary}).Exec(context.Background(), config.Target{Destination: "fixture"}, ExecInput{Args: []string{"/bin/true"}, Batch: true}, nil, io.Discard, io.Discard)
         wrapped := fault.Wrap("CLOUD_NOT_READY", "cloud_not_ready", err)
         if result.Status != "unconfirmed" || FailureKind(wrapped) != tc.kind || FailureReason(wrapped) != tc.reason || RetryableConnection(wrapped) != tc.retry {
@@ -40,7 +36,7 @@ func TestExecConnectionClassificationIsBoundedPrivateAndNeverReplayed(t *testing
             t.Fatal("diagnostic escaped", err)
         }
         calls, _ := os.ReadFile(count)
-        if string(calls) != "x\n" {
+        if string(calls) != "call\n" {
             t.Fatal("foreground command replayed", string(calls))
         }
     }
@@ -52,11 +48,8 @@ func TestExecConnectionClassificationIsBoundedPrivateAndNeverReplayed(t *testing
 }
 
 func TestNativeHostTrustDisablesAuthenticationAndRejectsOtherCommands(t *testing.T) {
-    file := filepath.Join(t.TempDir(), "ssh")
     output := filepath.Join(t.TempDir(), "args")
-    if err := os.WriteFile(file, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > '"+output+"'\nexit 0\n"), 0700); err != nil {
-        t.Fatal(err)
-    }
+    file := fixtureProcess(t, processFixture{Arguments: output})
     client := &Client{Binary: file}
     _, err := client.Exec(context.Background(), config.Target{Destination: "fixture"}, ExecInput{Args: []string{"/bin/true"}, TrustOnly: true}, nil, io.Discard, io.Discard)
     args, _ := os.ReadFile(output)

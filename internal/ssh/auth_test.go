@@ -5,6 +5,7 @@ import (
     "context"
     "os"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
 
@@ -14,7 +15,8 @@ import (
 
 func TestAskpassDoesNotPersistOrForwardTheSecret(t *testing.T) {
     secret := "fixture password 'quoted'"
-    env, cleanup, err := passwordPrompt(context.Background(), secret, "/test/loaf")
+    executable, _ := os.Executable()
+    env, cleanup, err := passwordPrompt(context.Background(), secret, executable)
     if err != nil {
         t.Fatal(err)
     }
@@ -32,13 +34,17 @@ func TestAskpassDoesNotPersistOrForwardTheSecret(t *testing.T) {
             launcher = value
         }
     }
-    contents, err := os.ReadFile(launcher)
-    if err != nil || bytes.Contains(contents, []byte(secret)) {
-        t.Fatal(string(contents), err)
-    }
-    mode, err := os.Stat(filepath.Dir(socket))
-    if err != nil || mode.Mode().Perm() != 0700 {
-        t.Fatal(mode, err)
+    if runtime.GOOS != "windows" {
+        contents, err := os.ReadFile(launcher)
+        if err != nil || bytes.Contains(contents, []byte(secret)) {
+            t.Fatal("secret persisted in launcher", err)
+        }
+        mode, err := os.Stat(filepath.Dir(socket))
+        if err != nil || mode.Mode().Perm() != 0700 {
+            t.Fatal(mode, err)
+        }
+    } else if launcher != filepath.ToSlash(executable) {
+        t.Fatal("askpass is not the native helper")
     }
     t.Setenv("LOAF_ASKPASS_SOCKET", socket)
     for _, prompt := range []string{"root@gpu.example.com's password:", "Password:"} {
@@ -61,7 +67,7 @@ func TestCloudSessionRefreshesAndStripsPlatformTokens(t *testing.T) {
     b := cloud.Binding{Ref: cloud.Ref{Provider: "autodl", Product: "pro", Account: "demo", ID: "pro-saved"}, Settings: cloud.Account{Provider: "autodl", DefaultProduct: "pro", Credential: cloud.CredentialRef{Mode: "developer", Env: "TEST_CLOUD_TOKEN"}}}
     target := config.Target{Cloud: &b, RemoteBase: "~/projects"}
     calls := 0
-    client := &Client{Binary: "ssh", AskpassExecutable: "/test/loaf", SensitiveEnv: []string{"OTHER_CLOUD_TOKEN"}, Resolve: func(_ context.Context, target config.Target) (config.Target, string, error) {
+    client := &Client{Binary: "ssh", SensitiveEnv: []string{"OTHER_CLOUD_TOKEN"}, Resolve: func(_ context.Context, target config.Target) (config.Target, string, error) {
         calls++
         if target.Cloud.Ref.ID != "pro-saved" {
             t.Fatal(target)

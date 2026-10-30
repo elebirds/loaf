@@ -2,6 +2,7 @@ package config
 
 import (
     "context"
+    "github.com/elebirds/loaf/internal/testutil"
     "os"
     "path/filepath"
     "testing"
@@ -31,10 +32,7 @@ func TestCloudAccountsDoNotPersistTokensOrRedirectBindings(t *testing.T) {
     if err != nil || cfg.Cloud.DefaultAccount != "" || *cfg.Targets["gpu"].Cloud != b {
         t.Fatal(cfg, err)
     }
-    mode, _ := os.Stat(s.ConfigFile)
-    if mode.Mode().Perm() != 0600 {
-        t.Fatal(mode.Mode())
-    }
+    testutil.Private(t, s.ConfigFile, false)
 }
 
 func TestProjectAcceptsResourceRequirementsButNeverAccounts(t *testing.T) {

@@ -1,3 +1,5 @@
+//go:build !windows
+
 package cli
 
 import (
@@ -220,6 +222,36 @@ func TestUXHRichLocalRequestWithIntegratedRunActions(t *testing.T) {
             after, err := term.GetState(int(terminal.Fd()))
             if err != nil || !reflect.DeepEqual(before, after) || len(spy.shows) != 1 || spy.shows[0].ID != row.ID || spy.shows[0].Target != nil || len(spy.cancels)+len(spy.cleans)+len(spy.submits) != 0 {
                 t.Fatal("detail navigation lost identity, mutated or failed restoration", err, spy)
+            }
+        })
+    }
+}
+
+func TestUXHIntegratedPlainTerminalModes(t *testing.T) {
+    for _, mode := range []string{"NO_COLOR", "TERM=dumb"} {
+        t.Run(mode, func(t *testing.T) {
+            spy := &uxHQueueSpy{result: queue.Result{Status: &queue.Status{TargetID: "shared", Slots: 1, CoordinatorRunning: true}}}
+            c, master, _, output := uxHTerminal(t, "en", 80, 18, spy)
+            c.options.App, c.options.Interactive, c.options.TerminalError = c.app, true, true
+            c.options.Env = map[string]string{"TERM": "xterm-256color", "LANG": "en"}
+            if mode == "NO_COLOR" {
+                c.options.Env["NO_COLOR"] = "1"
+            } else {
+                c.options.Env["TERM"] = "dumb"
+            }
+            ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+            defer cancel()
+            done, joined := make(chan int, 1), make(chan struct{})
+            go func() { defer close(joined); done <- Execute(ctx, []string{"-i", "queue"}, c.options) }()
+            t.Cleanup(func() { cancel(); <-joined })
+            uxHWaitFrame(t, ctx, output, 0, "> ")
+            uxHCapture(t, output, "hub-plain-"+mode+"-80x18")
+            _, _ = io.WriteString(master, "5\n")
+            if code := <-done; code != 0 || len(spy.lists) != 1 {
+                t.Fatal(code, spy.lists)
+            }
+            if strings.Contains(output.raw(), "\x1b[") {
+                t.Fatal("plain terminal rendered control sequences", output.raw())
             }
         })
     }

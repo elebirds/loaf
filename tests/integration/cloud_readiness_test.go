@@ -3,7 +3,6 @@ package integration
 import (
     "context"
     "errors"
-    "github.com/creack/pty"
     "io"
     "net"
     "os"
@@ -77,7 +76,7 @@ func TestCloudNativeReadinessDiagnostics(t *testing.T) {
     if e != nil {
         t.Fatal(e)
     }
-    if e := os.WriteFile(badConfig, []byte(strings.ReplaceAll(string(content), f.key, wrong)), 0600); e != nil {
+    if e := os.WriteFile(badConfig, []byte(strings.ReplaceAll(string(content), filepath.ToSlash(f.key), filepath.ToSlash(wrong))), 0600); e != nil {
         t.Fatal(e)
     }
     bad.Args = []string{"-F", badConfig}
@@ -98,8 +97,9 @@ func TestCloudNativeReadinessDiagnostics(t *testing.T) {
     hostKey := command(t, "docker", "exec", f.id, "cat", "/etc/ssh/ssh_host_ed25519_key.pub")
     _ = os.WriteFile(f.known, append(original, []byte("[127.0.0.1]:"+port+" "+hostKey+"\n")...), 0600)
     proxyReady := make(chan net.Listener, 1)
+    startProxy := make(chan struct{})
     go func() {
-        time.Sleep(300 * time.Millisecond)
+        <-startProxy
         listener, e := net.Listen("tcp", address)
         if e != nil {
             proxyReady <- nil
@@ -129,14 +129,26 @@ func TestCloudNativeReadinessDiagnostics(t *testing.T) {
     settings := config.Global{}
     settings.Cloud.Accounts = map[string]cloud.Account{"fixture": account}
     settings.Cloud.DefaultAccount = "fixture"
-    operations := &ssh.Client{Binary: "ssh", Resolve: func(context.Context, config.Target) (config.Target, string, error) { return target, "", nil }}
+    operations := f.client
+    operations.Resolve = func(context.Context, config.Target) (config.Target, string, error) { return target, "", nil }
     resources := &application.Resources{Config: store, Settings: settings, Operations: operations, Cloud: &cloud.Service{Open: func(context.Context, string, cloud.Account, string) (cloud.Provider, error) {
         return readinessProvider{ref}, nil
     }}}
     probes := 0
     ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
     defer cancel()
-    result, err := resources.CloudBind(ctx, application.CloudBindInput{Name: "test", Instance: ref.ID, ReadyTimeout: 8 * time.Second, Progress: func(e cloud.Event) error { probes = max(probes, e.ProbeAttempts); return nil }})
+    proxyStarted := false
+    result, err := resources.CloudBind(ctx, application.CloudBindInput{Name: "test", Instance: ref.ID, ReadyTimeout: 8 * time.Second, Progress: func(e cloud.Event) error {
+        probes = max(probes, e.ProbeAttempts)
+        if !proxyStarted && e.FailureKind == "connection_refused" {
+            close(startProxy)
+            proxyStarted = true
+        }
+        return nil
+    }})
+    if !proxyStarted {
+        close(startProxy)
+    }
     listener := <-proxyReady
     if listener != nil {
         defer listener.Close()
@@ -190,10 +202,7 @@ func TestCloudNativeFirstTrustRequiresFingerprintDecision(t *testing.T) {
     defer cancel()
     cmd := exec.CommandContext(ctx, binary, "-test.run=^TestNativeCloudTrustTerminalChild$")
     cmd.Env = append(os.Environ(), "LOAF_NATIVE_TRUST_CONFIG="+f.config)
-    master, err := pty.Start(cmd)
-    if err != nil {
-        t.Fatal(err)
-    }
+    master, waitTerminal := startTerminal(t, cmd)
     defer master.Close()
     chunks := make(chan string, 100)
     go func() {
@@ -224,10 +233,10 @@ func TestCloudNativeFirstTrustRequiresFingerprintDecision(t *testing.T) {
             confirmed = true
         }
     }
-    if err := cmd.Wait(); err != nil || !confirmed || !strings.Contains(transcript, "LOAF_NATIVE_TRUST_COMPLETED") {
+    if err := waitTerminal(); err != nil || !confirmed || !strings.Contains(transcript, "LOAF_NATIVE_TRUST_COMPLETED") {
         t.Fatal(err, transcript)
     }
-    _, err = f.client.Exec(ctx, f.target, ssh.ExecInput{Args: []string{"/bin/true"}, Batch: true}, nil, io.Discard, io.Discard)
+    _, err := f.client.Exec(ctx, f.target, ssh.ExecInput{Args: []string{"/bin/true"}, Batch: true}, nil, io.Discard, io.Discard)
     if err != nil {
         t.Fatal("strict authentication did not follow trust", err)
     }

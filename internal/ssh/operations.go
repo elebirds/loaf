@@ -8,8 +8,6 @@ import (
     "os/exec"
     "strconv"
     "strings"
-    "syscall"
-    "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
@@ -70,7 +68,7 @@ func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, s
         return ExecResult{Status: "succeeded", ExitCode: &code}, nil
     }
     var exit *exec.ExitError
-    if errors.As(err, &exit) && exit.ExitCode() >= 0 && exit.ExitCode() < 255 {
+    if ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() >= 0 && exit.ExitCode() < 255 {
         code := exit.ExitCode()
         result = ExecResult{Status: "failed", ExitCode: &code}
         return result, fault.New("EXEC_FAILED", "exec_failed", map[string]any{"Value": code})
@@ -145,15 +143,9 @@ func (c *Client) Forward(ctx context.Context, target config.Target, local, remot
 }
 
 // Give native SSH an opportunity to restore terminal modes before forced exit.
-func foregroundProcess(ctx context.Context, binary string, args ...string) *exec.Cmd {
-    cmd := exec.CommandContext(ctx, binary, args...)
-    cmd.Cancel = func() error {
-        if cmd.Process == nil {
-            return os.ErrProcessDone
-        }
-        return cmd.Process.Signal(syscall.SIGTERM)
-    }
-    cmd.WaitDelay = time.Second
+func foregroundProcess(ctx context.Context, binary string, args ...string) *process {
+    cmd := commandContext(ctx, binary, args...)
+    cancelForeground(cmd)
     return cmd
 }
 

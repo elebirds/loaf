@@ -64,6 +64,11 @@ func summaryConfirmationForm(prompt Confirmation, width int, value *string, dark
 func (s *InputSession) runForm(ctx context.Context, form *huh.Form, header ...string) error {
     runCtx, cancel := context.WithCancel(ctx)
     defer cancel()
+    input, closeInput, err := richInput(runCtx, s.options.In)
+    if err != nil {
+        return err
+    }
+    defer closeInput()
     output := &formWriter{writer: s.options.Err, cancel: cancel}
     var writer io.Writer = output
     if terminal, ok := s.options.Err.(terminalOutput); ok {
@@ -88,16 +93,24 @@ func (s *InputSession) runForm(ctx context.Context, form *huh.Form, header ...st
     if len(header) == 2 {
         title, summary = header[0], header[1]
     }
-    _, err := tea.NewProgram(formModel{form: form, height: Height(s.options.Err), headerTitle: title, headerSummary: summary, ctx: runCtx, footer: footer, selectFooter: s.options.SelectHelp, multiFooter: s.options.MultiHelp, compact: s.options.Compact, width: Width(s.options.Err), dark: s.Dark(), background: s.dark.Store},
-        tea.WithInput(s.options.In), tea.WithOutput(writer), tea.WithoutSignalHandler(),
+    program := tea.NewProgram(formModel{form: form, height: Height(s.options.Err), headerTitle: title, headerSummary: summary, ctx: runCtx, footer: footer, selectFooter: s.options.SelectHelp, multiFooter: s.options.MultiHelp, compact: s.options.Compact, width: Width(s.options.Err), dark: s.Dark(), background: s.dark.Store},
+        tea.WithInput(input), tea.WithOutput(writer), tea.WithoutSignalHandler(),
         tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+            if _, quit := msg.(tea.QuitMsg); quit {
+                // Join the raw read before Bubble Tea restores cooked modes;
+                // a pending Windows read can otherwise retain an edited line.
+                closeInput()
+            }
             // Bubble Tea sends initial size and resize events itself. Huh's
             // redundant request starts an unjoined fd query during shutdown.
             if msg == tea.RequestWindowSize() {
                 return nil
             }
             return msg
-        })).Run()
+        }))
+    stopResize := watchRichSize(program, s.options.Err)
+    defer stopResize()
+    _, err = program.Run()
     if writeErr := output.failure(); writeErr != nil {
         return writeErr
     }

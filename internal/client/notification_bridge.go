@@ -3,17 +3,16 @@ package client
 import (
     "context"
     "errors"
-    "os"
     "path/filepath"
     "sync"
     "time"
 
     "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/filelock"
     "github.com/elebirds/loaf/internal/state/db"
     "github.com/elebirds/loaf/internal/state/notifications"
     "github.com/elebirds/loaf/sdk/agentdelivery"
-    "golang.org/x/sys/unix"
 )
 
 type bridgeUpdate struct {
@@ -33,15 +32,14 @@ func (s *eventServices) Serve(ctx context.Context, in NotifyServeInput, emit fun
         return result, asyncError("NOTIFY_FAILED", err)
     }
     database.Close()
-    lock, err := os.OpenFile(filepath.Join(filepath.Dir(s.store.Path), "notify-bridge.lock"), os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW, 0600)
+    lock, err := filelock.Acquire(ctx, filepath.Join(filepath.Dir(s.store.Path), "notify-bridge.lock"), 0)
     if err != nil {
+        if errors.Is(err, filelock.ErrBusy) {
+            return result, asyncError("NOTIFY_BUSY", err)
+        }
         return result, asyncError("NOTIFY_FAILED", err)
     }
     defer lock.Close()
-    if err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-        return result, asyncError("NOTIFY_BUSY", err)
-    }
-    defer unix.Flock(int(lock.Fd()), unix.LOCK_UN)
     if err = s.store.RecoverInterrupted(ctx); err != nil {
         return result, asyncError("NOTIFY_FAILED", err)
     }

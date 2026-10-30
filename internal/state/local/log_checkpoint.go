@@ -8,12 +8,12 @@ import (
     "io"
     "os"
     "path/filepath"
-    "time"
 
     "github.com/elebirds/loaf/internal/atomicfile"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/filelock"
+    "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/wire"
-    "golang.org/x/sys/unix"
 )
 
 type logCheckpoint struct {
@@ -77,28 +77,13 @@ func SaveLogCheckpoint(ctx context.Context, path, token string) error {
 }
 
 func checkpointLocked(ctx context.Context, path string, fn func() error) error {
-    if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+    if err := privatefs.MkdirAll(filepath.Dir(path)); err != nil {
         return err
     }
-    f, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+    f, err := filelock.Acquire(ctx, path+".lock", -1)
     if err != nil {
         return err
     }
     defer f.Close()
-    for {
-        err = unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-        if err == nil {
-            break
-        }
-        if !errors.Is(err, unix.EWOULDBLOCK) {
-            return err
-        }
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-time.After(10 * time.Millisecond):
-        }
-    }
-    defer unix.Flock(int(f.Fd()), unix.LOCK_UN)
     return fn()
 }

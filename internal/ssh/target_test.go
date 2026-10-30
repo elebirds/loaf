@@ -3,6 +3,7 @@ package ssh
 import (
     "os/exec"
     "reflect"
+    "runtime"
     "testing"
 )
 
@@ -37,6 +38,9 @@ func TestRejectExecutableAndUnsafeInput(t *testing.T) {
 }
 
 func TestRemoteQuoting(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("executes the remote POSIX shell; covered on Linux and by SSH integration")
+    }
     for _, s := range []string{"a space", "quote'and\"double", "中文;$(exit 3)", "line\nnext"} {
         got, err := exec.Command("/bin/sh", "-c", "printf %s "+Quote(s)).Output()
         if err != nil || string(got) != s {

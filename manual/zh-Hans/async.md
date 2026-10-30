@@ -16,6 +16,10 @@
 使用 `loaf help queue submit --json` 可在不连接远端时查看提交参数。
 只读列表没有 `--dry-run`；预览属于 `queue submit`、`queue clean`、`notify prune` 等操作。
 
+原生 Windows 支持事件持久化、前台 Bridge、Webhook 和远端队列。基于 Unix socket 的
+`codex`、`codex-desktop`、`claude-channel` 适配器在该平台返回 `DESTINATION_UNSUPPORTED`；
+下面的相关示例适用于已验证的 Unix／WSL 环境，WSL 不代表能够访问 Windows 桌面会话。
+
 ## 将通知送回当前 Codex 桌面会话
 
 在希望接收通知的 Codex 桌面会话中，让 Agent 执行一次：

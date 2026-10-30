@@ -2,10 +2,8 @@ package cli
 
 import (
     "context"
-    "io"
     "strings"
     "testing"
-    "time"
 
     "github.com/elebirds/loaf/internal/queue"
 )
@@ -66,35 +64,5 @@ func TestUXHIntegratedNavigationBindsTemporaryTarget(t *testing.T) {
     c = uxHCallFixture(t, "en", "6\n", spy)
     if _, err := c.uxNavigate(context.Background(), uxRoute{Kind: "queue-submit", Target: new("temporary")}); err != nil || len(spy.submits) != 0 {
         t.Fatal(err, spy.submits)
-    }
-}
-
-func TestUXHIntegratedPlainTerminalModes(t *testing.T) {
-    for _, mode := range []string{"NO_COLOR", "TERM=dumb"} {
-        t.Run(mode, func(t *testing.T) {
-            spy := &uxHQueueSpy{result: queue.Result{Status: &queue.Status{TargetID: "shared", Slots: 1, CoordinatorRunning: true}}}
-            c, master, _, output := uxHTerminal(t, "en", 80, 18, spy)
-            c.options.App, c.options.Interactive, c.options.TerminalError = c.app, true, true
-            c.options.Env = map[string]string{"TERM": "xterm-256color", "LANG": "en"}
-            if mode == "NO_COLOR" {
-                c.options.Env["NO_COLOR"] = "1"
-            } else {
-                c.options.Env["TERM"] = "dumb"
-            }
-            ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-            defer cancel()
-            done, joined := make(chan int, 1), make(chan struct{})
-            go func() { defer close(joined); done <- Execute(ctx, []string{"-i", "queue"}, c.options) }()
-            t.Cleanup(func() { cancel(); <-joined })
-            uxHWaitFrame(t, ctx, output, 0, "> ")
-            uxHCapture(t, output, "hub-plain-"+mode+"-80x18")
-            _, _ = io.WriteString(master, "5\n")
-            if code := <-done; code != 0 || len(spy.lists) != 1 {
-                t.Fatal(code, spy.lists)
-            }
-            if strings.Contains(output.raw(), "\x1b[") {
-                t.Fatal("plain terminal rendered control sequences", output.raw())
-            }
-        })
     }
 }

@@ -2,7 +2,7 @@
 package task
 
 import (
-    "path/filepath"
+    "path"
     "regexp"
     "time"
 
@@ -47,7 +47,7 @@ var queueIDPattern = regexp.MustCompile(`^q_[0-9a-f]{24}$`)
 func ValidRun(ref RunRef) bool {
     return runIDPattern.MatchString(ref.ID) && projectIDPattern.MatchString(ref.ProjectID) &&
         (ref.QueueRequestID == "" || queueIDPattern.MatchString(ref.QueueRequestID)) &&
-        config.ValidName(ref.Target) && config.ValidRemotePath(ref.RemoteDir) && filepath.IsAbs(ref.Runner) &&
+        config.ValidName(ref.Target) && config.ValidRemotePath(ref.RemoteDir) && path.IsAbs(ref.Runner) &&
         ref.Version != "" && !ref.CreatedAt.IsZero() &&
         (ref.Cleanup == nil || !ref.Cleanup.RequestedAt.IsZero() && ref.Cleanup.Summary.Valid()) &&
         (ref.Submission == "preparing" || ((ref.Submission == "submitted" || ref.Submission == "uncertain") && ref.AttemptedAt != nil))

@@ -9,11 +9,12 @@ import (
     "net/url"
     "os"
     "path/filepath"
-    "syscall"
     "time"
 
+    "github.com/elebirds/loaf/internal/filelock"
+    "github.com/elebirds/loaf/internal/localpath"
+    "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/state/eventlog"
-    "golang.org/x/sys/unix"
     "modernc.org/sqlite"
 )
 
@@ -51,28 +52,17 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
         return nil, errors.New("state path must be absolute")
     }
     if write {
-        if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+        if err := privatefs.MkdirAll(filepath.Dir(path)); err != nil {
             return nil, err
         }
     }
-    dir, err := os.Lstat(filepath.Dir(path))
-    if err != nil {
+    if err := privatefs.Check(filepath.Dir(path), true); err != nil {
         return nil, err
-    }
-    if !dir.IsDir() || dir.Mode().Perm()&0077 != 0 {
-        return nil, errors.New("unsafe state directory")
-    }
-    if write {
-        unlock, err := lockInitialization(ctx, path+".init.lock")
-        if err != nil {
-            return nil, err
-        }
-        defer unlock()
     }
     created := false
     info, err := os.Lstat(path)
     if os.IsNotExist(err) && write {
-        file, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+        file, createErr := privatefs.Create(path)
         if createErr == nil {
             created = true
             createErr = file.Close()
@@ -85,23 +75,19 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
     if err != nil {
         return nil, err
     }
-    if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+    if !info.Mode().IsRegular() {
         return nil, errors.New("unsafe state database")
     }
     for _, name := range []string{filepath.Dir(path), path, path + "-wal", path + "-shm"} {
-        stat, err := os.Lstat(name)
+        err := privatefs.Check(name, name == filepath.Dir(path))
         if os.IsNotExist(err) && (name == path+"-wal" || name == path+"-shm") {
             continue
         }
         if err != nil {
             return nil, err
         }
-        owner, ok := stat.Sys().(*syscall.Stat_t)
-        if !ok || owner.Uid != uint32(os.Geteuid()) || stat.Mode()&os.ModeSymlink != 0 || stat.Mode().Perm()&0077 != 0 || (name != filepath.Dir(path) && !stat.Mode().IsRegular()) {
-            return nil, errors.New("unsafe state file")
-        }
     }
-    uri := url.URL{Scheme: "file", Path: path}
+    uri := localpath.FileURL(path)
     q := url.Values{"mode": {"ro"}, "_pragma": {"busy_timeout(2000)", "foreign_keys(1)"}, "_txlock": {"immediate"}}
     if write {
         q.Set("mode", "rw")
@@ -117,11 +103,27 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
         return nil, err
     }
     var version, app int
-    if err = database.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+    readSchema := func() error {
+        // One statement observes both identifiers in the same SQLite snapshot,
+        // including while another process is committing initial schema setup.
+        return database.QueryRowContext(ctx, "SELECT user_version, application_id FROM pragma_user_version, pragma_application_id").Scan(&version, &app)
+    }
+    if err = readSchema(); err != nil {
         return fail(err)
     }
-    if err = database.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
-        return fail(err)
+    initializationLocked := false
+    if write && version == 0 && app == 0 {
+        unlock, err := lockInitialization(ctx, path+".init.lock")
+        if err != nil {
+            return fail(err)
+        }
+        defer unlock()
+        initializationLocked = true
+        // Another opener may have initialized the file while we waited. Only
+        // schema/WAL setup needs this lock; ordinary writers use SQLite locks.
+        if err = readSchema(); err != nil {
+            return fail(err)
+        }
     }
     if write && version == 0 && app == 0 {
         tx, err := database.BeginTx(ctx, nil)
@@ -147,10 +149,7 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
         if err != nil {
             return fail(err)
         }
-        if err = database.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
-            return fail(err)
-        }
-        if err = database.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
+        if err = readSchema(); err != nil {
             return fail(err)
         }
     }
@@ -163,6 +162,13 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
             return fail(err)
         }
         if journal != "wal" {
+            if !initializationLocked {
+                unlock, err := lockInitialization(ctx, path+".init.lock")
+                if err != nil {
+                    return fail(err)
+                }
+                defer unlock()
+            }
             if err = database.QueryRowContext(ctx, "PRAGMA journal_mode=WAL").Scan(&journal); err != nil {
                 return fail(err)
             }
@@ -192,13 +198,7 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
         }
     }
     if created {
-        directory, err := os.Open(filepath.Dir(path))
-        if err != nil {
-            return fail(err)
-        }
-        err = directory.Sync()
-        _ = directory.Close()
-        if err != nil {
+        if err = privatefs.SyncParent(path); err != nil {
             return fail(err)
         }
     }
@@ -208,42 +208,9 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
 // lockInitialization serializes only connection/schema setup across processes.
 // The caller releases it before returning a connection or starting any use-case transaction.
 func lockInitialization(ctx context.Context, path string) (func(), error) {
-    file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+    file, err := filelock.Acquire(ctx, path, 2*time.Second)
     if err != nil {
         return nil, err
     }
-    stat, err := file.Stat()
-    if err != nil {
-        file.Close()
-        return nil, err
-    }
-    owner, ok := stat.Sys().(*syscall.Stat_t)
-    if !ok || !stat.Mode().IsRegular() || stat.Mode().Perm()&0077 != 0 || owner.Uid != uint32(os.Geteuid()) {
-        file.Close()
-        return nil, errors.New("unsafe state lock")
-    }
-    deadline := time.NewTimer(2 * time.Second)
-    defer deadline.Stop()
-    for {
-        err = unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-        if err == nil {
-            return func() {
-                _ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
-                _ = file.Close()
-            }, nil
-        }
-        if !errors.Is(err, unix.EWOULDBLOCK) {
-            file.Close()
-            return nil, err
-        }
-        select {
-        case <-ctx.Done():
-            file.Close()
-            return nil, ctx.Err()
-        case <-deadline.C:
-            file.Close()
-            return nil, errors.New("state initialization busy")
-        case <-time.After(10 * time.Millisecond):
-        }
-    }
+    return func() { _ = file.Close() }, nil
 }

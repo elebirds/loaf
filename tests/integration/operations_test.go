@@ -182,7 +182,11 @@ func TestForwardIsolationAndInteractiveSSH(t *testing.T) {
     }
     f := newFixture(t)
     f.shell(`nc -lk -s 127.0.0.1 -p 18080 -e /bin/cat </dev/null >/dev/null 2>&1 & echo $! > "$HOME/service.pid"; sleep 300 </dev/null >/dev/null 2>&1 & echo $! > "$HOME/sentinel.pid"`)
-    socketDir, err := os.MkdirTemp("/tmp", "loaf-master-")
+    base := "/tmp"
+    if runtime.GOOS == "windows" {
+        base = t.TempDir()
+    }
+    socketDir, err := os.MkdirTemp(base, "loaf-master-")
     if err != nil {
         t.Fatal(err)
     }
@@ -197,13 +201,20 @@ func TestForwardIsolationAndInteractiveSSH(t *testing.T) {
     if err := os.WriteFile(f.config, content, 0600); err != nil {
         t.Fatal(err)
     }
-    command(t, "ssh", "-F", f.config, "-M", "-f", "-N", "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:18080", originalPort), "fixture")
-    defer func() {
-        out, err := exec.Command("ssh", "-F", f.config, "-o", "ForkAfterAuthentication=no", "-O", "exit", "fixture").CombinedOutput()
-        if err != nil {
-            t.Errorf("close fixture master: %v %s", err, out)
-        }
-    }()
+    if runtime.GOOS == "windows" {
+        unrelated, closeUnrelated := context.WithCancel(context.Background())
+        independent := make(chan error, 1)
+        go func() { independent <- f.client.Forward(unrelated, f.target, originalPort, 18080, true, io.Discard) }()
+        defer func() { closeUnrelated(); <-independent }()
+    } else {
+        command(t, "ssh", "-F", f.config, "-M", "-f", "-N", "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:18080", originalPort), "fixture")
+        defer func() {
+            out, err := exec.Command("ssh", "-F", f.config, "-o", "ForkAfterAuthentication=no", "-O", "exit", "fixture").CombinedOutput()
+            if err != nil {
+                t.Errorf("close fixture master: %v %s", err, out)
+            }
+        }()
+    }
     wait(t, 5*time.Second, func() bool { return operationEcho(originalPort) })
     local := operationPort(t)
     ctx, cancel := context.WithCancel(context.Background())
@@ -227,7 +238,9 @@ func TestForwardIsolationAndInteractiveSSH(t *testing.T) {
     if !operationEcho(originalPort) {
         t.Fatal("canceling Loaf forwarding removed an unrelated master forwarding")
     }
-    command(t, "ssh", "-F", f.config, "-o", "ForkAfterAuthentication=no", "-O", "check", "fixture")
+    if runtime.GOOS != "windows" {
+        command(t, "ssh", "-F", f.config, "-o", "ForkAfterAuthentication=no", "-O", "check", "fixture")
+    }
     f.shell(`kill -0 "$(cat "$HOME/sentinel.pid")"; kill -0 "$(cat "$HOME/service.pid")"`)
     occupied, err := net.Listen("tcp4", "127.0.0.1:0")
     if err != nil {
@@ -253,28 +266,18 @@ func TestForwardIsolationAndInteractiveSSH(t *testing.T) {
         t.Fatal("forward reused another authenticated connection", err, diagnostic.String())
     }
     // A real controlling terminal lets native SSH own PTY setup and raw modes.
-    script, err := exec.LookPath("script")
-    if err != nil {
-        t.Fatal("the native script utility is required for the PTY integration case", err)
-    }
     project := t.TempDir()
     if code, out := cli(t, project, "machine", "add", "machine", "--ssh", "ssh -F "+ssh.Quote(f.config)+" fixture", "--json"); code != 0 {
         t.Fatal(code, string(out))
     }
     client := operationCLI(t, project, "ssh", "--target", "machine")
-    var tty *exec.Cmd
-    if runtime.GOOS == "darwin" {
-        tty = exec.Command(script, append([]string{"-q", "/dev/null", client.Path}, client.Args[1:]...)...)
-    } else {
-        words := append([]string{client.Path}, client.Args[1:]...)
-        for i := range words {
-            words[i] = ssh.Quote(words[i])
-        }
-        tty = exec.Command(script, "-q", "-e", "-c", strings.Join(words, " "), "/dev/null")
+    terminal, waitTerminal := startTerminal(t, client)
+    defer terminal.Close()
+    if _, err := io.WriteString(terminal, "printf 'interactive-%s\\n' \"$(id -un)\"\nexit\n"); err != nil {
+        t.Fatal(err)
     }
-    tty.Dir, tty.Env = client.Dir, client.Env
-    tty.Stdin = strings.NewReader("printf 'interactive-%s\\n' \"$(id -un)\"\nexit\n")
-    output, err := tty.CombinedOutput()
+    output, _ := io.ReadAll(terminal)
+    err = waitTerminal()
     if err != nil || !strings.Contains(string(output), "interactive-researcher") {
         t.Fatal(err, string(output))
     }

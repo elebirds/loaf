@@ -9,6 +9,7 @@ import (
     "net/http/httptest"
     "os"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
     "time"
@@ -57,6 +58,9 @@ func TestWebhookHTTPPolicyAnd429AreNotAssumedSafe(t *testing.T) {
     }
 }
 func TestCommonUnixSecurityAndPublicSymlinkException(t *testing.T) {
+    if runtime.GOOS == "windows" {
+        t.Skip("Unix socket ownership; native Windows returns ErrUnsupported")
+    }
     directory, err := os.MkdirTemp("/tmp", "ad-secure-")
     if err != nil {
         t.Fatal(err)

@@ -26,6 +26,7 @@ import (
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/credentials"
     "github.com/elebirds/loaf/internal/state/local"
+    "github.com/elebirds/loaf/internal/testutil"
 )
 
 // Only test processes can redirect the fixed provider hosts to a loopback
@@ -367,17 +368,16 @@ func TestCloudCredentialLifecycleAcrossProcesses(t *testing.T) {
     // A fresh process must surface an unavailable selected vault, not read the
     // retained file credential or overwrite either reference as a fallback.
     native := runtime.GOOS == "linux" && os.Getenv("LOAF_TEST_NATIVE_VAULT") == "1"
+    restore := func() {}
     if native {
         f.childEnv = []string{"DBUS_SESSION_BUS_ADDRESS=unix:path=" + filepath.Join(f.root, "missing-bus")}
-    } else if err := os.Chmod(filepath.Join(f.store().StateDir, "test-vault"), 0755); err != nil {
-        t.Fatal(err)
+    } else {
+        restore = testutil.Public(t, filepath.Join(f.store().StateDir, "test-vault"))
     }
     result = f.invoke(1, "", "cloud", "list", "--json")
     f.childEnv = nil
     if !native {
-        if err := os.Chmod(filepath.Join(f.store().StateDir, "test-vault"), 0700); err != nil {
-            t.Fatal(err)
-        }
+        restore()
     }
     if result.Error == nil || result.Error.Code != "CREDENTIAL_STORE_UNAVAILABLE" || f.account().Credential != switched.Credential {
         t.Fatal("unavailable vault changed storage or identity")

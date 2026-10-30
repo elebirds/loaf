@@ -64,7 +64,7 @@ func summaryConfirmationForm(prompt Confirmation, width int, value *string, dark
 func (s *InputSession) runForm(ctx context.Context, form *huh.Form, header ...string) error {
     runCtx, cancel := context.WithCancel(ctx)
     defer cancel()
-    input, closeInput := richInput(s.options.In)
+    input, closeInput := richInput(runCtx, s.options.In)
     defer closeInput()
     output := &formWriter{writer: s.options.Err, cancel: cancel}
     var writer io.Writer = output
@@ -93,6 +93,11 @@ func (s *InputSession) runForm(ctx context.Context, form *huh.Form, header ...st
     program := tea.NewProgram(formModel{form: form, height: Height(s.options.Err), headerTitle: title, headerSummary: summary, ctx: runCtx, footer: footer, selectFooter: s.options.SelectHelp, multiFooter: s.options.MultiHelp, compact: s.options.Compact, width: Width(s.options.Err), dark: s.Dark(), background: s.dark.Store},
         tea.WithInput(input), tea.WithOutput(writer), tea.WithoutSignalHandler(),
         tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+            if _, quit := msg.(tea.QuitMsg); quit {
+                // Join the raw read before Bubble Tea restores cooked modes;
+                // a pending Windows read can otherwise retain an edited line.
+                closeInput()
+            }
             // Bubble Tea sends initial size and resize events itself. Huh's
             // redundant request starts an unjoined fd query during shutdown.
             if msg == tea.RequestWindowSize() {

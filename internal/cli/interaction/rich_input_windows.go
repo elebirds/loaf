@@ -25,7 +25,7 @@ type richConsoleInput struct {
     reads  sync.WaitGroup
 }
 
-func richInput(input io.Reader) (io.Reader, func()) {
+func richInput(parent context.Context, input io.Reader) (io.Reader, func()) {
     file, ok := input.(*os.File)
     if !ok {
         return input, func() {}
@@ -34,7 +34,7 @@ func richInput(input io.Reader) (io.Reader, func()) {
     if windows.GetConsoleMode(windows.Handle(file.Fd()), &mode) != nil {
         return input, func() {}
     }
-    ctx, cancel := context.WithCancel(context.Background())
+    ctx, cancel := context.WithCancel(parent)
     reader := &richConsoleInput{file: file, ctx: ctx, cancel: cancel}
     return reader, func() { _ = reader.Close() }
 }
@@ -46,12 +46,18 @@ func (r *richConsoleInput) Read(p []byte) (int, error) {
     r.mu.Lock()
     if r.closed {
         r.mu.Unlock()
-        return 0, os.ErrClosed
+        return 0, io.EOF
     }
     r.reads.Add(1)
     r.mu.Unlock()
     defer r.reads.Done()
-    return terminalRead(r.ctx, r.file, func() (int, error) { return r.file.Read(p) })
+    n, err := terminalRead(r.ctx, r.file, func() (int, error) { return r.file.Read(p) })
+    if r.ctx.Err() != nil {
+        // Closing this input owner is an ordinary end of its byte stream,
+        // not an application error reported by Bubble Tea during Quit.
+        return 0, io.EOF
+    }
+    return n, err
 }
 
 // Close cancels only reads owned by this form, never closes the borrowed stdin.

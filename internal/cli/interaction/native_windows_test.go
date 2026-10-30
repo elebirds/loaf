@@ -46,8 +46,13 @@ func windowsNativeChild(t *testing.T, dir string) {
     }
     ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
     defer cancel()
-    input, closeInput := richInput(os.Stdin)
-    program := tea.NewProgram(windowsResizeModel{}, tea.WithContext(ctx), tea.WithInput(input), tea.WithOutput(os.Stdout), tea.WithoutSignalHandler())
+    input, closeInput := richInput(ctx, os.Stdin)
+    program := tea.NewProgram(windowsResizeModel{}, tea.WithContext(ctx), tea.WithInput(input), tea.WithOutput(os.Stdout), tea.WithoutSignalHandler(), tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+        if _, quit := msg.(tea.QuitMsg); quit {
+            closeInput()
+        }
+        return msg
+    }))
     stopResize := watchRichSize(program, os.Stdout)
     _, err := program.Run()
     stopResize()

@@ -12,6 +12,12 @@ Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigati
 
 ## Diagnose and continue the same operation
 
+For local input failures, use `error.argument`, `reason` and the optional
+`issues[]`; follow `help_command` as argv to inspect the real syntax. Correct
+known local issues together, without reading credentials or querying a platform
+to fill them. Help/version remain offline despite unrelated config failures.
+Read-only lists have no `--dry-run`; use only an operation's existing preview.
+
 Cloud runner operations reuse a private native SSH master only within one CLI invocation, without borrowing the user's master. Let one `pull` select multiple paths instead of launching a separate CLI for every file. Finite reads/downloads may make one bounded transient-transport retry; mutations and foreground commands are not replayed. Inspect `error.stage` and the original error code/diagnostic to distinguish cloud lookup, SSH authentication, runner verification, sync, submission, observation, and download failures. Do not reinstall a runner merely because its verification connection failed.
 
 Native Windows x64 is the explicit connection exception: use paired MSYS2 tools (`LOAF_MSYS2_ROOT` or PATH discovery), independent connections and zero established masters. Each cloud connection resolves the frozen instance; mutations remain non-replayable. Local state defaults to `%LOCALAPPDATA%\loaf` with private NTFS ACLs. WSL uses the Linux client and separate state/credentials. Never share a database across these environments. Windows downloads reject illegal names, case collisions and links unsupported by the destination filesystem. Unix-socket Agent adapters are unsupported on native Windows; persistent events, Bridge, Webhooks and remote queues remain available.

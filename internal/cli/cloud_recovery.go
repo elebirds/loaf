@@ -13,7 +13,7 @@ import (
 )
 
 func (c *invocation) recoverCloudBinding(ctx context.Context, binding client.CloudBinding, cause error) (client.CloudBinding, error) {
-    if c.policy.Batch || binding.Instance.ID == "" || errors.Is(cause, context.Canceled) || ctx.Err() != nil {
+    if !c.uxInteractive() || binding.Instance.ID == "" || errors.Is(cause, context.Canceled) || ctx.Err() != nil {
         return binding, cause
     }
     for cause != nil && ctx.Err() == nil {

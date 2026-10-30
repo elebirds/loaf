@@ -262,7 +262,7 @@ func TestQueueCleanPreviewAndExplicitConfirmation(t *testing.T) {
     q.cleans = nil
     o.Interactive = true
     o.In = strings.NewReader("no\n")
-    code, _, stderr = run(t, o, "queue", "clean", "q_1")
+    code, _, stderr = run(t, o, "-i", "queue", "clean", "q_1")
     if code != 1 || len(q.cleans) != 1 || !strings.Contains(stderr, "Shared datasets") {
         t.Fatal(code, stderr, q.cleans)
     }

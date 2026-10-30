@@ -182,6 +182,7 @@ func (q *Queues) Submit(ctx context.Context, in QueueSubmitInput, emit ProgressF
     if in.DryRun {
         preview := q.Projects.previewRun(direct, p)
         preview.Provenance["wait"] = []string{"default"}
+        preview.Notifications = append([]string(nil), in.Notify...)
         result.Preview = &preview
         return result, nil
     }

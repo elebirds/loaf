@@ -6,7 +6,24 @@ Use a notification to deliver a saved result after a task finishes. Use a queue
 when cooperating projects share a machine. A direct Run or cloud operation can
 notify you without ever entering a queue.
 
-Native Windows supports persistent events, the foreground Bridge, Webhooks and remote queues. The `codex`, `codex-desktop` and `claude-channel` Unix-socket adapters return `DESTINATION_UNSUPPORTED` there. Their examples below apply to verified Unix/WSL environments; WSL does not imply access to a Windows desktop session.
+In a terminal, `loaf queue -i`, `loaf notify -i` and `loaf events -i`
+open their respective centers; `loaf -i` also offers them under **More**.
+Without `-i`, these entries return finite queries, including in an Agent's PTY.
+Explicit subcommands stay direct. A default-command option such as
+`queue --limit 100` or `queue --trace=false` is still a query, not a menu request.
+
+For scripts and Agents, use explicit queries such as `loaf queue list --json`,
+`loaf notify deliveries --json` and `loaf events list --json`. These calls stay
+queries even when an interactive overview offers more actions. Use
+`loaf help queue submit --json` to inspect the submission arguments without
+connecting. Read-only lists have no `--dry-run`; previews belong to operations
+such as `queue submit`, `queue clean` and `notify prune`.
+
+Native Windows supports persistent events, the foreground Bridge, Webhooks and
+remote queues. The `codex`, `codex-desktop` and `claude-channel` Unix-socket
+adapters return `DESTINATION_UNSUPPORTED` there. Their examples below apply to
+verified Unix/WSL environments; WSL does not imply access to a Windows desktop
+session.
 
 ## Send notifications back to the current Codex desktop chat
 
@@ -139,6 +156,13 @@ relay; existing permissions still govern any continuation.
 
 ## Read facts and delivery evidence separately
 
+In the notification center, choose a receiving location, subscription or delivery
+to inspect its evidence and applicable actions. The events browser lets you
+choose local, resource, project or queue facts; remote sources require an
+explicit machine choice. Search stays within the displayed page/window and does
+not scan all history. From a task detail, subscribing passes that saved Run ID
+without the current target. Saving a subscription never starts a Bridge or Channel.
+
 ```bash
 loaf events list --source project --limit 100 --json
 loaf events list --source resources --json
@@ -158,6 +182,11 @@ default to `project`; select `--source resources` for cloud facts or `--source
 queue` for admission facts. Retained matches are included by default;
 `--replay=false` selects future facts only.
 
+Explicit false establishes the existing bounded source snapshot; it can read
+the source and is not an offline setting. A Run subscription follows its saved
+project binding. Do not attach the current target to a historical Run or infer
+non-delivery from an empty page.
+
 `notify subscriptions` keeps the last successful source-sync time and the last
 source-query error code/time separately, including after a later successful
 sync. Compare those timestamps when checking recovery. A source-query failure
@@ -174,6 +203,12 @@ ordinary Webhook acceptance proves Agent processing. Ambiguous sends remain
 Progress is not mixed into finite JSON.
 
 ## Queue fixed inputs on one machine
+
+The interactive queue center shows capacity, dispatch state and a bounded request
+list. Search covers the loaded requests; refresh or explicitly increase the limit
+to inspect more. Choosing another machine affects this visit, not project defaults.
+Submitting from the center reviews an offline plan before one explicit admission;
+complete `queue submit` calls retain their direct path.
 
 ```bash
 loaf queue enable --slots 1
@@ -197,6 +232,15 @@ A request ID tracks admission; its Run ID tracks execution. Queued acceptance
 does not prove a workload started. Find the Run with `queue show`, then use its
 explicit ID with `status`, `logs`, `stop` and `pull`. Uncertain dispatch is
 reconciled against the original Run, not replaced by a second execution.
+
+Queue details expose identity and state, not the private frozen command or
+environment. To submit new work, supply its inputs explicitly; do not treat the
+current project command as a reconstruction of an older request.
+
+The shared list may include another project's requests. Show, cancel, clean and
+Run actions require the original project's saved binding; open that project
+rather than overriding the target. An ID in the list alone does not grant a new
+project control of that request.
 
 ```bash
 loaf queue pause

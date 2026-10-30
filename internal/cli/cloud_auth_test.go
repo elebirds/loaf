@@ -137,6 +137,9 @@ func TestCloudLoginAfterLogoutRequestsFreshCredentials(t *testing.T) {
                 return []byte(" raw password "), nil
             }
             args = []string{"cloud", "login", "lab"}
+            if !structured {
+                args = append(args, "--prompt")
+            }
             if structured {
                 args = append(args, "--username", "student@master", "--json")
             }
@@ -181,7 +184,7 @@ func TestCloudLoginErrorsAndBothHelpCatalogs(t *testing.T) {
     o.Interactive = true
     password := []byte(" raw password ")
     o.ReadPassword = func(context.Context) ([]byte, error) { return password, nil }
-    code, out, stderr := run(t, o, "cloud", "login", "lab", "--username", "student@master", "--credential-store", "file")
+    code, out, stderr := run(t, o, "cloud", "login", "lab", "--username", "student@master", "--credential-store", "file", "--prompt")
     if code != 0 || !strings.Contains(stderr, ":") {
         t.Fatal(code, out, stderr)
     }
@@ -242,7 +245,7 @@ func TestCloudLoginInvalidInputNeverAuthenticates(t *testing.T) {
     o, calls := authFixture(t)
     o.Interactive = true
     o.ReadPassword = func(context.Context) ([]byte, error) { return []byte{}, nil }
-    code, out, stderr := run(t, o, "cloud", "login", "lab", "--username", "student@master")
+    code, out, stderr := run(t, o, "cloud", "login", "lab", "--username", "student@master", "--prompt")
     if code != 2 || *calls != 0 || out != "" {
         t.Fatal("empty terminal password was not a parameter error", code, out, stderr)
     }
@@ -273,7 +276,7 @@ func TestCloudLoginBatchDoesNotPromptAndFailedSecretIsCleared(t *testing.T) {
     o.Interactive = true
     password := []byte(" private failed input ")
     o.ReadPassword = func(context.Context) ([]byte, error) { return password, context.Canceled }
-    code, out, stderr = run(t, o, "cloud", "login", "lab", "--username", "student@master")
+    code, out, stderr = run(t, o, "cloud", "login", "lab", "--username", "student@master", "--prompt")
     if code != 1 || *calls != 0 || out != "" || strings.Contains(out+stderr, "private failed input") {
         t.Fatal(code, out, stderr, *calls)
     }

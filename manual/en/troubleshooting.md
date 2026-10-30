@@ -2,7 +2,27 @@
 
 [Home](../../README.md) · [Command reference](commands.md) · [简体中文](../zh-Hans/troubleshooting.md)
 
-## Troubleshooting
+## Correct local input before connecting
+
+```bash
+loaf help machine add --json
+loaf help run --json
+```
+
+Use `error.argument` and `error.reason` to locate the problem. If `error.issues`
+is present, correct the listed local issues together. `error.help_command` is an
+argv array for the relevant help page; it does not repeat the failed mutation.
+Help and version work with unrelated configuration errors, so no account login,
+credential lookup or connection check is needed just to learn the syntax.
+
+Without `-i`, calls cannot fill missing values through a form, even with a PTY.
+Supply them in the command or supported configuration, or explicitly use `-i`
+for a human guide. A valid empty/zero/false
+override is different from omission: `--wait 0s` means no wait, whereas
+`status --limit 0` is out of range. Input errors omit argument values and config
+excerpts; do not paste private input into a diagnostic report to compensate.
+
+## Diagnose transport without replaying an operation
 
 ```bash
 loaf check --trace --json
@@ -20,6 +40,22 @@ On Windows, `masters_established` stays zero: independent SSH connections are in
 Downloads reporting `UNSAFE_PATH` may contain Windows reserved names, trailing spaces/dots, case collisions, reparse points or unsupported links. Use compatible output names or a Linux filesystem in WSL; Loaf never renames outputs or overwrites a differently cased local name. Keep state and credentials on local NTFS with private ACLs. Preserve rejected stores when correcting permissions; do not delete uncertainty evidence. WSL uses separate Linux state and credentials. Native Unix-socket Agent adapters return `DESTINATION_UNSUPPORTED`; use Webhooks or a verified adapter inside WSL, without substituting sessions or bypassing permissions.
 
 Connection failures include a stable `error.stage`, such as `cloud_connection`, `ssh_connect`, `runner_verify`, `sync`, `launch`, `observe`, or `pull`, while retaining the original error code and available SSH/provider diagnostics. A runner verification failure is not itself evidence of a damaged executable.
+
+Choose the next step from the available connection evidence:
+
+- Unknown host key: verify the fingerprint with the machine administrator, then
+  make the trust decision through native `loaf ssh --target lab`.
+- Changed host key: investigate the change first; do not delete `known_hosts`
+  entries or accept the replacement automatically.
+- Authentication or configuration problem: inspect `loaf machine show lab` and
+  the relevant SSH user, key/agent or config. Do not publish raw SSH diagnostics.
+- Timeout or disconnect: a fresh `check` can gather new evidence. An
+  `EXEC_UNCONFIRMED` result still requires checking what ran remotely before
+  repeating the foreground command.
+
+Use the actual saved alias in place of `lab`. To share diagnostics, export the
+allowlisted `check --report` artifact; ordinary `check --json` is not a redacted
+report and can include tool paths.
 
 Finite read-only probes, status/log queries, output checks, and downloads make at most one extra attempt after a recognized transient transport failure, with a short cancellable backoff. Authentication, host-key, configuration, and path failures are not retried. Default log streams are not restarted after partial output; explicitly opt in to cursor recovery with `logs -f --reconnect` or `--resume`. Source sync, runner upload, submission, stop, cleanup, and foreground commands are never automatically replayed. Downloads retain completed files and reuse the original run and destination.
 

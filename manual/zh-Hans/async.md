@@ -5,7 +5,20 @@
 任务结束后需要交付结果，使用通知；协作项目需要共享机器，使用队列。
 直接 Run 和云资源操作不需要经过队列，也能发送通知。
 
-原生 Windows 支持事件持久化、前台 Bridge、Webhook 和远端队列。基于 Unix socket 的 `codex`、`codex-desktop`、`claude-channel` 适配器在该平台返回 `DESTINATION_UNSUPPORTED`；下面的相关示例适用于已验证的 Unix／WSL 环境，WSL 不代表能够访问 Windows 桌面会话。
+终端中的 `loaf queue -i`、`loaf notify -i`、`loaf events -i` 打开各自中心，也可从 `loaf -i` 的
+「更多」进入。不加 `-i` 时，即使 Agent 分配了 PTY 也保持有限查询。
+显式子命令保持直接调用；`queue --limit 100`、`queue --trace=false`
+等显式默认命令选项仍表示查询，不会进入菜单。
+
+脚本和 Agent 使用明确查询，例如 `loaf queue list --json`、
+`loaf notify deliveries --json`、`loaf events list --json`。
+即使交互概览提供更多动作，这些调用仍保持查询语义。
+使用 `loaf help queue submit --json` 可在不连接远端时查看提交参数。
+只读列表没有 `--dry-run`；预览属于 `queue submit`、`queue clean`、`notify prune` 等操作。
+
+原生 Windows 支持事件持久化、前台 Bridge、Webhook 和远端队列。基于 Unix socket 的
+`codex`、`codex-desktop`、`claude-channel` 适配器在该平台返回 `DESTINATION_UNSUPPORTED`；
+下面的相关示例适用于已验证的 Unix／WSL 环境，WSL 不代表能够访问 Windows 桌面会话。
 
 ## 将通知送回当前 Codex 桌面会话
 
@@ -122,6 +135,10 @@ loaf notify serve
 
 ## 分别查看事实与投递证据
 
+通知中心可选择接收位置、订阅或投递，查看证据及适用动作。事件浏览器可切换本地、资源、
+项目、队列来源，远端来源先明确选机。搜索只筛选当前页／读取窗口，不扫描全部历史。
+从任务详情创建订阅时沿用保存的 Run ID，不附加当前 target；保存订阅不会启动 Bridge 或 Channel。
+
 ```bash
 loaf events list --source project --limit 100 --json
 loaf events list --source resources --json
@@ -140,6 +157,9 @@ loaf notify subscriptions
 订阅默认来源为 `project`；云事实使用 `--source resources`，入队派发事实使用
 `--source queue`。默认包含保留的匹配事件；`--replay=false` 仅订阅之后的事实。
 
+显式 false 会执行既有的有界来源快照读取，并非离线设置。Run 订阅沿用保存的项目绑定，
+不要给历史 Run 附加当前 target，也不能从一个空页推断未投递。
+
 `notify subscriptions` 分别保留最近成功同步时间、上次来源查询错误的稳定 code 和时间，
 之后同步成功也不会抹去旧错误；判断恢复时应比较两类时间。
 来源查询失败不是目的地拒绝，也不是 Agent 处理结果。
@@ -153,6 +173,10 @@ Socket 写入或普通 Webhook 接收不能证明 Agent 已处理。
 使用 NDJSON 投递记录，最后输出 end/error 记录。进度不会混入有限 JSON。
 
 ## 将固定输入加入单机队列
+
+交互队列中心显示容量、派发状态及有界请求列表；搜索仅作用于已加载请求，需要更多时应刷新
+或明确提高数量上限。本次改选机器不改变项目默认值。从中心提交会先核对离线计划，再明确
+入队一次；完整 `queue submit` 命令仍保持直接调用。
 
 ```bash
 loaf queue enable --slots 1
@@ -173,6 +197,12 @@ FIFO 按确认入队的顺序排列，不使用客户端时钟；本版只实现
 请求 ID 跟踪入队派发，Run ID 跟踪执行。确认入队不等于程序已启动。
 使用 `queue show` 找到关联 Run，再用明确 Run ID 调用 `status`、`logs`、`stop` 和 `pull`。
 派发未确认时核对原 Run，不创建第二个替代执行。
+
+队列详情公开身份和状态，不公开冻结的私有命令或环境。
+提交新工作时应明确提供输入，不能把当前项目命令当作旧请求的重建结果。
+
+共享列表可能包含其他项目的请求。查看详情、取消、清理和 Run 动作需要原项目保存的绑定；
+请进入原项目，而不是覆盖 target。仅在列表中看到 ID，不会让新项目取得该请求的控制权。
 
 ```bash
 loaf queue pause

@@ -129,7 +129,7 @@ type formModel struct {
 }
 
 func (m formModel) Init() tea.Cmd {
-    return tea.Batch(m.form.Init(), func() tea.Msg {
+    return tea.Batch(m.form.Init(), tea.RequestBackgroundColor, func() tea.Msg {
         <-m.ctx.Done()
         return formCanceled{}
     })

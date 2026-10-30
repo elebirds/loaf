@@ -87,6 +87,10 @@ func (c *Resources) CloudInfo(ctx context.Context, in CloudInstanceInput) (cloud
     if err != nil {
         return cloud.Instance{}, err
     }
+    return c.cloudInfo(ctx, b)
+}
+
+func (c *Resources) cloudInfo(ctx context.Context, b cloud.Binding) (cloud.Instance, error) {
     p, err := c.Cloud.Open(ctx, b.Ref.Account, b.Settings, b.Ref.Product)
     if err != nil {
         return cloud.Instance{}, cloud.Failure(err)

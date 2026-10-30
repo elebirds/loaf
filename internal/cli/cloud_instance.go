@@ -15,7 +15,7 @@ func (c *invocation) chooseCloudInstance(ctx context.Context, selection *client.
     if id != "" {
         return id, nil
     }
-    if c.policy.Batch {
+    if !c.uxInteractive() {
         return "", fault.Invalid("instance", "missing_argument", "cloud_instance_required")
     }
     r := c.app.Resources

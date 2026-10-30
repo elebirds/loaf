@@ -182,9 +182,9 @@ func TestResourceHelpMetadataUsesRealConfigurationFields(t *testing.T) {
 func TestMachinePromptValidatesLocallyAndKeepsInput(t *testing.T) {
     o := fixture(t)
     o.Interactive = true
-    o.In = strings.NewReader("ssh host && do-not-execute\nlab-gpu\n")
-    code, out, stderr := run(t, o, "machine", "add", "lab")
-    if code != 0 || !strings.Contains(out, "lab-gpu") || !strings.Contains(stderr, "Ctrl-C") {
+    o.In = strings.NewReader("ssh host && do-not-execute\nlab-gpu\n1\n")
+    code, out, stderr := run(t, o, "-i", "machine", "add", "lab")
+    if code != 0 || !strings.Contains(out, "lab-gpu") || !strings.Contains(stderr, i18n.English().Text("ssh_input")) {
         t.Fatal(code, out, stderr)
     }
     cfg, err := o.Config.Load()
@@ -197,7 +197,7 @@ func TestCloudConfirmationDisplaysResolvedIdentity(t *testing.T) {
     o, p := cloudFixture(t)
     o.Interactive = true
     o.In = strings.NewReader("no\n")
-    code, out, stderr := run(t, o, "cloud", "stop", "pro-existing")
+    code, out, stderr := run(t, o, "-i", "cloud", "stop", "pro-existing")
     if code != 2 || p.creates != 0 || !strings.Contains(stderr, "demo") || !strings.Contains(stderr, "pro-existing") || !strings.Contains(stderr, "pro") {
         t.Fatal(code, out, stderr)
     }

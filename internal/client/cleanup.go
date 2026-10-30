@@ -47,6 +47,12 @@ func (c *Projects) PrepareClean(ctx context.Context, in CleanInput) (CleanBatch,
     if len(in.IDs) == 0 || len(in.IDs) > 1000 {
         return CleanBatch{}, fault.New("BAD_CONFIG", "argument_count", map[string]any{"Command": "loaf clean"})
     }
+    for _, id := range in.IDs {
+        // Select uses an empty ID for latest. Cleanup never grants that scope.
+        if id == "" {
+            return CleanBatch{}, fault.New("BAD_CONFIG", "argument_count", map[string]any{"Command": "loaf clean"})
+        }
+    }
     if c.Runs == nil || c.Cleaner == nil {
         return CleanBatch{}, fault.New("SSH_FAILED", "ssh_missing", nil)
     }
@@ -72,6 +78,7 @@ func (c *Projects) PrepareClean(ctx context.Context, in CleanInput) (CleanBatch,
         }
         item, err := c.Cleaner.Preview(ctx, ref, in.Policy.Batch, in.PrepareRunner)
         if err != nil {
+            item.Eligible = false
             item.ErrorCode = cleanErrorCode(err)
             if first == nil {
                 first = err

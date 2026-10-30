@@ -65,6 +65,9 @@ func TestCommandReferenceAndExamples(t *testing.T) {
                         t.Fatalf("no minimal example: %s", node.FullPath())
                     }
                     for _, argv := range h.Examples {
+                        if _, err := uxJCommandDisplay(argv); err != nil {
+                            t.Fatalf("unsafe example for %s: %v", node.FullPath(), err)
+                        }
                         g := &grammar{}
                         p, err := newParser(g)
                         if err != nil {
@@ -74,14 +77,18 @@ func TestCommandReferenceAndExamples(t *testing.T) {
                             t.Fatalf("invalid example %v: %v", argv, err)
                         }
                     }
-                    fmt.Fprintf(&out, "| `%s` | `%s` | %s |\n", node.FullPath(), strings.Join(h.Examples[0], " "), strings.ReplaceAll(l.Text(node.Help), "|", "\\|"))
+                    display, err := uxJCommandDisplay(h.Examples[0])
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    fmt.Fprintf(&out, "| `%s` | `%s` | %s |\n", node.FullPath(), display, strings.ReplaceAll(l.Text(node.Help), "|", "\\|"))
                 }
             }
         }
         if lang == "en" {
-            out.WriteString("\n## Parameters and constraints\n\nUse `loaf help COMMAND` for parameter descriptions, built-in defaults, ranges and examples; `loaf help COMMAND --json` adds machine-readable argument and flag metadata. The same declarations produce this list and the help interface. [Argument construction](guide.md#construct-arguments-without-guessing) covers literal argv, repeated flags, CSV, false/zero/empty values and Shell boundaries. [Configuration](configuration.md) explains effective precedence. [JSON](json.md) explains result types and errors.\n\n`status` with no ID lists recent tasks; `logs`, `stop`, `outputs` and `pull` select the latest submitted or uncertain task when their ID is omitted. `wait` needs explicit IDs or tags; `clean` always needs explicit IDs. Additional common calls:\n\n")
+            out.WriteString("\n## Parameters and constraints\n\nUse `loaf help COMMAND` for parameter descriptions, built-in defaults, ranges and examples; `loaf help COMMAND --json` adds machine-readable argument and flag metadata. The same declarations produce this list and the help interface. [Argument construction](guide.md#construct-arguments-without-guessing) covers literal argv, repeated flags, CSV, false/zero/empty values and Shell boundaries. [Configuration](configuration.md) explains effective precedence. [JSON](json.md) explains result types and errors.\n\n`loaf -i` opens the project overview. `machine`, `queue`, `notify`, `events` and `status` open their browsers only with `-i` / `--interactive`; otherwise they return finite queries, even in a terminal. Explicit IDs/options retain direct semantics. Missing-input guidance also requires `-i`. Interactive mode needs a terminal, conflicts with `--json` and never grants mutation approval.\n\n`logs`, `stop`, `outputs` and `pull` select the latest submitted or uncertain task when their ID is omitted. `wait` needs explicit IDs or tags; `clean` always needs explicit IDs. Additional common calls:\n\n")
         } else {
-            out.WriteString("\n## 参数与条件\n\n使用 `loaf help COMMAND` 查看参数描述、内置默认值、范围及示例；`loaf help COMMAND --json` 增加结构化参数元数据。清单与帮助来自同一命令声明。[参数构造](guide.md#准确构造参数)说明原样 argv、重复选项、CSV、false/零/空值和 Shell 边界。[配置参考](configuration.md)解释生效优先级，[JSON](json.md)说明结果与错误。\n\n`status` 不带 ID 时列出最近任务；`logs`、`stop`、`outputs`、`pull` 不带 ID 时选择最近已提交或未确认任务。`wait` 必须明确 ID 或标签，`clean` 必须明确 ID。其他常用调用：\n\n")
+            out.WriteString("\n## 参数与条件\n\n使用 `loaf help COMMAND` 查看参数描述、内置默认值、范围及示例；`loaf help COMMAND --json` 增加结构化参数元数据。清单与帮助来自同一命令声明。[参数构造](guide.md#准确构造参数)说明原样 argv、重复选项、CSV、false/零/空值和 Shell 边界。[配置参考](configuration.md)解释生效优先级，[JSON](json.md)说明结果与错误。\n\n`loaf -i` 打开项目概览。`machine`、`queue`、`notify`、`events`、`status` 只有带 `-i / --interactive` 才打开浏览器，否则即使在终端中也保持有限查询。明确 ID／选项仍保留直接语义，缺项向导也须显式开启。交互需要终端，与 `--json` 冲突，也不代表批准变更。\n\n`logs`、`stop`、`outputs`、`pull` 不带 ID 时选择最近已提交或未确认任务。`wait` 必须明确 ID 或标签，`clean` 必须明确 ID。其他常用调用：\n\n")
         }
         out.WriteString("```bash\nloaf run\nloaf status ID\nloaf logs ID -f\nloaf wait ID1 ID2\nloaf pull ID1 ID2 --into ./comparison\nloaf check --targets a,b\nloaf cloud acquire gpu-copy --clone-from old-gpu\nloaf cloud bind gpu --request REQUEST\nloaf cloud requests REQUEST\n```\n")
         expected := out.String()
@@ -125,13 +132,21 @@ func TestPublicDocumentationLinks(t *testing.T) {
         }
         for _, match := range links.FindAllStringSubmatch(string(data), -1) {
             link := strings.SplitN(match[1], "#", 2)[0]
+            if strings.HasPrefix(link, "file://") {
+                t.Fatalf("machine-local public link in %s: %s", file, link)
+            }
             if link == "" || strings.Contains(link, "://") || strings.HasPrefix(link, "mailto:") {
                 continue
             }
             if filepath.IsAbs(link) {
                 t.Fatalf("nonportable public link in %s: %s", file, link)
             }
-            if _, err := os.Stat(filepath.Join(filepath.Dir(path), filepath.FromSlash(link))); err != nil {
+            destination := filepath.Join(filepath.Dir(path), filepath.FromSlash(link))
+            relative, err := filepath.Rel(root, destination)
+            if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || relative == "docs" || strings.HasPrefix(filepath.ToSlash(relative), "docs/") {
+                t.Fatalf("public link leaves the packaged sources in %s: %s", file, link)
+            }
+            if _, err := os.Stat(destination); err != nil {
                 t.Errorf("broken link in %s: %s: %v", file, link, err)
             }
         }

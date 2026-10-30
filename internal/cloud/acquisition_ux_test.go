@@ -184,10 +184,12 @@ func TestContinuousInventoryWaitDoesNotBlockDifferentInstancePower(t *testing.T)
     go func() { _, err := s.Acquire(ctx, in, nil); done <- err }()
     select {
     case <-waiting:
-    case <-time.After(3 * time.Second):
+    case err := <-done:
+        t.Fatal("acquisition ended before waiting", err)
+    case <-time.After(10 * time.Second):
         t.Fatal("acquisition never waited")
     }
-    powerCtx, powerCancel := context.WithTimeout(context.Background(), 3*time.Second)
+    powerCtx, powerCancel := context.WithTimeout(context.Background(), 10*time.Second)
     defer powerCancel()
     r, err := s.Power(powerCtx, Binding{Ref: Ref{Provider: "autodl", Account: in.Account, Product: "pro", ID: "existing"}, Settings: in.Settings}, false, 0)
     if err != nil || r.Status != "accepted" {

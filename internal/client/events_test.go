@@ -143,8 +143,7 @@ func (r *frozenEventRemote) ControlResponse(_ context.Context, target config.Tar
 }
 
 func TestBridgeRetainsSourceErrorAndContinuesAfterRecovery(t *testing.T) {
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
+    ctx := context.Background()
     state := local.New(t.TempDir())
     root, _, _ := config.Discover(ctx, t.TempDir())
     project, err := state.Select(ctx, root, "lab")
@@ -164,6 +163,9 @@ func TestBridgeRetainsSourceErrorAndContinuesAfterRecovery(t *testing.T) {
     if _, err = notify.Subscribe(ctx, SubscribeInput{Subject: fact.Subject, Source: "project", Destinations: []string{"agent"}, Replay: true}); err != nil {
         t.Fatal(err)
     }
+    // Bound the recovery observation, not private-state fixture construction.
+    ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+    defer cancel()
     result, err := notify.Serve(ctx, NotifyServeInput{Interval: time.Millisecond}, func(Delivery) error { cancel(); return nil })
     if !errors.Is(err, context.Canceled) || result.Accepted != 1 || sender.calls != 1 || remote.calls < 2 {
         t.Fatal(result, err, sender.calls, remote.calls)

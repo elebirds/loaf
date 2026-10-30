@@ -5,10 +5,10 @@
 ## Start with your cloud overview
 
 ```bash
-loaf cloud
+loaf cloud -i
 ```
 
-An interactive terminal opens **My instances, Find compute / rent, Requests needing attention, Accounts and profiles, Exit**. The header identifies the current account and Standard/Pro product. Switching is session-only; explicitly set a default to save it. The first page queries only that scope. Expired login still leaves local request recovery and account/login navigation available. JSON, noninteractive calls and explicit help remain help-only, with no implicit network access.
+Explicit `-i` / `--interactive` opens **My instances, Find compute / rent, Requests needing attention, Accounts and profiles, Exit** in a terminal. The header identifies the current account and Standard/Pro product. Switching is session-only; explicitly set a default to save it. The first page queries only that scope. Expired login still leaves local request recovery and account/login navigation available. Without `-i`, bare `loaf cloud` returns offline help, even in a terminal. `--json` cannot combine with `-i`.
 
 Search, filter by state and refresh existing instances, retaining partial results and their coverage. Details offer binding/retry, native SSH, redacted connection details, project selection and applicable power actions. Power changes require separate confirmation; the menu observes them for two minutes. Direct commands still default to submission-only, including explicit `--wait 0s`; accepted is not completed.
 
@@ -17,10 +17,10 @@ Pending requests prioritize uncertain creation, created-but-unconnected instance
 ## Rent a GPU in one guided flow
 
 ```bash
-loaf cloud acquire
+loaf cloud acquire -i
 ```
 
-In an interactive terminal, the Huh wizard collects four groups of choices:
+With `-i`, the Huh wizard collects four groups of choices:
 
 1. **Compute:** search the actual GPU model names, choose the card count and allowed regions. Resource floors are optional advanced conditions.
 2. **Selection or automatic acquisition:** select a currently available host, or set a whole-instance hourly price cap and wait for matching stock.
@@ -33,7 +33,7 @@ With no region preference, the wizard preselects regions marked public by the pl
 
 The header keeps the complete route visible: **Mode → GPUs → Host/conditions → Image/disk → Approve → Acquire → Connect**. `●` marks the current step, `✓` marks earlier completed choices, and `○` marks upcoming steps. Only the current step's fields expand; going back updates the position.
 
-Use arrows to navigate, `/` to search, Space to toggle multiple choices, Enter to continue, and Shift+Tab to move between fields. Each page offers back/cancel navigation where choices change. Ctrl+C cancels. A plain-terminal fallback uses numbered choices; Enter keeps the marked choice, comma-separated numbers select multiple entries, and `0` clears them. Existing flags and profiles prefill the wizard. Complete named commands retain their direct path; `--yes`, `--json` and noninteractive calls never enter it. A single saved account can be selected for this invocation without changing its global default. With no account, the wizard can return from native login to acquisition.
+Use arrows to navigate, `/` to search, Space to toggle multiple choices, Enter to continue, and Shift+Tab to move between fields. Each page offers back/cancel navigation where choices change. Ctrl+C cancels. A plain-terminal fallback uses numbered choices; Enter keeps the marked choice, comma-separated numbers select multiple entries, and `0` clears them. Existing flags and profiles prefill the wizard. Complete named commands retain their direct path; `--yes` skips the wizard. Without `-i`, missing inputs produce diagnostics instead. A single saved account can be selected for this invocation without changing its global default. With no account, the wizard can return from native login to acquisition.
 
 A complete profile opens at review. Go back to change individual groups without losing the draft. Review also offers save-without-renting and an equivalent command without payment approval.
 
@@ -98,16 +98,18 @@ This recovers the alias and frozen resource from the receipt, never rents again.
 Existing SSH targets need no cloud account. For AutoDL, log in with a main account's phone number or the full `subuser@master-id` login. One verified session can access **ordinary instances** (`standard`) and **Pro** (`pro`), subject to the account's permissions. Password input is hidden; credentials are never accepted as command-line flags.
 
 ```bash
-loaf cloud login autodl-main --username 'your-subuser@master-id' --default
+loaf cloud login --prompt autodl-main --username 'your-subuser@master-id' --default
 loaf cloud list --account autodl-main
 loaf cloud list --account autodl-main --product pro
 ```
 
+For native username/password input, explicitly use `--prompt` or `-i`; `--verify` explicitly requests verification-code input. Without these options, provide inputs such as `--username` and `--password-stdin`, or reuse saved credentials. Authentication stays in one native input session.
+
 ### Choose where to save credentials
 
 ```bash
-loaf cloud login autodl-main --credential-store keyring   # Default
-loaf cloud login autodl-main --credential-store file      # Unencrypted private files
+loaf cloud login --prompt autodl-main --credential-store keyring   # Default
+loaf cloud login --prompt autodl-main --credential-store file      # Unencrypted private files
 ```
 
 `keyring` uses macOS Keychain or Linux Secret Service (requires a working user session). `file` needs no vault service: entries are stored under `$XDG_STATE_HOME/loaf/credentials/`, defaulting to `~/.local/state/loaf/credentials/`, with directory mode `0700` and file mode `0600`. File storage protects against other OS users, not software running as you. Keyring failures never silently fall back to files. The CLI supports macOS/Linux; Windows users currently need WSL.

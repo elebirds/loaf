@@ -82,6 +82,15 @@ other = "Show help."
 other = "Interface language: auto, en, or zh-Hans."
 [flag_json]
 other = "Print JSON; exec, logs -f, cloud watch and continuous notify serve stream NDJSON."
+
+[flag_interactive]
+other = "Open menus and guide missing inputs; requires a terminal and cannot combine with --json."
+
+[ui_json_conflict]
+other = "Choose --interactive for menus or --json for structured results, not both."
+
+[ui_terminal_required]
+other = "--interactive requires a terminal. Omit it and supply complete arguments for direct calls."
 [flag_target]
 other = "Override the project's target alias."
 [flag_ssh]
@@ -619,7 +628,7 @@ other = "Preview selected paths and terminal outcomes without changing files"
 [clean_flag_yes]
 other = "Confirm removal of the explicitly selected remote run data"
 [clean_confirmation_required]
-other = "Noninteractive cleanup requires --yes; use --dry-run to preview first."
+other = "Direct cleanup requires --yes; use --dry-run to preview or --interactive to review and confirm."
 [clean_confirm]
 other = "Remove these remote logs, work copies and outputs? [y/N] "
 [clean_preview]
@@ -658,7 +667,7 @@ other = "cleanup unconfirmed"
 other = "Query the same run ID with loaf status to confirm acceptance before cleaning; do not submit a replacement run."
 
 [cloud_short]
-other = "Open the cloud overview; manage instances, rent and recover."
+other = "Manage cloud resources; use --interactive for the overview."
 
 [cloud_config]
 other = "Invalid cloud settings. Check the account, resource conditions, image, units and time bounds."
@@ -727,7 +736,7 @@ other = "The instance exists but SSH readiness is not confirmed. It may already 
 other = "Use cloud credentials to inspect the endpoint, establish host trust with native SSH, then retry cloud bind with the same --instance or --request. Do not rent a replacement."
 
 [cloud_confirm_required]
-other = "This operation needs explicit approval: pass --yes noninteractively, or type yes at the prompt."
+other = "This operation needs explicit approval: pass --yes for a direct call, or use --interactive to review and confirm."
 
 [cloud_power_confirm]
 other = "Apply {{.Value}} to the entire instance {{.ID}}? This may start billing or stop every experiment on it. Type yes to continue."
@@ -1962,7 +1971,7 @@ other = "The notification interval must be a positive duration."
 other = "Queue concurrency must be a positive integer."
 
 [queue_clean_confirmation_required]
-other = "Add --yes to delete canceled inputs noninteractively, or use --dry-run."
+other = "Deleting canceled inputs requires --yes or --interactive confirmation; use --dry-run to preview."
 
 [queue_clean_scope]
 other = "Delete prepared inputs only for canceled requests: {{.Value}}. Shared datasets, active Runs and local downloads are excluded."
@@ -3373,3 +3382,1623 @@ other = "Read-only: no instance will be rented."
 
 [cloud_failure_cloud_api]
 other = "The platform could not provide instance or connection information."
+
+[ux_core_form_help]
+other = "Enter continue · Shift+Tab back · Ctrl+C cancel"
+
+[ux_core_choice_invalid]
+other = "Choose one of the listed options."
+
+[ux_core_cloud_instance_info]
+other = "Inspect cloud instance"
+
+[ux_core_select_help]
+other = "↑↓ select · / search · Enter continue · Ctrl+C cancel"
+
+[ux_core_multi_help]
+other = "↑↓ move · Space select · / search · Enter continue · Ctrl+C cancel"
+
+[ux_core_multi_plain]
+other = "Enter keeps the selection; use comma-separated numbers, or 0 to clear."
+
+[ux_core_details]
+other = "Details"
+
+[ux_core_result]
+other = "Result"
+
+[ux_core_page_count]
+other = "Page {{.Count}} of {{.Total}}"
+
+[ux_core_next]
+other = "Next page"
+
+[ux_core_previous]
+other = "Previous page"
+
+[ux_core_back]
+other = "Back"
+
+[ux_core_exit]
+other = "Exit"
+
+[ux_core_run]
+other = "Run this project"
+
+[ux_core_tasks]
+other = "Tasks and logs"
+
+[ux_core_results]
+other = "Results and cleanup"
+
+[ux_core_machines]
+other = "Machines and connections"
+
+[ux_core_cloud]
+other = "Cloud resources"
+
+[ux_core_more]
+other = "More"
+
+[ux_core_queue]
+other = "Queue"
+
+[ux_core_notify]
+other = "Notifications"
+
+[ux_core_project]
+other = "Project"
+
+[ux_core_machine]
+other = "Machine"
+
+[ux_core_no_machine]
+other = "Not selected"
+
+[ux_core_missing_machine]
+other = "{{.Target}} (not registered)"
+
+[ux_core_run_required]
+other = "Choose a specific run to continue."
+
+[ux_core_frozen_route]
+other = "This action uses its saved identity; do not override the target or selected runs."
+
+[ux_core_route_identity]
+other = "This action does not accept an existing run identity."
+
+[ux_core_invalid_route]
+other = "The requested navigation action is not supported."
+
+[ux_core_unavailable]
+other = "This interactive workflow is not available. Use its existing direct command."
+
+[ux_a_hub]
+other = "Machines"
+[ux_a_pick]
+other = "Choose a machine for this action"
+[ux_a_manage]
+other = "Manage machines / add one"
+[ux_a_cancel]
+other = "Cancel"
+[ux_a_filter]
+other = "Search: {{.Value}}"
+
+[ux_a_no_matches]
+other = "No matches. Change or clear the search."
+[ux_a_empty]
+other = "No saved machines. Add an SSH connection to begin."
+[ux_a_search]
+other = "Search all machines / clear search"
+[ux_a_search_prompt]
+other = "Search machines"
+[ux_a_search_help]
+other = "Alias, connection target or cloud instance; leave blank to show all."
+[ux_a_refresh]
+other = "Refresh local settings"
+[ux_a_add]
+other = "Add a machine"
+[ux_a_project_none]
+other = "Project machine: not selected"
+[ux_a_project_current]
+other = "Project machine: {{.Target}} (*)"
+
+[ux_a_project_missing]
+other = "Project machine: {{.Target}} (alias removed)"
+
+[ux_a_static]
+other = "SSH"
+[ux_a_cloud]
+other = "Cloud"
+[ux_a_name]
+other = "Alias"
+[ux_a_kind]
+other = "Type"
+[ux_a_scope]
+other = "Selection"
+[ux_a_selected]
+other = "Selected for this project"
+[ux_a_destination]
+other = "SSH target"
+[ux_a_account]
+other = "Cloud account"
+[ux_a_product]
+other = "Product"
+[ux_a_instance]
+other = "Instance ID"
+[ux_a_details]
+other = "Machine details"
+[ux_a_saved]
+other = "Saved {{.Target}}. Choose it for an action or for this project."
+
+[ux_a_use]
+other = "Set as this project's machine"
+[ux_a_connections]
+other = "Check / connect"
+[ux_a_replace]
+other = "Replace this alias"
+[ux_a_remove]
+other = "Remove this alias"
+[ux_a_removed]
+other = "Alias removed"
+[ux_a_removed_selected]
+other = "{{.Target}} is still this project's choice. Select another machine to continue."
+
+[ux_a_choose_project]
+other = "Choose a project machine"
+[ux_a_check]
+other = "Check this machine"
+[ux_a_ssh]
+other = "Open SSH terminal"
+[ux_a_exec]
+other = "Run a foreground command"
+[ux_a_forward]
+other = "Forward a port"
+[ux_a_remove_scope]
+other = "Removes only your saved alias. Project choices, historical tasks, downloads and cloud instances are kept."
+[ux_a_remote]
+other = "Change remote base directory"
+[ux_a_remote_help]
+other = "Each project gets its own directory beneath this path."
+[ux_a_remote_invalid]
+other = "Use an absolute or ~/ path, not the root, home itself or a path containing .. ."
+[ux_a_name_help]
+other = "1–64 letters (A–Z, a–z), digits, _ or -; start with a letter or digit."
+[ux_a_name_invalid]
+other = "Use 1–64 ASCII letters, digits, _ or -; start with a letter or digit."
+[ux_a_name_required]
+other = "Provide a machine alias. Use loaf machine list to see saved machines."
+[ux_a_connection]
+other = "SSH connection"
+[ux_a_connection_help]
+other = "Paste an SSH connection or a Host alias, without a remote command."
+[ux_a_review]
+other = "Save this machine?"
+[ux_a_replace_review]
+other = "Replace the existing alias?"
+[ux_a_save]
+other = "Save machine"
+[ux_a_edit]
+other = "Edit alias / connection"
+[ux_a_old]
+other = "Existing alias"
+[ux_a_new]
+other = "New connection"
+[ux_a_add_scope]
+other = "Saves a personal alias without connecting or selecting a project machine."
+[ux_a_replace_scope]
+other = "Changes this personal alias for future actions in every project that selects it. Historical tasks keep their original bindings."
+
+[ux_b_check]
+other = "Check connections"
+
+[ux_b_machines]
+other = "Machines to check (1–32)"
+
+[ux_b_overview]
+other = "Connection, tools and resources"
+
+[ux_b_technical]
+other = "Paths and versions"
+
+[ux_b_found]
+other = "available"
+
+[ux_b_coverage]
+other = "Checked {{.Count}}/{{.Total}}; failed {{.Value}}; not checked {{.Matched}}."
+
+[ux_b_connection_kind]
+other = "Choose SSH, a foreground command, or a port tunnel."
+
+[ux_b_exec]
+other = "Run a foreground command"
+
+[ux_b_argv]
+other = "Literal arguments (argv)"
+
+[ux_b_shell]
+other = "Shell script (/bin/sh -c)"
+
+[ux_b_argv_help]
+other = "Quotes group arguments. Quote literal $, *, or ;. Example: printf '%s' 'a b' '$HOME' ''. No expansion is performed."
+
+[ux_b_shell_help]
+other = "The remote /bin/sh interprets this script, including variables, pipes and redirects."
+
+[ux_b_command_invalid]
+other = "Enter a literal argument list or choose explicit Shell mode. The executable and script cannot be empty."
+
+[ux_b_exec_review]
+other = "Run this command once?"
+
+[ux_b_execute]
+other = "Run once"
+
+[ux_b_edit]
+other = "Edit"
+
+[ux_b_forward]
+other = "Port tunnel"
+
+[ux_b_remote_port]
+other = "Remote port"
+
+[ux_b_local_port]
+other = "Local port (optional)"
+
+[ux_b_local_port_help]
+other = "Leave empty to use the remote port number."
+
+[ux_b_forward_review]
+other = "Open this tunnel?"
+
+[ux_b_forward_scope]
+other = "Loopback only. Ctrl+C closes this tunnel; verify the service separately."
+
+[ux_b_open]
+other = "Open tunnel"
+
+[ux_b_host_key_unknown]
+other = "Host key is not trusted"
+
+[ux_b_host_key_changed]
+other = "Host key has changed"
+
+[ux_b_recover_host_key_unknown]
+other = "Verify the fingerprint with the machine owner, then use loaf ssh --target <alias> to make the native trust decision."
+
+[ux_b_recover_host_key_changed]
+other = "Stop and verify the changed fingerprint with the machine owner. Keep known_hosts intact until the change is explained."
+
+[ux_b_recover_host_trust]
+other = "Verify the host fingerprint and existing known_hosts entry with the machine owner before reconnecting."
+
+[ux_b_recover_authentication]
+other = "Check the SSH user, key/agent and account access. Use loaf ssh --target <alias> for native authentication."
+
+[ux_b_recover_configuration]
+other = "Inspect loaf machine show <alias> and the referenced SSH configuration. Correct that configuration before connecting again."
+
+[ux_b_recover_name_resolution]
+other = "Check the machine alias, hostname and DNS or jump-host configuration."
+
+[ux_b_recover_connection_refused]
+other = "Check the machine power state, SSH port and access rules, then run check again."
+
+[ux_b_recover_timeout]
+other = "Check network reachability and jump hosts. Run check again with a suitable --timeout observation budget."
+
+[ux_b_recover_disconnected]
+other = "Inspect the connection and machine state. Use check to observe again before deciding whether to repeat any operation."
+
+[ux_b_recover_remote_prerequisite]
+other = "Resolve the listed platform, directory or tool issues on the intended machine, then run check again."
+
+[ux_b_recover_runner]
+other = "Verify the local build and version. Use check --runner only when you intend to upload and verify the bundled helper."
+
+[ux_b_recover_canceled]
+other = "The observation ended. Review any retained results before starting another operation."
+
+[ux_b_recover_other]
+other = "Inspect the operation result and machine settings before taking another action."
+
+[ux_c_command_title]
+other = "Command for this operation"
+
+[ux_c_command_keep]
+other = "Keep current argv"
+
+[ux_c_command_project]
+other = "Use the project command"
+
+[ux_c_command_argv]
+other = "Literal argv"
+
+[ux_c_command_shell]
+other = "Explicit Shell script"
+
+[ux_c_argv_help]
+other = "Separate arguments with spaces; quotes and backslashes preserve literals. Quote '$', ';' and glob characters. Expansion, pipes and redirection require Shell mode."
+
+[ux_c_argv_invalid]
+other = "Enter a nonempty literal command; quote special characters or choose explicit Shell."
+
+[ux_c_shell_help]
+other = "Enter the script passed to /bin/sh -c. Loaf does not execute it while editing."
+
+[ux_c_shell_review]
+other = "Shell script"
+
+[ux_c_run_review]
+other = "Review this run"
+
+[ux_c_submit]
+other = "Submit once"
+
+[ux_c_details]
+other = "Plan and source details"
+
+[ux_c_edit]
+other = "Change command or machine"
+
+[ux_c_setup]
+other = "setup: {{.Value}}"
+
+[ux_c_sources]
+other = "Files: {{.Count}} · {{.Bytes}} B · {{.Mode}}"
+
+[ux_c_wait_notify]
+other = "Wait: {{.Wait}} · Notify: {{.Notify}}"
+
+[ux_c_notifications_none]
+other = "none"
+
+[ux_c_execution_details]
+other = "Execution and value sources"
+
+[ux_c_source_details]
+other = "Files and exclusions"
+
+[ux_c_notify_detail]
+other = "Notification destinations: {{.Value}}"
+
+[ux_c_setup_separate]
+other = "Setup runs separately; its cd and exports do not carry into the command."
+
+[ux_c_open_task]
+other = "Open this task"
+
+[ux_c_open_logs]
+other = "View this task's logs"
+
+[ux_c_next]
+other = "Continue with this task"
+
+[ux_d_subscribe]
+other = "Subscribe to this task"
+
+[ux_c_excluded]
+other = "{{.Count}} exclusions · Respect .gitignore: {{.Value}}"
+
+[ux_c_sync_review]
+other = "Review source sync"
+
+[ux_c_sync_submit]
+other = "Sync now"
+
+[ux_c_machine_change]
+other = "Choose a machine for this sync"
+
+
+[ux_c_command_blank_keeps]
+other = "Leave empty to keep the current command."
+
+[ux_c_source_rules]
+other = "Additional exclusion rules: {{.Value}}"
+
+[ux_d_tasks]
+other = "Tasks"
+
+[ux_d_task]
+other = "Task"
+
+[ux_d_pick]
+other = "Choose saved tasks"
+
+[ux_d_use_selection]
+other = "Use {{.Count}} selected"
+
+[ux_d_clear_selection]
+other = "Clear selection"
+
+[ux_d_actions]
+other = "Search and actions…"
+
+[ux_d_search]
+other = "Search loaded rows"
+
+[ux_d_search_help]
+other = "Name, tag, machine or ID within loaded rows. Current: {{.Value}}. Empty clears."
+
+[ux_d_filters]
+other = "Filters"
+
+[ux_d_reload]
+other = "Reload saved facts"
+
+[ux_d_refresh]
+other = "Refresh live"
+
+[ux_d_wait_selection]
+other = "Choose tasks to wait for…"
+
+[ux_d_open_id]
+other = "Open a saved ID…"
+
+[ux_d_id_help]
+other = "Exact ID in this project, including preparation records. Empty returns."
+
+[ux_d_coverage]
+other = "Coverage and filters"
+
+[ux_d_saved]
+other = "Local · ~ dated observation"
+
+[ux_d_observed]
+other = "Queried · Q! query / S! save error"
+
+[ux_d_list_count]
+other = "{{.Count}} shown / {{.Total}} eligible · limit {{.Limit}}"
+
+[ux_d_empty]
+other = "No matches. Search and filters never select a different project."
+
+[ux_d_partial]
+other = "Query failures {{.Query}} · save failures {{.State}} · unexamined {{.Unexamined}}"
+
+[ux_d_search_selection]
+other = "Search: {{.Value}} · selected {{.Count}}"
+
+[ux_d_coverage_values]
+other = "Saved {{.Total}} · eligible {{.Eligible}}\nExamined {{.Examined}} · matched {{.Matched}}\nUnresolved {{.Unresolved}} · unexamined {{.Unexamined}}\nState errors {{.State}} · limit {{.Limit}}\nTimes are UTC. ~ is dated; Q! is a query failure, Q~ a saved query failure, S! a local save failure."
+
+[ux_d_filter_name]
+other = "Exact name"
+
+[ux_d_filter_tags]
+other = "Tags (match all)"
+
+[ux_d_filter_target]
+other = "Original machine"
+
+[ux_d_filter_since]
+other = "Since (RFC3339, inclusive)"
+
+[ux_d_filter_until]
+other = "Until (RFC3339, inclusive)"
+
+[ux_d_filter_limit]
+other = "Observation limit (1–1000)"
+
+[ux_d_filter_status]
+other = "Observed status"
+
+[ux_d_filter_values]
+other = "Review filters"
+
+[ux_d_filter_clear]
+other = "Reset filters"
+
+[ux_d_filter_apply]
+other = "Apply filters"
+
+[ux_d_filter_help]
+other = "Local filters precede the limit. Status filtering is available after live refresh."
+
+[ux_d_filter_none]
+other = "No explicit filters; using the configured limit."
+
+[ux_d_cancel]
+other = "Cancel"
+
+[ux_d_edit_help]
+other = "Current: {{.Value}}. Empty clears this override."
+
+[ux_d_tag_add]
+other = "Add an exact tag"
+
+[ux_d_tag_remove]
+other = "Remove: {{.Value}}"
+
+[ux_d_tag_help]
+other = "One literal tag; spaces and commas are kept."
+
+[ux_d_details]
+other = "Saved identity and observations"
+
+[ux_d_logs]
+other = "Logs"
+
+[ux_d_outputs]
+other = "Outputs"
+
+[ux_d_wait]
+other = "Wait for completion…"
+
+[ux_d_stop]
+other = "Stop…"
+
+[ux_d_clean]
+other = "Review cleanup…"
+
+[ux_d_id]
+other = "Run ID"
+
+[ux_d_instance]
+other = "Instance"
+
+[ux_d_grace]
+other = "Stop grace"
+
+[ux_d_stop_confirm]
+other = "Stop this task? [y/N]"
+
+[ux_d_stop_terminal]
+other = "Terminal result confirmed"
+
+[ux_d_stop_failed]
+other = "Stop request failed"
+
+[ux_d_stop_unknown]
+other = "Stop completion unconfirmed"
+
+[ux_d_stop_accepted]
+other = "Accepted stop grace: {{.Value}}"
+
+[ux_d_timeout]
+other = "Observation budget"
+
+[ux_d_wait_help]
+other = "{{.Count}} fixed task IDs. Ending observation does not stop their execution."
+
+[ux_d_wait_result]
+other = "Wait result"
+
+[ux_d_wait_expired]
+other = "Observation budget ended; tasks may still be running"
+
+[ux_d_wait_counts]
+other = "Selected {{.Selected}} · completed {{.Completed}} · pending {{.Pending}}\nExamined {{.Examined}} · unexamined {{.Unexamined}} · interrupted {{.Interrupted}}\nQuery failures {{.Query}} · local save failures {{.State}}"
+
+[ux_d_column_name]
+other = "Name / tags"
+
+[ux_d_column_target]
+other = "Machine"
+
+[ux_d_column_state]
+other = "State / phase"
+
+[ux_d_column_time]
+other = "Attempt UTC"
+
+[ux_d_submission]
+other = "Submission"
+
+[ux_d_submission_submitted]
+other = "Accepted"
+
+[ux_d_submission_uncertain]
+other = "Unconfirmed"
+
+[ux_d_submission_preparing]
+other = "Preparation saved"
+
+[ux_d_execution]
+other = "Execution"
+
+[ux_d_failures]
+other = "Query: {{.Query}} · local save: {{.State}}"
+
+[ux_d_phase]
+other = "Phase"
+
+[ux_d_observed_at]
+other = "Verified at"
+
+[ux_d_exit]
+other = "Exit code"
+
+[ux_d_signal]
+other = "Signal"
+
+[ux_d_completed]
+other = "Completed at"
+
+[ux_d_attempted]
+other = "Submission attempted at"
+
+[ux_d_last_saved]
+other = "Last saved observation (dated)"
+
+[ux_d_last_failure]
+other = "Last saved query failure"
+
+[ux_d_query_error]
+other = "Latest query error"
+
+[ux_d_state_error]
+other = "Latest local save error"
+
+[ux_d_destination]
+other = "Saved destination"
+
+[ux_d_version]
+other = "Required version"
+
+[ux_d_client_version]
+other = "Client version"
+
+[ux_d_remote]
+other = "Saved remote directory"
+
+[ux_e_title]
+other = "Logs"
+
+[ux_e_context]
+other = "{{.ID}} · saved machine: {{.Target}}"
+
+[ux_e_recent]
+other = "Recent logs"
+
+[ux_e_follow]
+other = "Follow logs"
+
+[ux_e_advanced]
+other = "Cursor and recovery options"
+
+[ux_e_tail]
+other = "Tail lines"
+
+[ux_e_tail_help]
+other = "Leave blank for project/user settings (default 100). Use 0–10000."
+
+[ux_e_start]
+other = "Start following from"
+
+[ux_e_cursor]
+other = "Saved cursor"
+
+[ux_e_file]
+other = "Cursor file"
+
+[ux_e_file_help]
+other = "Keep this file outside synced sources. Terminal writes save the cursor; pipes require explicit --ack-cursor."
+
+[ux_e_recovery]
+other = "Connection recovery"
+
+[ux_e_single]
+other = "Single connection"
+
+[ux_e_once]
+other = "Allow one transient reconnect"
+
+[ux_e_budget]
+other = "Disconnected-wait budget"
+
+[ux_e_budget_help]
+other = "For example 2m; up to 24h. 0s allows one transient reconnect."
+
+[ux_e_read_tail]
+other = "initial tail, then new output"
+
+[ux_e_read_cursor]
+other = "saved cursor, then new output"
+
+[ux_e_read_file]
+other = "cursor file, or initial tail if the file is new"
+
+[ux_e_following]
+other = "Following {{.ID}} · {{.Target}}\n{{.Mode}}. Ctrl+C ends observation, not the task."
+
+[ux_e_tail_done]
+other = "Recent logs read."
+
+[ux_e_eof]
+other = "Log connection ended without an end event. Check the task status."
+
+[ux_e_follow_done]
+other = "Log observation finished."
+
+[ux_e_outcome]
+other = "{{.ID}} · {{.Outcome}}"
+
+[ux_e_exhausted]
+other = "Automatic recovery ended. A new attempt requires your choice."
+
+[ux_e_cursor_kept]
+other = "Last consumed cursor: byte {{.Offset}}. Observation disconnected; the task was not stopped."
+
+[ux_e_resume]
+other = "Continue from the consumed cursor (one transient reconnect)"
+
+[ux_e_cursor_only]
+other = "This cursor-only read will not update the cursor file."
+
+[ux_e_fresh_tail]
+other = "Read a fresh tail (reset continuity)"
+
+[ux_e_keep]
+other = "Keep the result and return"
+
+[ux_e_recovery_choice]
+other = "Choose [1]:"
+
+[ux_f_results]
+other = "Results"
+
+[ux_f_outputs]
+other = "Outputs · {{.ID}}"
+
+[ux_f_entries]
+other = "Files, directories and coverage"
+
+[ux_f_choose_paths]
+other = "Choose files or directories"
+
+[ux_f_all_outputs]
+other = "Use all frozen outputs"
+
+[ux_f_review]
+other = "Review download"
+
+[ux_f_refresh]
+other = "Refresh listing"
+
+[ux_f_bounds]
+other = "Browse depth and entry budget"
+
+[ux_f_prepare]
+other = "Prepare helper and refresh"
+
+[ux_f_prepare_title]
+other = "Prepare the helper for {{.ID}}?"
+
+[ux_f_prepare_body]
+other = "Upload or repair the current Loaf helper on the saved machine."
+
+[ux_f_coverage]
+other = "{{.Count}} entries · roots {{.Examined}}/{{.Total}} · depth {{.Depth}} · budget {{.Limit}}"
+
+[ux_f_limited]
+other = "Partial listing · {{.Count}} depth-limited directories"
+
+[ux_f_missing]
+other = "{{.Count}} missing output roots"
+
+[ux_f_empty]
+other = "No entries observed within this scope."
+
+[ux_f_selection_all]
+other = "Selection: all frozen outputs"
+
+[ux_f_selection_count]
+other = "Literal paths selected: {{.Count}}"
+
+[ux_f_path_help]
+other = "Directories include descendants. Only listed files and directories can be selected."
+
+[ux_f_no_choices]
+other = "No selectable files or directories in this listing. Check missing items or increase the browse budget."
+
+[ux_f_use_selection]
+other = "Keep selection"
+
+[ux_f_selection_empty]
+other = "Choose at least one path, or use all frozen outputs."
+
+[ux_f_depth]
+other = "Depth (0–20)"
+
+[ux_f_limit]
+other = "Entry budget (1–1000)"
+
+[ux_f_bound_range]
+other = "Enter a whole number from {{.Min}} to {{.Max}}."
+
+[ux_f_download]
+other = "Download selected outputs"
+
+[ux_f_destination]
+other = "Local destination"
+
+[ux_f_exact]
+other = "Exact directory (relative to the current directory)"
+
+[ux_f_parent]
+other = "Parent directory (one subdirectory per run ID)"
+
+[ux_f_preferences]
+other = "Use configured destination"
+
+[ux_f_checksum]
+other = "Change detection"
+
+[ux_f_inherit]
+other = "Use effective preference"
+
+[ux_f_quick]
+other = "Size and modification time (checksum=false)"
+
+[ux_f_hash]
+other = "Read file contents (checksum=true)"
+
+[ux_f_details]
+other = "Selections and exact destinations"
+
+[ux_f_browse_run]
+other = "Browse one selected run"
+
+[ux_f_common_roots]
+other = "Choose shared frozen output roots"
+
+[ux_f_common_help]
+other = "The same literal selection applies to every run. Browse a run to select its nested files separately."
+
+[ux_f_no_common]
+other = "No shared frozen output roots. Download each run’s frozen outputs or browse one run."
+
+[ux_f_review_summary]
+other = "Runs: {{.Count}} · {{.Mode}}\nDestination source: {{.Source}}"
+
+[ux_f_batch_mode]
+other = "isolated run-ID directories"
+
+[ux_f_single_mode]
+other = "one exact directory"
+
+[ux_f_source_default]
+other = "default result base"
+
+[ux_f_source_user]
+other = "user base_dir"
+
+[ux_f_source_project]
+other = "project base_dir"
+
+[ux_f_source_to]
+other = "explicit --to"
+
+[ux_f_source_into]
+other = "explicit --into"
+
+[ux_f_source_flag]
+other = "explicit choice"
+
+[ux_f_live_copy]
+other = "For a running task, this is a live copy, not a consistent checkpoint."
+
+[ux_f_policy]
+other = "Detection: {{.Mode}} · {{.Source}}"
+
+[ux_f_working]
+other = "Downloading {{.ID}}"
+
+[ux_f_finished]
+other = "Download result"
+
+[ux_f_result_summary]
+other = "{{.Completed}} completed · {{.Failed}} failed · {{.Unexamined}} not examined"
+
+[ux_f_retry]
+other = "Retry failed or unexamined runs here"
+
+[ux_f_result_details]
+other = "Per-run results and directories"
+
+[ux_f_clean]
+other = "Review remote cleanup"
+
+[ux_f_back]
+other = "Back"
+
+[ux_g_title]
+other = "Remote task cleanup"
+
+[ux_g_delete]
+other = "Delete remote payloads"
+
+[ux_g_download_first]
+other = "Download results first"
+
+[ux_g_change_selection]
+other = "Change selection"
+
+[ux_g_review]
+other = "Review selected paths"
+
+[ux_g_refresh]
+other = "Refresh these same tasks"
+
+[ux_g_cancel]
+other = "Cancel cleanup"
+
+[ux_g_keep]
+other = "Keep remote data"
+
+[ux_g_selection]
+other = "Selected tasks: {{.Count}}."
+
+[ux_g_blocked_batch]
+other = "Some tasks could not be verified. Change the selection or refresh before deleting."
+
+[ux_g_confirm]
+other = "Delete selected remote payloads ({{.Count}})? [y/N]"
+
+[ux_g_scope]
+other = "Removes the reviewed remote working copies, logs and outputs. This cannot be undone."
+
+[ux_g_retained]
+other = "Keeps local downloads, deletion receipts, task IDs and terminal summaries. Cloud instances are unchanged."
+
+[ux_g_recovery]
+other = "Incomplete cleanup"
+
+[ux_g_review_incomplete]
+other = "Review only the incomplete task IDs"
+
+[ux_g_preview_title]
+other = "Review remote payloads ({{.Count}})"
+
+[ux_g_result_title]
+other = "Cleanup results ({{.Count}})"
+
+[ux_g_machine]
+other = "Original machine: {{.Target}}"
+
+[ux_g_path]
+other = "Payload: {{.Path}}"
+
+[ux_g_not_attempted]
+other = "not attempted"
+
+[ux_g_not_attempted_reason]
+other = "Canceled before this task's cleanup call."
+
+[ux_g_busy]
+other = "Cleanup was refused because a process or transfer still holds a required lock."
+
+[ux_g_not_found]
+other = "This ID was not found in the current project or at its saved remote location."
+
+[ux_g_version]
+other = "Use the task's matching CLI. If its helper is missing, explicitly prepare it before retrying the preview."
+
+[ux_g_failed]
+other = "not completed"
+
+[ux_g_eligible]
+other = "terminal result verified"
+
+[ux_g_terminal]
+other = "Fresh terminal result: {{.Value}}. Deletion rechecks ownership and locks."
+
+[ux_h_title]
+other = "Queue"
+
+[ux_h_requests]
+other = "Browse requests"
+
+[ux_h_refresh]
+other = "Refresh"
+
+[ux_h_submit]
+other = "Queue this project"
+
+[ux_h_manage]
+other = "Dispatch and capacity"
+
+[ux_h_machine]
+other = "Choose a machine for this visit"
+
+[ux_h_back]
+other = "Back"
+
+[ux_h_next]
+other = "Next page"
+
+[ux_h_previous]
+other = "Previous page"
+
+[ux_h_search]
+other = "Search loaded requests"
+
+[ux_h_search_prompt]
+other = "Request / Run ID, name, tag or state (empty clears): "
+
+[ux_h_limit]
+other = "Query limit (1–1000)"
+
+[ux_h_number]
+other = "Enter an integer from 1 to {{.Count}}."
+
+[ux_h_page]
+other = "{{.Start}}–{{.End}} / {{.Total}} matches · loaded {{.Count}} / limit {{.Limit}}"
+
+[ux_h_filter]
+other = "Filter: {{.Value}}"
+
+[ux_h_more]
+other = "More requests remain outside this query."
+
+[ux_h_request]
+other = "Queue request"
+
+[ux_h_details]
+other = "Details"
+
+[ux_h_cancel]
+other = "Cancel before dispatch"
+
+[ux_h_clean]
+other = "Preview and clean canceled input"
+
+[ux_h_task]
+other = "Inspect the linked Run"
+
+[ux_h_logs]
+other = "View linked Run logs"
+
+[ux_h_outputs]
+other = "View linked Run outputs"
+
+[ux_h_foreign]
+other = "Shared-machine request from another project; view it from that project to act."
+
+[ux_h_cancel_confirm]
+other = "Cancel request {{.Value}}? Dispatch already started cannot be canceled here. [y/N] "
+
+[ux_h_clean_confirm]
+other = "Delete only the canceled input for {{.Value}}? The request and no-start fact stay saved. [y/N] "
+
+[ux_h_pause]
+other = "Pause new dispatch"
+
+[ux_h_resume]
+other = "Resume dispatch"
+
+[ux_h_capacity]
+other = "Change slots / start Coordinator"
+
+[ux_h_enable]
+other = "Enable queue explicitly"
+
+[ux_h_slots]
+other = "Slots (1–64)"
+
+[ux_h_scope]
+other = "Machine {{.Target}}: aliases and projects share this remote user’s queue."
+
+[ux_h_enable_scope]
+other = "Set {{.Count}} slots and start the remote Coordinator. Existing Runs keep their Supervisor."
+
+[ux_h_enable_confirm]
+other = "{{.Value}}\nEnable? [y/N] "
+
+[ux_h_capacity_confirm]
+other = "{{.Value}}\nApply? [y/N] "
+
+[ux_h_pause_confirm]
+other = "{{.Value}}\nPause new dispatch only; running work continues. Proceed? [y/N] "
+
+[ux_h_resume_confirm]
+other = "{{.Value}}\nResume FIFO dispatch of saved requests? [y/N] "
+
+[ux_h_target]
+other = "Machine: {{.Target}}"
+
+[ux_h_disabled]
+other = "Not enabled. Explicit enablement starts a remote FIFO Coordinator."
+
+[ux_h_capacity_status]
+other = "{{.Value}} · reserved {{.Count}} / {{.Total}} slots · queued {{.Queued}}"
+
+[ux_h_inactive]
+other = "Coordinator is not running."
+
+[ux_h_coverage]
+other = "Last query: {{.Count}} requests / limit {{.Limit}}"
+
+[ux_h_query_error]
+other = "Query incomplete: {{.Code}}; displayed facts may be older."
+
+[ux_h_unknown]
+other = "Unknown state ({{.Value}})"
+
+[ux_h_reason_code]
+other = "Reported reason: {{.Code}}"
+
+[ux_h_preparing]
+other = "Input preparation has not confirmed queued acceptance."
+
+[ux_h_wait_unknown]
+other = "Waiting reason is unavailable; refresh the original request."
+
+[ux_h_wait_paused]
+other = "New dispatch is paused."
+
+[ux_h_wait_capacity]
+other = "All queue slots are reserved."
+
+[ux_h_wait_fifo]
+other = "Waiting for FIFO dispatch; start time is unknown."
+
+[ux_h_dispatch_uncertain]
+other = "Dispatch is unresolved. Observe the fixed Run; do not submit a replacement."
+
+[ux_h_dispatched]
+other = "Dispatch was confirmed. Observe the linked Run for its execution outcome."
+
+[ux_h_canceled]
+other = "Durable cancellation prevents this request from starting."
+
+[ux_h_request_id]
+other = "Request ID"
+
+[ux_h_run_id]
+other = "Fixed Run ID"
+
+[ux_h_state]
+other = "Request state"
+
+[ux_h_project_id]
+other = "Project ID"
+
+[ux_h_target_id]
+other = "Shared queue ID"
+
+[ux_h_name]
+other = "Name"
+
+[ux_h_tags]
+other = "Tags"
+
+[ux_h_sequence]
+other = "Admission sequence"
+
+[ux_h_created]
+other = "Created"
+
+[ux_h_updated]
+other = "Observed record"
+
+[ux_h_attempted]
+other = "Dispatch attempt"
+
+[ux_h_fixed_run]
+other = "The Run ID is allocated before dispatch; an ID alone does not prove execution started."
+
+[ux_h_command_unavailable]
+other = "The public queue record does not expose the frozen command. Current project settings cannot reconstruct it."
+
+[ux_h_review]
+other = "Review local submission plan"
+
+[ux_h_command]
+other = "Edit command"
+
+[ux_h_labels]
+other = "Edit name and tags"
+
+[ux_h_notifications]
+other = "Notification destinations"
+
+[ux_h_project_command]
+other = "Use the project command"
+
+[ux_h_name_prompt]
+other = "Name (empty clears): "
+
+[ux_h_tags_prompt]
+other = "Tags as a JSON string array, e.g. [\"seed 1\", \"baseline\"] (empty clears): "
+
+[ux_h_tags_invalid]
+other = "Enter tags as a JSON string array, or leave empty to clear."
+
+[ux_h_submit_scope]
+other = "Queue admission prepares an independent input copy. The plan is local, not a frozen snapshot; submitting does not enable the queue."
+
+[ux_h_submit_confirm]
+other = "Submit this project once to the queue on {{.Value}}? [y/N] "
+
+[ux_h_destination_missing]
+other = "{{.Value}} (not registered)"
+
+[ux_i_notify]
+other = "Notifications"
+
+[ux_i_destinations]
+other = "Receiving locations"
+
+[ux_i_subscriptions]
+other = "Subscriptions"
+
+[ux_i_deliveries]
+other = "Delivery history"
+
+[ux_i_attention]
+other = "Needs verification"
+
+[ux_i_events]
+other = "Events"
+
+[ux_i_prune]
+other = "Prune settled history"
+
+[ux_i_back]
+other = "Back"
+
+[ux_i_next]
+other = "Next page"
+
+[ux_i_previous]
+other = "Previous page"
+
+[ux_i_search]
+other = "Search"
+
+[ux_i_refresh]
+other = "Refresh"
+
+[ux_i_bind]
+other = "Bind current session"
+
+[ux_i_add]
+other = "Add a receiving location"
+
+[ux_i_remove]
+other = "Remove"
+
+[ux_i_details]
+other = "Details"
+
+[ux_i_probe]
+other = "Check capabilities"
+
+[ux_i_destination]
+other = "Receiving location"
+
+[ux_i_name]
+other = "Name"
+
+[ux_i_adapter]
+other = "Adapter"
+
+[ux_i_session]
+other = "Session"
+
+[ux_i_created]
+other = "Created"
+
+[ux_i_binding_scope]
+other = "Saved subscriptions keep their original recipient when this name changes."
+
+[ux_i_experimental]
+other = "Experimental desktop IPC; the exact session must remain available."
+
+[ux_i_checked]
+other = "Checked"
+
+[ux_i_available]
+other = "Adapter available"
+
+[ux_i_existing_session]
+other = "Existing session"
+
+[ux_i_receipt_query]
+other = "Receipt lookup"
+
+[ux_i_processing_ack]
+other = "Processing ACK"
+
+[ux_i_idempotent]
+other = "Idempotent delivery"
+
+[ux_i_code]
+other = "Error code"
+
+[ux_i_webhook_probe]
+other = "Webhook configuration is valid. This check does not contact the endpoint."
+
+[ux_i_no_destinations]
+other = "No receiving locations"
+
+[ux_i_remove_destination]
+other = "Remove this receiving location?"
+
+[ux_i_remove_destination_scope]
+other = "Referenced locations must first be removed from active subscriptions. Runs are unaffected."
+
+[ux_i_previous_binding]
+other = "Previous binding for this name"
+
+[ux_i_bind_confirm]
+other = "Save this exact current session?"
+
+[ux_i_replace_confirm]
+other = "Replace this name's binding?"
+
+[ux_i_endpoint]
+other = "Endpoint"
+
+[ux_i_endpoint_hint]
+other = "Use an explicit URL or socket. No password, token, query or fragment."
+
+[ux_i_cwd]
+other = "Workspace (optional)"
+
+[ux_i_bearer]
+other = "Bearer environment name"
+
+[ux_i_bearer_hint]
+other = "Enter only a variable name, never the token. The Bridge reads its own environment."
+
+[ux_i_http_confirm]
+other = "Allow unencrypted HTTP for this location?"
+
+[ux_i_http_risk]
+other = "HTTP can expose notification content. Bearer authentication requires HTTPS."
+
+[ux_i_save_binding_hint]
+other = "Saving records the address. Check capabilities from the location's details before use."
+
+[ux_i_review]
+other = "Review"
+
+[ux_i_save]
+other = "Save"
+
+[ux_i_edit]
+other = "Edit draft"
+
+[ux_i_search_prompt]
+other = "Search this list or page (empty clears)"
+
+[ux_i_coverage]
+other = "Records on this page: {{.Count}}."
+
+[ux_i_coverage_more]
+other = "Records on this page: {{.Count}}; more pages remain."
+
+[ux_i_cutoff]
+other = "Before which time? RFC3339; empty cancels"
+
+[ux_i_prune_confirm]
+other = "Prune this settled local history?"
+
+[ux_i_prune_scope]
+other = "Unresolved deliveries and root deduplication markers remain. The counts are a preview; execution rechecks current state."
+
+[ux_i_delivery_coverage]
+other = "{{.Count}} matches in {{.Total}} recent records (read limit {{.Value}}). Older records may be outside this window."
+
+[ux_i_delivery_search]
+other = "Filter by recipient, state, error or ID (empty clears)"
+
+[ux_i_limit]
+other = "Change read limit"
+
+[ux_i_limit_prompt]
+other = "Read limit (1–1000)"
+
+[ux_i_delivery]
+other = "Delivery"
+
+[ux_i_evidence]
+other = "Evidence and attempts"
+
+[ux_i_recorded]
+other = "Recorded"
+
+[ux_i_unknown]
+other = "Unknown"
+
+[ux_i_delivery_id]
+other = "Delivery ID"
+
+[ux_i_recipient]
+other = "Recipient"
+
+[ux_i_state]
+other = "Dispatch / status"
+
+[ux_i_updated]
+other = "Updated"
+
+[ux_i_source_fact]
+other = "Source persistence"
+
+[ux_i_local_receipt]
+other = "Local inbox receipt"
+
+[ux_i_transport]
+other = "Transport write"
+
+[ux_i_acceptance]
+other = "Destination acceptance"
+
+[ux_i_processing]
+other = "Agent processing"
+
+[ux_i_receipt]
+other = "Observed receipt"
+
+[ux_i_operation_id]
+other = "Platform operation"
+
+[ux_i_reason]
+other = "Receipt reason"
+
+[ux_i_subscription_id]
+other = "Subscription ID"
+
+[ux_i_parent_id]
+other = "Parent delivery"
+
+[ux_i_evidence_hint]
+other = "Unknown means no evidence for that layer. Manual resolution stays separate from the observed receipt; processed is an ACK, not completion of follow-up work."
+
+[ux_i_next_attempt]
+other = "Next safe attempt"
+
+[ux_i_resolution]
+other = "Manual resolution"
+
+[ux_i_successor_id]
+other = "Successor delivery"
+
+[ux_i_attempt]
+other = "Attempt"
+
+[ux_i_subscription]
+other = "Subscription"
+
+[ux_i_reconcile]
+other = "Look up this receipt"
+
+[ux_i_disable]
+other = "Disable subscription"
+
+[ux_i_enable]
+other = "Enable subscription"
+
+[ux_i_confirmed]
+other = "Resolve as confirmed"
+
+[ux_i_abandoned]
+other = "Resolve as abandoned"
+
+[ux_i_resend]
+other = "Authorize a resend"
+
+[ux_i_successor]
+other = "Inspect successor"
+
+[ux_i_disable_confirm]
+other = "Disable this subscription?"
+
+[ux_i_enable_confirm]
+other = "Enable this subscription from its saved cursors?"
+
+[ux_i_remove_confirm]
+other = "Remove this subscription?"
+
+[ux_i_lifecycle_scope]
+other = "Collection and new sends follow subscription state. In-flight sends cannot be recalled. Computing tasks keep running."
+
+[ux_i_resolve_confirmed]
+other = "Record a human confirmation of acceptance?"
+
+[ux_i_resolve_abandoned]
+other = "Abandon this delivery without sending again?"
+
+[ux_i_platform_evidence]
+other = "Confirm acceptance only with evidence from the destination platform. An empty list does not prove non-delivery. This decision preserves the original receipt."
+
+[ux_i_allow_duplicate]
+other = "Allow a possible duplicate notification / Agent turn?"
+
+[ux_i_duplicate_risk]
+other = "A second notification can repeat inference and consume quota. Loaf queues one successor; only the existing Bridge sends it."
+
+[ux_i_resend_confirm]
+other = "Queue one resend to the frozen recipient?"
+
+[ux_i_page_search]
+other = "{{.Count}} matches on this page; search does not scan other pages."
+
+[ux_i_subscribe]
+other = "Create subscription"
+
+[ux_i_source]
+other = "Source"
+
+[ux_i_synced]
+other = "Last successful sync"
+
+[ux_i_source_failure]
+other = "Last source failure"
+
+[ux_i_subject]
+other = "Object"
+
+[ux_i_source_history]
+other = "Each source keeps its own success and failure times. Compare the timestamps; one source's success does not clear another's failure."
+
+[ux_i_add_first]
+other = "Add or bind a receiving location in Notifications → Receiving locations, then return here."
+
+[ux_i_replay]
+other = "Historical events"
+
+[ux_i_replay_yes]
+other = "Include retained history (default)"
+
+[ux_i_replay_no]
+other = "Only events after registration"
+
+[ux_i_subscription_scope]
+other = "Saving freezes the source and recipient. Start the Bridge separately with loaf notify serve; this menu never starts it."
+
+[ux_i_target]
+other = "Machine for source browsing"
+
+[ux_i_local]
+other = "Local inbox"
+
+[ux_i_resources]
+other = "Resource facts"
+
+[ux_i_project]
+other = "Project facts"
+
+[ux_i_queue]
+other = "Queue facts"
+
+[ux_i_source_health]
+other = "Source sync and failures"
+
+[ux_i_clear_filter]
+other = "Clear object filter"
+
+[ux_i_coverage_title]
+other = "Page coverage"
+
+[ux_i_cursor]
+other = "Input cursor"
+
+[ux_i_next_cursor]
+other = "Next cursor"
+
+[ux_i_event_coverage_hint]
+other = "Cursors belong to one source. Local inbox coverage includes only collected events; it cannot prove remote completeness."
+
+[ux_i_event]
+other = "Event"
+
+[ux_i_filter]
+other = "Filter this object"
+
+[ux_i_occurred]
+other = "Occurred"
+
+[ux_i_event_id]
+other = "Event ID"
+
+[ux_i_fact_hint]
+other = "A persisted event reports an observed transition. It grants no new execution or spending authority."
+
+[ux_b_checking]
+other = "Checking {{.Count}} machine(s); up to {{.Value}} per machine."

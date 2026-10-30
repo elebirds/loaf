@@ -12,6 +12,7 @@ import (
     "unicode/utf16"
     "unsafe"
 
+    "github.com/elebirds/loaf/internal/testutil"
     "golang.org/x/sys/windows"
 )
 
@@ -25,28 +26,12 @@ func TestWindowsConsoleSecret(t *testing.T) {
     for _, mode := range []string{"success", "cancel"} {
         t.Run(mode, func(t *testing.T) {
             dir := t.TempDir()
-            input, output := consoleChild(t, mode, dir)
-            text := ""
-            until := func(marker string) {
-                t.Helper()
-                timer := time.NewTimer(5 * time.Second)
-                defer timer.Stop()
-                for !strings.Contains(text, marker) {
-                    select {
-                    case chunk, open := <-output:
-                        if !open {
-                            t.Fatalf("console exited before %s: %s", marker, text)
-                        }
-                        text += chunk
-                    case <-timer.C:
-                        t.Fatalf("console did not reach %s: %s", marker, text)
-                    }
-                }
-            }
+            console := testutil.ConsoleProcess(t, 100, 24, "-test.run=^TestWindowsConsoleSecret$", "--", "loaf-console-child", mode, dir)
+            until := func(marker string) { t.Helper(); console.Wait(t, marker) }
             until("HIDDEN")
             const secret = "密码 中文 🔑 private"
             if mode == "success" {
-                if _, err := input.WriteString(secret + "\r"); err != nil {
+                if _, err := console.Input.WriteString(secret + "\r"); err != nil {
                     t.Fatal(err)
                 }
             }
@@ -55,11 +40,12 @@ func TestWindowsConsoleSecret(t *testing.T) {
                     t.Fatal(err)
                 }
                 until("NEXT")
-                if _, err := input.WriteString("next 中文\r"); err != nil {
+                if _, err := console.Input.WriteString("next 中文\r"); err != nil {
                     t.Fatal(err)
                 }
             }
             until("DONE")
+            text := console.Text()
             if strings.Contains(text, secret) || strings.Contains(text, "private") || strings.Contains(text, "密码") {
                 t.Fatal("console echoed secret input")
             }
@@ -167,84 +153,4 @@ func consoleSecretChild(t *testing.T, mode, dir string) {
         }
     }
     fmt.Println("DONE")
-}
-
-func consoleChild(t *testing.T, mode, dir string) (*os.File, <-chan string) {
-    t.Helper()
-    inputRead, inputWrite, err := os.Pipe()
-    if err != nil {
-        t.Fatal(err)
-    }
-    t.Cleanup(func() { inputRead.Close(); inputWrite.Close() })
-    outputRead, outputWrite, err := os.Pipe()
-    if err != nil {
-        t.Fatal(err)
-    }
-    t.Cleanup(func() { outputRead.Close(); outputWrite.Close() })
-    var console windows.Handle
-    if err := windows.CreatePseudoConsole(windows.Coord{X: 100, Y: 24}, windows.Handle(inputRead.Fd()), windows.Handle(outputWrite.Fd()), 0, &console); err != nil {
-        t.Fatal(err)
-    }
-    t.Cleanup(func() { windows.ClosePseudoConsole(console) })
-    inputRead.Close()
-    outputWrite.Close()
-    attributes, err := windows.NewProcThreadAttributeList(1)
-    if err != nil {
-        t.Fatal(err)
-    }
-    defer attributes.Delete()
-    // PSEUDOCONSOLE is a handle value, unlike pointer-valued attributes.
-    update := windows.NewLazySystemDLL("kernel32.dll").NewProc("UpdateProcThreadAttribute")
-    ok, _, updateErr := update.Call(uintptr(unsafe.Pointer(attributes.List())), 0, windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, uintptr(console), unsafe.Sizeof(console), 0, 0)
-    if ok == 0 {
-        t.Fatal(updateErr)
-    }
-    executable, err := os.Executable()
-    if err != nil {
-        t.Fatal(err)
-    }
-    application, err := windows.UTF16PtrFromString(executable)
-    if err != nil {
-        t.Fatal(err)
-    }
-    command, err := windows.UTF16PtrFromString(windows.ComposeCommandLine([]string{executable, "-test.run=^TestWindowsConsoleSecret$", "--", "loaf-console-child", mode, dir}))
-    if err != nil {
-        t.Fatal(err)
-    }
-    startup := windows.StartupInfoEx{}
-    startup.Flags = windows.STARTF_USESTDHANDLES
-    startup.Cb = uint32(unsafe.Sizeof(startup))
-    startup.ProcThreadAttributeList = attributes.List()
-    var process windows.ProcessInformation
-    if err := windows.CreateProcess(application, command, nil, nil, false, windows.EXTENDED_STARTUPINFO_PRESENT, nil, nil, &startup.StartupInfo, &process); err != nil {
-        t.Fatal(err)
-    }
-    windows.CloseHandle(process.Thread)
-    t.Cleanup(func() {
-        if result, _ := windows.WaitForSingleObject(process.Process, 2000); result != windows.WAIT_OBJECT_0 {
-            windows.TerminateProcess(process.Process, 1)
-            t.Error("console child did not exit")
-        }
-        var code uint32
-        windows.GetExitCodeProcess(process.Process, &code)
-        windows.CloseHandle(process.Process)
-        if code != 0 {
-            t.Errorf("console child exit %d", code)
-        }
-    })
-    chunks := make(chan string, 32)
-    go func() {
-        defer close(chunks)
-        data := make([]byte, 4096)
-        for {
-            n, err := outputRead.Read(data)
-            if n > 0 {
-                chunks <- string(data[:n])
-            }
-            if err != nil {
-                return
-            }
-        }
-    }()
-    return inputWrite, chunks
 }

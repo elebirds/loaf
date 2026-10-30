@@ -77,13 +77,13 @@ func TestCleanHumanConfirmationAndFinitePartialJSON(t *testing.T) {
     o.Cleaner, o.Interactive = cleaner, true
     for _, language := range []string{"en", "zh-Hans"} {
         o.In = strings.NewReader("no\n")
-        code, out, stderr := run(t, o, "--lang", language, "clean", remote.req.RunID)
+        code, out, stderr := run(t, o, "-i", "--lang", language, "clean", remote.req.RunID)
         if code != 1 || cleaner.cleans != 0 || !strings.Contains(stderr, "[y/N]") || !strings.Contains(out+stderr, remote.req.RunID) {
             t.Fatal(code, out, stderr, cleaner)
         }
     }
     o.In = strings.NewReader("yes\n")
-    code, out, stderr := run(t, o, "clean", remote.req.RunID)
+    code, out, stderr := run(t, o, "-i", "clean", remote.req.RunID)
     if code != 0 || cleaner.cleans != 1 || !strings.Contains(out, "data cleaned") || strings.Count(stderr, "[y/N]") != 1 {
         t.Fatal(code, out, stderr, cleaner)
     }

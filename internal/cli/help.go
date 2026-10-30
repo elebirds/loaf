@@ -124,6 +124,17 @@ func helpData(node *kong.Node, l *i18n.Localizer) helpResult {
                 continue
             }
             v := describeValue(flag.Value, l)
+            if v.Group == "" {
+                v.Group = "global"
+                if node.Parent != nil {
+                    for _, local := range node.Flags {
+                        if local == flag {
+                            v.Group = "common"
+                            break
+                        }
+                    }
+                }
+            }
             if flag.Name == "target" && node.Path() == "status" {
                 v.Description = l.Text("ps_flag_target")
                 // History filters never inherit the project's selected target.
@@ -133,6 +144,7 @@ func helpData(node *kong.Node, l *i18n.Localizer) helpResult {
                 // Non-acquisition calls resolve accounts or frozen bindings,
                 // not resource-profile product defaults.
                 v.ConfigKey = ""
+                v.Configurable = false
             }
             if flag.Name == "json" && node.Path() == "ssh" {
                 v.Description = l.Text("interactive_json")
@@ -190,6 +202,18 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
         fmt.Fprint(out, " "+l.Text("options_arg"))
     }
     fmt.Fprintln(out)
+    if len(h.Examples) > 0 {
+        fmt.Fprintln(out, "\n"+l.Text("help_examples"))
+        for _, example := range h.Examples {
+            display, err := uxJCommandDisplay(example)
+            if err != nil {
+                // Keep the rest of help available without emitting the unsafe
+                // example. The grammar/reference test rejects such examples.
+                display = (&presenter{locale: l, command: node.Path()}).error(err).Message
+            }
+            fmt.Fprintln(out, "  "+display)
+        }
+    }
     if node.Parent == nil {
         for _, group := range []string{"experiments", "machines", "resources", "diagnostics"} {
             fmt.Fprintln(out, "\n"+l.Text("group_"+group))
@@ -205,37 +229,18 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
             writeHelpLine(out, child.Name, child.Description)
         }
     }
-    if len(h.Examples) > 0 {
-        fmt.Fprintln(out, "\n"+l.Text("help_examples"))
-        for _, example := range h.Examples {
-            fmt.Fprintln(out, "  "+strings.Join(example, " "))
-        }
-    }
-    grouped := node.Path() == "cloud acquire"
-    if len(h.Flags) > 0 && !grouped {
-        fmt.Fprintln(out, "\n"+l.Text("flags"))
-    }
-    flags := h.Flags
-    if grouped {
-        flags = nil
-        for _, group := range []string{"common", "environment", "conditions", "advanced", "global"} {
-            for _, flag := range h.Flags {
-                current := flag.Group
-                if current == "" {
-                    current = "global"
-                }
-                if current == group {
-                    flag.Group = group
-                    flags = append(flags, flag)
-                }
-            }
-        }
-    }
-    group := ""
+    flags := uxJHelpFlags(h.Flags)
+    group := "\x00"
     for _, flag := range flags {
-        if grouped && group != flag.Group {
+        if group != flag.Group {
             group = flag.Group
-            fmt.Fprintln(out, "\n"+l.Text("cloud_help_"+group))
+            heading := "flags"
+            switch group {
+            case "common", "environment", "conditions", "advanced", "global":
+                // These existing bilingual headings are shared with Cloud.
+                heading = "cloud_help_" + group
+            }
+            fmt.Fprintln(out, "\n"+l.Text(heading))
         }
         label := "--" + flag.Name
         original := findFlag(node, label)
@@ -255,6 +260,30 @@ func renderHelp(out io.Writer, node *kong.Node, h helpResult, l *i18n.Localizer)
         }
         writeHelpLine(out, label, description)
     }
+}
+
+// uxJHelpFlags orders annotations, not command names or a second flag table.
+// Retain unknown groups visibly so a future annotation cannot hide an option.
+func uxJHelpFlags(flags []helpValue) []helpValue {
+    ordered := make([]helpValue, 0, len(flags))
+    groups := []string{"common", "environment", "conditions", "advanced", "global"}
+    for _, flag := range flags {
+        found := false
+        for _, group := range groups {
+            found = found || flag.Group == group
+        }
+        if !found {
+            groups = append(groups, flag.Group)
+        }
+    }
+    for _, group := range groups {
+        for _, flag := range flags {
+            if flag.Group == group {
+                ordered = append(ordered, flag)
+            }
+        }
+    }
+    return ordered
 }
 
 func writeHelpLine(out io.Writer, label, description string) {

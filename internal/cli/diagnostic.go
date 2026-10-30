@@ -20,12 +20,13 @@ func helpInvocation(node *kong.Node) []string {
 }
 
 func inputFailure(reason, argument, message string, params map[string]any, node *kong.Node) *fault.Error {
-    if params == nil {
-        params = map[string]any{}
+    owned := make(map[string]any, len(params)+2)
+    for key, value := range params {
+        owned[key] = value
     }
-    params["Argument"] = argument
-    params["Command"] = strings.Join(helpInvocation(node), " ")
-    f := fault.New("BAD_CONFIG", message, params)
+    owned["Argument"] = argument
+    owned["Command"] = strings.Join(helpInvocation(node), " ")
+    f := fault.New("BAD_CONFIG", message, owned)
     f.Hint = "input_help_hint"
     f.Input = &fault.Input{Reason: reason, Argument: argument, HelpCommand: helpInvocation(node)}
     return f

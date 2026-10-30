@@ -59,13 +59,6 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
     if err := privatefs.Check(filepath.Dir(path), true); err != nil {
         return nil, err
     }
-    if write {
-        unlock, err := lockInitialization(ctx, path+".init.lock")
-        if err != nil {
-            return nil, err
-        }
-        defer unlock()
-    }
     created := false
     info, err := os.Lstat(path)
     if os.IsNotExist(err) && write {
@@ -110,11 +103,27 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
         return nil, err
     }
     var version, app int
-    if err = database.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+    readSchema := func() error {
+        // One statement observes both identifiers in the same SQLite snapshot,
+        // including while another process is committing initial schema setup.
+        return database.QueryRowContext(ctx, "SELECT user_version, application_id FROM pragma_user_version, pragma_application_id").Scan(&version, &app)
+    }
+    if err = readSchema(); err != nil {
         return fail(err)
     }
-    if err = database.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
-        return fail(err)
+    initializationLocked := false
+    if write && version == 0 && app == 0 {
+        unlock, err := lockInitialization(ctx, path+".init.lock")
+        if err != nil {
+            return fail(err)
+        }
+        defer unlock()
+        initializationLocked = true
+        // Another opener may have initialized the file while we waited. Only
+        // schema/WAL setup needs this lock; ordinary writers use SQLite locks.
+        if err = readSchema(); err != nil {
+            return fail(err)
+        }
     }
     if write && version == 0 && app == 0 {
         tx, err := database.BeginTx(ctx, nil)
@@ -140,10 +149,7 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
         if err != nil {
             return fail(err)
         }
-        if err = database.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
-            return fail(err)
-        }
-        if err = database.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
+        if err = readSchema(); err != nil {
             return fail(err)
         }
     }
@@ -156,6 +162,13 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
             return fail(err)
         }
         if journal != "wal" {
+            if !initializationLocked {
+                unlock, err := lockInitialization(ctx, path+".init.lock")
+                if err != nil {
+                    return fail(err)
+                }
+                defer unlock()
+            }
             if err = database.QueryRowContext(ctx, "PRAGMA journal_mode=WAL").Scan(&journal); err != nil {
                 return fail(err)
             }

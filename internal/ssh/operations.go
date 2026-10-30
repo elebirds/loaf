@@ -104,9 +104,13 @@ func (c *Client) Interactive(ctx context.Context, target config.Target, stdin io
     args = append(args, "--", target.Destination)
     cmd := foregroundProcess(ctx, c.Binary, args...)
     cmd.Env = session.env
-    cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
+    diagnostic := &diagnosticWriter{out: stderr}
+    cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, diagnostic
     if err := cmd.Run(); err != nil {
-        return fault.Wrap("SSH_FAILED", "interactive_failed", err)
+        if ctx.Err() != nil {
+            err = errors.Join(err, ctx.Err())
+        }
+        return fault.Wrap("SSH_FAILED", "interactive_failed", classifyConnection(err, diagnostic.data))
     }
     return nil
 }
@@ -126,13 +130,14 @@ func (c *Client) Forward(ctx context.Context, target config.Target, local, remot
     args := forwardArguments(target, local, remote, batch)
     cmd := foregroundProcess(ctx, c.Binary, args...)
     cmd.Env = session.env
-    cmd.Stderr = stderr
+    diagnostic := &diagnosticWriter{out: stderr}
+    cmd.Stderr = diagnostic
     err = cmd.Run()
     if errors.Is(ctx.Err(), context.Canceled) {
         return nil
     }
     if err != nil {
-        return fault.Wrap("SSH_FAILED", "forward_failed", err)
+        return fault.Wrap("SSH_FAILED", "forward_failed", classifyConnection(err, diagnostic.data))
     }
     return nil
 }

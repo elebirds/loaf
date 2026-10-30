@@ -85,7 +85,7 @@ func TestCloudWizardTerminalAcceptsOneGPU(t *testing.T) {
             o.Env["TERM"] = "xterm-256color"
             ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
             done, joined := make(chan int, 1), make(chan struct{})
-            args := []string{"--lang", "zh-Hans", "cloud", "acquire"}
+            args := []string{"-i", "--lang", "zh-Hans", "cloud", "acquire"}
             if tc.product != "" {
                 args = append(args, "--product", tc.product)
             }
@@ -166,7 +166,12 @@ func TestCloudWizardTerminalEntryShowsBothModesAndAllSteps(t *testing.T) {
             if err != nil {
                 t.Fatal(err)
             }
-            t.Cleanup(func() { master.Close(); terminal.Close() })
+            // An actual terminal continuously consumes its output. Leaving the
+            // PTY master unread can fill the kernel buffer and block the final
+            // renderer flush during cancellation, especially under -race.
+            drained := make(chan struct{})
+            go func() { defer close(drained); _, _ = io.Copy(io.Discard, master) }()
+            t.Cleanup(func() { terminal.Close(); master.Close(); <-drained })
             if err := pty.Setsize(terminal, &pty.Winsize{Rows: 24, Cols: columns}); err != nil {
                 t.Fatal(err)
             }
@@ -179,7 +184,7 @@ func TestCloudWizardTerminalEntryShowsBothModesAndAllSteps(t *testing.T) {
             done, joined := make(chan int, 1), make(chan struct{})
             go func() {
                 defer close(joined)
-                done <- execute(ctx, []string{"--lang", language, "cloud", "acquire", "--continuous"}, o)
+                done <- execute(ctx, []string{"-i", "--lang", language, "cloud", "acquire", "--continuous"}, o)
             }()
             t.Cleanup(func() { cancel(); <-joined })
             l, _ := i18n.New(language, nil)
@@ -226,7 +231,9 @@ func TestCloudLifecycleRichReviewAndHub(t *testing.T) {
             o.Env["TERM"] = "xterm-256color"
             ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
             done := make(chan int, 1)
-            go func() { done <- execute(ctx, []string{"--lang", tc.lang, "cloud", "acquire", "--profile=train"}, o) }()
+            go func() {
+                done <- execute(ctx, []string{"-i", "--lang", tc.lang, "cloud", "acquire", "--profile=train"}, o)
+            }()
             t.Cleanup(func() { cancel(); terminal.Close(); master.Close(); <-drained })
             l, _ := i18n.New(tc.lang, nil)
             previous := 0
@@ -260,7 +267,7 @@ func TestCloudLifecycleRichReviewAndHub(t *testing.T) {
             ctx2, stop := context.WithTimeout(context.Background(), 5*time.Second)
             defer stop()
             before := len(output.snapshot())
-            go func() { done <- execute(ctx2, []string{"--lang", tc.lang, "cloud"}, o) }()
+            go func() { done <- execute(ctx2, []string{"-i", "--lang", tc.lang, "cloud"}, o) }()
             for !strings.Contains(output.snapshot()[before:], l.Text("cloud_hub_title")) {
                 select {
                 case <-ctx2.Done():
@@ -311,7 +318,7 @@ func TestCloudHubRichBoundedBrowseAndPagedResult(t *testing.T) {
     locale, _ := i18n.New("zh-Hans", nil)
     ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
     t.Cleanup(func() { cancel(); terminal.Close(); master.Close(); <-drained })
-    call := &invocation{app: client.New(o.Dependencies, settings), options: Options{In: terminal, Err: output}, output: &presenter{locale: locale, out: io.Discard, err: output}, grammar: &grammar{}, input: interaction.New(interaction.Options{In: terminal, Err: output, Rich: true, Interactive: true, Compact: true, PageHelp: locale.Text("cloud_ui_form_help"), SelectHelp: locale.Text("cloud_select_help")})}
+    call := &invocation{ui: true, app: client.New(o.Dependencies, settings), options: Options{In: terminal, Err: output}, output: &presenter{locale: locale, out: io.Discard, err: output}, grammar: &grammar{}, input: interaction.New(interaction.Options{In: terminal, Err: output, Rich: true, Interactive: true, Compact: true, PageHelp: locale.Text("cloud_ui_form_help"), SelectHelp: locale.Text("cloud_select_help")})}
     h := &cloudHub{call: call, selection: client.CloudSelect{Account: cloudPointer("main"), Product: cloudPointer("standard")}}
     waitFresh := func(start int, text string) {
         t.Helper()

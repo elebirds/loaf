@@ -2,6 +2,7 @@ package cli
 
 import (
     "context"
+    "errors"
     "fmt"
     "strings"
 
@@ -136,11 +137,11 @@ func (c *invocation) cloudBusy(ctx context.Context, title, scope string, read fu
 
 // finishCloud owns one human result. JSON and explicit inventory/details keep
 // their existing contracts, while lifecycle results no longer recursively dump receipts.
-func (p *presenter) finishCloud(data any, e *errorView) bool {
+func (p *presenter) finishCloud(data any, e *errorView) (bool, error) {
     switch p.command {
     case "cloud acquire", "cloud bind", "cloud start", "cloud stop", "cloud reconcile":
     default:
-        return false
+        return false, nil
     }
     l := p.locale
     d := interaction.Document{Tone: "warning"}
@@ -150,10 +151,19 @@ func (p *presenter) finishCloud(data any, e *errorView) bool {
     ready := false
     known := false
     cloneStatus := ""
+    var actionErr error
+    displayAction := func(action uxNextAction) string {
+        display, err := uxJCommandDisplay(action.Command)
+        if err != nil {
+            actionErr = errors.Join(actionErr, err)
+            return p.error(err).Message
+        }
+        return display
+    }
     switch r := data.(type) {
     case cloud.Plan:
         if e == nil {
-            return false
+            return false, nil
         }
         d.Title = e.Message
         if p.cloudContext != nil {
@@ -170,12 +180,12 @@ func (p *presenter) finishCloud(data any, e *errorView) bool {
             if d.Body != "" {
                 d.Body += "\n\n"
             }
-            d.Body += l.Text("cloud_ui_next") + "\n" + commandDisplay(p.nextActions[0].Command)
+            d.Body += l.Text("cloud_ui_next") + "\n" + displayAction(p.nextActions[0])
         }
         if _, err := fmt.Fprintln(p.out, d.Render(p.width, p.styled, p.dark)); err != nil {
             p.writeErr = err
         }
-        return true
+        return true, actionErr
     case client.CloudBinding:
         target, ready, cloneStatus = r.Target, r.Status == "ready", r.CloneDataStatus
         known = r.Status == "ready" || r.Status == "bound" || r.Request != nil && r.Request.Instance != nil
@@ -192,7 +202,7 @@ func (p *presenter) finishCloud(data any, e *errorView) bool {
         ref = r.Instance
         known = ref != nil
     default:
-        return false
+        return false, nil
     }
     if receipt != nil && target == "" {
         target = receipt.Target
@@ -266,12 +276,12 @@ func (p *presenter) finishCloud(data any, e *errorView) bool {
         }
     default:
         if e == nil {
-            return false
+            return false, nil
         }
         d.Title = e.Message
     }
     if d.Title == "" {
-        return false
+        return false, nil
     }
     if e != nil && e.Detail != "" {
         if d.Body != "" {
@@ -292,7 +302,7 @@ func (p *presenter) finishCloud(data any, e *errorView) bool {
         } else if a.Kind == "select_machine" {
             label = "cloud_ui_use"
         }
-        action := l.Text(label) + "\n" + commandDisplay(a.Command)
+        action := l.Text(label) + "\n" + displayAction(a)
         if d.Body != "" {
             d.Body += "\n\n"
         }
@@ -307,5 +317,5 @@ func (p *presenter) finishCloud(data any, e *errorView) bool {
     if _, err := fmt.Fprintln(p.out, d.Render(p.width, p.styled, p.dark)); err != nil {
         p.writeErr = err
     }
-    return true
+    return true, actionErr
 }

@@ -38,13 +38,10 @@ func TestUXBNativeConnectionClassificationPreservesStreamsAndSingleCall(t *testi
         } {
             t.Run(operation+"/"+tc.reason, func(t *testing.T) {
                 dir := t.TempDir()
-                file, count := filepath.Join(dir, "ssh"), filepath.Join(dir, "count")
+                count := filepath.Join(dir, "count")
                 message := tc.diagnostic + " private-endpoint secret-marker\n"
-                script := "#!/bin/sh\nprintf x >> " + Quote(count) + "\nprintf '%s' " + Quote(message) + " >&2\nexit 255\n"
-                if err := os.WriteFile(file, []byte(script), 0700); err != nil {
-                    t.Fatal(err)
-                }
-                client := &Client{Binary: file}
+                binary := fixtureProcess(t, processFixture{Stderr: message, Exit: 255, Count: count})
+                client := &Client{Binary: binary}
                 var native bytes.Buffer
                 var err error
                 if operation == "ssh" {
@@ -60,7 +57,7 @@ func TestUXBNativeConnectionClassificationPreservesStreamsAndSingleCall(t *testi
                     t.Fatal("changed native stream or leaked captured diagnostics", native.String(), err)
                 }
                 calls, readErr := os.ReadFile(count)
-                if readErr != nil || string(calls) != "x" {
+                if readErr != nil || string(calls) != "call\n" {
                     t.Fatal("native operation replayed", string(calls), readErr)
                 }
             })

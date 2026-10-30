@@ -63,7 +63,7 @@ func uxDThemeFrame(t *testing.T, ctx context.Context, output *uxDTerminal, offse
     }
 }
 
-func uxDWaitScreen(t *testing.T, ctx context.Context, output *uxDTerminal, offset int, title, footer string) {
+func uxDWaitScreen(t *testing.T, ctx context.Context, output *uxDTerminal, offset int, title, witness, footer string) {
     t.Helper()
     // A document title also appears as a menu choice on the preceding screen.
     // Match a title line, not that choice or a final repaint of the old screen.
@@ -73,8 +73,11 @@ func uxDWaitScreen(t *testing.T, ctx context.Context, output *uxDTerminal, offse
         output.mu.Lock()
         text := ansi.Strip(output.text.String()[offset:])
         output.mu.Unlock()
-        if match := heading.FindStringIndex(text); match != nil && strings.Contains(text[match[1]:], footer) {
-            return
+        if match := heading.FindStringIndex(text); match != nil {
+            body := text[match[1]:]
+            if at := strings.Index(body, witness); at >= 0 && strings.Contains(body[at+len(witness):], footer) {
+                return
+            }
         }
         select {
         case <-ctx.Done():
@@ -172,7 +175,19 @@ func TestUXDRichBrowseDetailsRefreshCancelStop(t *testing.T) {
                 if want == l.Text("ux_d_stop_confirm") {
                     uxCoreWaitFrame(t, ctx, &output.wizardTerminal, start, want, l.Text("ux_core_form_help"))
                 } else {
-                    uxDWaitScreen(t, ctx, output, start, want, l.Text("ux_core_select_help"))
+                    // A blurred Huh choice can lose its border while the old
+                    // form closes. Require content unique to the new screen,
+                    // not just its title (also used as that choice's label).
+                    witness := l.Text("ux_d_execution")
+                    switch want {
+                    case l.Text("ux_d_details"):
+                        witness = l.Text("ux_d_id")
+                    case l.Text("ux_d_tasks"):
+                        witness = l.Text("ux_d_column_name")
+                    case l.Text("ux_d_actions"):
+                        witness = l.Text("ux_d_wait_selection")
+                    }
+                    uxDWaitScreen(t, ctx, output, start, want, witness, l.Text("ux_core_select_help"))
                 }
                 if capture != "" {
                     uxDThemeFrame(t, ctx, output, start, entry.light)

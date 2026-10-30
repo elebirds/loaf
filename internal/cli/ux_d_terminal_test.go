@@ -9,10 +9,12 @@ import (
     "os"
     "path/filepath"
     "reflect"
+    "regexp"
     "strings"
     "testing"
     "time"
 
+    "github.com/charmbracelet/x/ansi"
     "github.com/creack/pty"
     "github.com/elebirds/loaf/internal/cli/interaction"
     "github.com/elebirds/loaf/internal/task"
@@ -56,6 +58,27 @@ func uxDThemeFrame(t *testing.T, ctx context.Context, output *uxDTerminal, offse
         select {
         case <-ctx.Done():
             t.Fatal("terminal did not render the requested background theme")
+        case <-time.After(time.Millisecond):
+        }
+    }
+}
+
+func uxDWaitScreen(t *testing.T, ctx context.Context, output *uxDTerminal, offset int, title, footer string) {
+    t.Helper()
+    // A document title also appears as a menu choice on the preceding screen.
+    // Match a title line, not that choice or a final repaint of the old screen.
+    // A renderer can start a new title with CR rather than LF.
+    heading := regexp.MustCompile(`(?:^|[\r\n]) *` + regexp.QuoteMeta(title) + ` *\r?\n`)
+    for {
+        output.mu.Lock()
+        text := ansi.Strip(output.text.String()[offset:])
+        output.mu.Unlock()
+        if match := heading.FindStringIndex(text); match != nil && strings.Contains(text[match[1]:], footer) {
+            return
+        }
+        select {
+        case <-ctx.Done():
+            t.Fatalf("missing complete screen %q: %s", title, text)
         case <-time.After(time.Millisecond):
         }
     }
@@ -146,11 +169,11 @@ func TestUXDRichBrowseDetailsRefreshCancelStop(t *testing.T) {
                 if _, err := io.WriteString(master, keys); err != nil {
                     t.Fatal(err)
                 }
-                footer := l.Text("ux_core_select_help")
                 if want == l.Text("ux_d_stop_confirm") {
-                    footer = l.Text("ux_core_form_help")
+                    uxCoreWaitFrame(t, ctx, &output.wizardTerminal, start, want, l.Text("ux_core_form_help"))
+                } else {
+                    uxDWaitScreen(t, ctx, output, start, want, l.Text("ux_core_select_help"))
                 }
-                uxCoreWaitFrame(t, ctx, &output.wizardTerminal, start, want, footer)
                 if capture != "" {
                     uxDThemeFrame(t, ctx, output, start, entry.light)
                     uxDCapture(t, output, capture+"-"+name)
@@ -158,7 +181,7 @@ func TestUXDRichBrowseDetailsRefreshCancelStop(t *testing.T) {
             }
             // Match screen titles, not fields also present on other pages.
             // Wait for the complete frame before sending the next key batch.
-            title := func(id string) string { return l.Text(id) + "\n" }
+            title := func(id string) string { return l.Text(id) }
             step("\r", title("ux_d_task"), "task")
             step("\r", title("ux_d_details"), "facts")
             // The document has multiple pages on short terminals; its default
@@ -171,7 +194,7 @@ func TestUXDRichBrowseDetailsRefreshCancelStop(t *testing.T) {
             if rowCount < len(refs) {
                 actionIndex++
             }
-            step(strings.Repeat("\x1b[B", actionIndex)+"\r", l.Text("ux_d_wait_selection"), "actions")
+            step(strings.Repeat("\x1b[B", actionIndex)+"\r", title("ux_d_actions"), "actions")
             step(strings.Repeat("\x1b[A", 4)+"\r", title("ux_d_tasks"), "refreshed")
             step("\r", title("ux_d_task"), "observed-task")
             step(strings.Repeat("\x1b[B", stopIndex-1)+"\r", l.Text("ux_d_stop_confirm"), "stop-review")

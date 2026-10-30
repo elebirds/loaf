@@ -16,8 +16,8 @@ import (
 
 var cancelSynchronousIO = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
-type lineResult struct {
-    value []byte
+type terminalResult[T any] struct {
+    value T
     err   error
 }
 
@@ -29,30 +29,40 @@ func readLine(ctx context.Context, input io.Reader, maxBytes int) ([]byte, error
     if !ok {
         return readLineBytes(ctx, input, maxBytes)
     }
-    if err := ctx.Err(); err != nil {
+    value, err := terminalRead(ctx, file, func() ([]byte, error) {
+        var mode uint32
+        if windows.GetConsoleMode(windows.Handle(file.Fd()), &mode) == nil {
+            return consoleLine(windows.Handle(file.Fd()), maxBytes)
+        }
+        return readLineBytes(ctx, input, maxBytes)
+    })
+    if err != nil {
+        clear(value)
         return nil, err
     }
+    return value, nil
+}
+
+func terminalRead[T any](ctx context.Context, file *os.File, read func() (T, error)) (value T, err error) {
+    if err := ctx.Err(); err != nil {
+        return value, err
+    }
     handles := make(chan windows.Handle, 1)
-    done := make(chan lineResult, 1)
+    done := make(chan terminalResult[T], 1)
     go func() {
         runtime.LockOSThread()
         defer runtime.UnlockOSThread()
         thread, err := windows.OpenThread(windows.THREAD_TERMINATE, false, windows.GetCurrentThreadId())
         handles <- thread
         if err != nil {
-            done <- lineResult{err: err}
+            done <- terminalResult[T]{err: err}
             return
         }
-        var value []byte
+        var value T
         if err = ctx.Err(); err == nil {
-            var mode uint32
-            if windows.GetConsoleMode(windows.Handle(file.Fd()), &mode) == nil {
-                value, err = consoleLine(windows.Handle(file.Fd()), maxBytes)
-            } else {
-                value, err = readLineBytes(ctx, input, maxBytes)
-            }
+            value, err = read()
         }
-        done <- lineResult{value, err}
+        done <- terminalResult[T]{value, err}
     }()
     thread := <-handles
     if thread != 0 {
@@ -61,8 +71,7 @@ func readLine(ctx context.Context, input io.Reader, maxBytes int) ([]byte, error
     select {
     case result := <-done:
         if err := ctx.Err(); err != nil {
-            clear(result.value)
-            return nil, err
+            return result.value, err
         }
         return result.value, result.err
     case <-ctx.Done():
@@ -77,8 +86,7 @@ func readLine(ctx context.Context, input io.Reader, maxBytes int) ([]byte, error
             }
             select {
             case result := <-done:
-                clear(result.value)
-                return nil, ctx.Err()
+                return result.value, ctx.Err()
             case <-timer.C:
             }
         }

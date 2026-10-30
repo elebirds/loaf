@@ -39,13 +39,14 @@ func (s *InputSession) StartProgress(ctx context.Context, cancel context.CancelF
         return nil, err
     }
     runCtx, stop := context.WithCancel(ctx)
+    input, closeInput := richInput(s.options.In)
     output := &formWriter{writer: s.options.Err, cancel: cancel}
     var writer io.Writer = output
     if terminal, ok := s.options.Err.(terminalOutput); ok {
         writer = terminalFormWriter{terminalOutput: terminal, checked: output}
     }
     live := &LiveProgress{done: make(chan error, 1), writer: output}
-    live.program = tea.NewProgram(progressModel{ctx: runCtx, cancel: cancel, frame: frame, width: Width(s.options.Err), dark: s.Dark(), background: s.dark.Store}, tea.WithInput(s.options.In), tea.WithOutput(writer), tea.WithoutSignalHandler(), tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
+    live.program = tea.NewProgram(progressModel{ctx: runCtx, cancel: cancel, frame: frame, width: Width(s.options.Err), dark: s.Dark(), background: s.dark.Store}, tea.WithInput(input), tea.WithOutput(writer), tea.WithoutSignalHandler(), tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
         if msg == tea.RequestWindowSize() {
             return nil
         }
@@ -54,7 +55,10 @@ func (s *InputSession) StartProgress(ctx context.Context, cancel context.CancelF
     go func() {
         defer stop()
         defer s.release()
+        stopResize := watchRichSize(live.program, s.options.Err)
         _, err := live.program.Run()
+        stopResize()
+        closeInput()
         if failure := output.failure(); failure != nil {
             err = failure
         }

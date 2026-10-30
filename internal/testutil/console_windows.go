@@ -14,9 +14,10 @@ import (
 // Console owns a hidden ConPTY and its child test process. Output is drained
 // continuously, including while the parent is waiting for child exit.
 type Console struct {
-    Input *os.File
-    mu    sync.Mutex
-    text  strings.Builder
+    Input  *os.File
+    mu     sync.Mutex
+    text   strings.Builder
+    handle windows.Handle
 }
 
 // Text returns the bounded transcript captured from this owned console.
@@ -35,6 +36,14 @@ func (c *Console) Wait(t testing.TB, marker string) {
             t.Fatalf("owned console did not reach %q: %s", marker, c.Text())
         }
         time.Sleep(5 * time.Millisecond)
+    }
+}
+
+// Resize changes only this fixture's hidden console dimensions.
+func (c *Console) Resize(t testing.TB, columns, rows int16) {
+    t.Helper()
+    if err := windows.ResizePseudoConsole(c.handle, windows.Coord{X: columns, Y: rows}); err != nil {
+        t.Fatal(err)
     }
 }
 
@@ -96,7 +105,7 @@ func ConsoleProcess(t testing.TB, columns, rows int16, args ...string) *Console 
         t.Fatal(err)
     }
     windows.CloseHandle(process.Thread)
-    result := &Console{Input: inputWrite}
+    result := &Console{Input: inputWrite, handle: console}
     t.Cleanup(func() {
         if result, _ := windows.WaitForSingleObject(process.Process, 5000); result != windows.WAIT_OBJECT_0 {
             windows.TerminateProcess(process.Process, 1)

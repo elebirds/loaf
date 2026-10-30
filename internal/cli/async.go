@@ -39,14 +39,6 @@ func boundedAsyncLimit(value int) error {
 
 func (c *invocation) async(ctx context.Context, path string) (any, error) {
     g, p := c.grammar, c.output
-    if c.uxInteractive() {
-        switch path {
-        case "notify":
-            return c.uxINotify(ctx)
-        case "events":
-            return c.uxIEvents(ctx)
-        }
-    }
     if path == "events" || path == "events list" {
         v := g.Events.List
         if err := boundedAsyncLimit(v.Limit); err != nil {
@@ -89,7 +81,7 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
             if !v.AllowDuplicate {
                 return nil, fault.Invalid("--allow-duplicate", "missing_argument", "notify_duplicate_required")
             }
-            if !c.uxInteractive() && !v.Yes {
+            if !c.interactiveInput() && !v.Yes {
                 return nil, fault.Invalid("--yes", "missing_argument", "notify_resend_yes_required")
             }
             if !v.Yes {
@@ -125,7 +117,7 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
             if err != nil {
                 return nil, fault.Invalid("--before", "invalid_value", "notify_before_invalid")
             }
-            if !v.DryRun && !c.uxInteractive() && !v.Yes {
+            if !v.DryRun && !c.interactiveInput() && !v.Yes {
                 return nil, fault.Invalid("--yes", "missing_argument", "notify_prune_yes_required")
             }
             preview, err := control.Prune(ctx, client.PruneInput{Before: before, DryRun: true})
@@ -220,9 +212,6 @@ func (c *invocation) queue(ctx context.Context, path string) (any, error) {
     if c.app == nil || c.app.Queue == nil {
         return nil, asyncUnavailable("queue")
     }
-    if path == "queue" && c.uxInteractive() {
-        return c.uxHQueue(ctx)
-    }
     service, g := c.app.Queue, c.grammar
     switch path {
     case "queue", "queue list":
@@ -253,7 +242,7 @@ func (c *invocation) queue(ctx context.Context, path string) (any, error) {
         return service.SetPaused(ctx, client.QueuePauseInput{Target: g.Target, Paused: path == "queue pause", Policy: c.policy})
     case "queue clean":
         v := g.Queue.Clean
-        if !v.DryRun && !v.Yes && !c.uxInteractive() {
+        if !v.DryRun && !v.Yes && !c.interactiveInput() {
             return nil, fault.Invalid("--yes", "missing_argument", "queue_clean_confirmation_required")
         }
         preview, err := service.Clean(ctx, client.QueueCleanInput{IDs: v.IDs, DryRun: true, Policy: c.policy})

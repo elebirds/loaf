@@ -15,10 +15,11 @@
 不能因为进程退出码非零就丢弃它。无结果的 `data`、无错误的 `error` 会省略。
 不适用字段省略；读取方应容忍后续增加字段。
 
-表单与操作菜单需要显式 `-i / --interactive`，不能与 `--json` 合用；仅有终端不会自动开启。
+GPU 表单与就地确认使用显式 `-i / --interactive`；登录也接受自己的 `--prompt / --verify`。
+`--json` 不进入提示流程，不能与 `-i` 合用；仅有终端不会自动开启表单。
 查询时优先明确使用 `machine list`、
 `queue list`、`notify deliveries`、`events list`；裸 `loaf --json` 返回离线帮助。
-完整直接调用不要求先经过交互概览或单独预览。
+完整调用直接执行，不要求先经过菜单或单独预览。
 
 | 操作退出码 | 含义 |
 | --- | --- |
@@ -63,6 +64,7 @@
 | `check` | 单目标报告；批量使用 `checks[]` 和覆盖计数 |
 | `wait` | 全部选中任务及 completed/pending/query_errors/state_errors/examined/unexamined/interrupted/timed_out |
 | `clean` | `runs[]` 的逐任务清理结果及错误码；执行结果另行保留 |
+| `abandon` | `dry_run`、`runs[]` 中的 run、path、eligible 及可选 no_start_at、cleaned_at、error_code、state_error |
 | `events list` | 绑定来源的 events、source_id、next_cursor、has_more；事件保留原来源身份 |
 | `notify destination list`、`notify subscriptions`、`notify deliveries` | 安全的目的地、订阅或投递行；派发状态与 SDK 证据分开 |
 | `notify bind NAME --current` | 只读验证当前线程并保存后的安全 destination 信息，以及 verified_at 时间 |
@@ -83,6 +85,12 @@
 列表保留部分成功。历史查询的 `limit` 限制检查候选数，而非保证匹配数；
 无法确认的行仍保留。有界结果为空不能证明没有失败任务或没有平台库存。
 `OUTPUT_MISSING` 时先检查已下载与缺失路径；未确认传输完成时不提供 `changed_files`。
+
+放弃准备结果中的 `no_start_at` 证明该准备任务不能再启动，`cleaned_at` 单独证明任务数据
+已回收。`ABANDON_UNCONFIRMED` 的操作退出码为 3，保留已经确认的字段；应使用相同的
+明确 ID 重试。本地 `state_error` 不抹掉远端事实。已保存任务在可选的 `abandonment` 中
+提供 requested_at、no_start_at、cleaned_at，与 submission、status、exit_code 分开。
+`run.preparation_abandoned` 是公开生命周期事件，不代表训练失败或停止结果。
 
 ## 读取参数元数据与错误位置
 

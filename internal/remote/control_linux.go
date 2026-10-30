@@ -62,6 +62,10 @@ func Serve(in io.Reader, out io.Writer) int {
             response.Events = &page
             err = eventErr
         }
+    } else if err == nil && (req.Action == "abandon" || req.Action == "abandon-preview") {
+        ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+        defer cancel()
+        response.Abandonment, err = Abandon(ctx, req, req.Action == "abandon-preview")
     } else if err == nil && (req.Action == "clean" || req.Action == "clean-preview") {
         ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
         defer cancel()
@@ -308,6 +312,9 @@ func launch(req wire.Request, dir string) (*wire.RunRecord, error) {
         return existingStart(req, dir)
     }
     defer unix.Flock(int(claim.Fd()), unix.LOCK_UN)
+    if err := preparationAvailability(req); err != nil {
+        return nil, err
+    }
     r, err := read(dir)
     if err != nil {
         return nil, err

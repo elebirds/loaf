@@ -16,6 +16,27 @@ The default uses output paths saved at submission and downloads to `loaf-results
 
 Running tasks may be pulled, but the result is a live copy, not a consistent checkpoint snapshot. Choose completion or atomically published checkpoint files when needed. `--checksum` detects same-size, same-time content changes with extra disk reads; it is not normally required.
 
+## Reclaim an authorized failed preparation
+
+```bash
+loaf abandon <run-id> --dry-run --json
+loaf abandon <run-id> --yes --json
+```
+
+Use the ID retained after a failed transfer or copy. `abandon` fences that ID
+before removing its payload; a local `preparing` or `uncertain` value alone does
+not prove eligibility. The remote owner refuses any entered launch admission,
+even before a Supervisor PID exists. Queued runs use `queue cancel` and
+`queue clean`, not abandonment. Preview does not deploy a helper or change files.
+
+Deletion needs explicit authority. Read each row's `no_start_at` and `cleaned_at`
+separately. `ABANDON_UNCONFIRMED` (exit 3) retains confirmed no-start evidence;
+retry only the same authorized ID to finish or confirm deletion. `state_error`
+does not erase confirmed remote facts. `inspect ID --json` exposes saved
+`abandonment` metadata without inventing a training terminal status. Shared
+source cache and local downloads remain; an incomplete cache still needs an
+explicit successful sync before new work can use it.
+
 ## Delete authorized terminal payloads
 
 ```bash

@@ -40,8 +40,11 @@ bundled helper automatically. Read-only previews never deploy it.
 This development build starts fresh local schema-3 state in `state-v3`.
 It does not import historical locators, subscriptions, receipts or destinations;
 bind `here` again from the intended Codex chat. Prior stores and credentials are
-not deleted. Remote project control remains schema 2 in `.loaf-control-v2`;
-never hot-upgrade an active Supervisor. Historical formats and interfaces are
+not deleted. New remote projects use schema 3 in `.loaf-control-v2`, including
+durable no-start receipts for abandoned preparation. Existing schema-2 projects
+are rejected without conversion; use a new remote project directory for this
+development build, preserving the original directory and its matching CLI.
+Never hot-upgrade an active Supervisor. Historical formats and interfaces are
 not supported by this development build. A fresh local store does not establish
 that an older uncertain cloud allocation did not happen. Reconcile real paid
 operations before any new explicitly authorized acquisition.

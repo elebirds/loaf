@@ -4,6 +4,12 @@
 
 Download the archive for your platform and its checksums file from [Releases](https://github.com/elebirds/loaf/releases). Filenames use `darwin` for macOS, `linux` for Linux, `arm64` for Apple Silicon/ARM64, and `amd64` for Intel/AMD x86-64. Extract the archive into a new directory.
 
+Use the manuals inside that archive for its available commands. The repository's
+`main` branch can contain features newer than the latest published download;
+`VERSION` records a target, not proof of a published release. To try `main`, use
+the source build below. Before replacing a CLI used by existing tasks, follow
+[the upgrade steps](upgrading.md) and keep its matching binary.
+
 Archives contain one executable, both READMEs, the Skill, examples, `BUILD.json`, and third-party license texts. From an extracted archive directory:
 
 ```bash

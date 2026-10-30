@@ -16,9 +16,9 @@ import (
     "github.com/creack/pty"
 )
 
-// An Agent may allocate a PTY without intending a menu. Do not send any input:
-// each ordinary invocation must complete through the same packaged entry point.
-func TestUXCoreTerminalDefaultsAreFinite(t *testing.T) {
+// People and Agents use the same finite entry points. No input is sent, even
+// with -i: that flag permits operation-local input, not a domain dashboard.
+func TestPackagedTerminalQueriesStayFinite(t *testing.T) {
     if os.Getenv("LOAF_INTEGRATION") != "1" {
         t.Skip("run bash scripts/integration.sh for packaged PTY entry checks")
     }
@@ -29,8 +29,14 @@ func TestUXCoreTerminalDefaultsAreFinite(t *testing.T) {
         json bool
     }{
         {"help", nil, 0, false},
+        {"interactive-help", []string{"-i"}, 0, false},
         {"cloud-help", []string{"cloud"}, 0, false},
+        {"interactive-cloud-help", []string{"cloud", "-i"}, 0, false},
         {"machines", []string{"machine"}, 0, false},
+        {"interactive-machines", []string{"machine", "-i"}, 0, false},
+        {"interactive-local-status", []string{"status", "--local", "-i"}, 0, false},
+        {"interactive-deliveries", []string{"notify", "-i"}, 0, false},
+        {"interactive-events", []string{"events", "-i"}, 0, false},
         {"missing-machine", []string{"machine", "add"}, 2, false},
         {"missing-resource", []string{"cloud", "acquire"}, 2, false},
         {"explicit-false", []string{"--interactive=false"}, 0, false},

@@ -30,7 +30,7 @@ func (s Service) localView(ref task.RunRef) (View, error) {
 // remember receives only a query failure. Consumption and local persistence
 // errors do not invalidate an independently verified remote observation.
 func (s Service) remember(ctx context.Context, ref task.RunRef, v View, queryErr error) error {
-    if s.Observations == nil || v.ID == "" || ref.Cleanup != nil {
+    if s.Observations == nil || v.ID == "" || ref.Cleanup != nil || ref.Abandonment != nil && ref.Abandonment.NoStartAt != nil {
         return nil
     }
     next := task.RunObservation{}

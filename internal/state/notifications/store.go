@@ -485,7 +485,7 @@ func (s Store) RecordSourceFailure(ctx context.Context, src Source, code string,
 }
 func deliverable(kind string) bool {
     switch kind {
-    case "run.succeeded", "run.failed", "run.stopped", "queue.canceled", "queue.attention_required", "resource.acquired", "resource.ready", "resource.started", "resource.stopped", "resource.attention_required", "attention.required":
+    case "run.succeeded", "run.failed", "run.stopped", "run.preparation_abandoned", "queue.canceled", "queue.attention_required", "resource.acquired", "resource.ready", "resource.started", "resource.stopped", "resource.attention_required", "attention.required":
         return true
     }
     return false

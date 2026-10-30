@@ -19,7 +19,6 @@ import (
 type invocation struct {
     ui              bool
     editAcquisition *atomic.Bool
-    profileOnly     bool
     app             *client.App
     options         Options
     grammar         *grammar
@@ -32,19 +31,17 @@ type invocation struct {
 func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
     g, p := c.grammar, c.output
     switch path {
-    case "":
-        return c.uxRoot(ctx)
     case "version":
         info, _ := debug.ReadBuildInfo()
         return versionData(info), nil
     case "machine", "machine add", "machine use", "machine list", "machine show", "machine remove":
-        return c.uxAMachineCommand(ctx, path)
+        return c.machine(ctx, path)
     case "check":
-        return c.uxBDirectCheck(ctx)
+        return c.check(ctx)
     case "sync":
-        return c.uxCSyncCommand(ctx)
+        return c.syncProject(ctx, c.syncInput())
     case "run":
-        return c.uxCRunCommand(ctx)
+        return c.run(ctx)
     case "status":
         v := g.PS
         result, err := c.app.Projects.PS(ctx, client.PSInput{ID: v.ID, Local: v.Local, Wait: v.Wait, Limit: v.Limit, Target: g.Target, Name: v.Name, Since: v.Since, Until: v.Until, Statuses: v.Status, Tags: v.Tag, Policy: c.policy})
@@ -88,7 +85,7 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
         }
         return nil, err
     case "clean":
-        if !g.Clean.DryRun && !g.Clean.Yes && !c.uxInteractive() {
+        if !g.Clean.DryRun && !g.Clean.Yes && !c.interactiveInput() {
             return nil, fault.Invalid("--yes", "missing_argument", "clean_confirmation_required")
         }
         preview, err := c.app.Projects.PrepareClean(ctx, client.CleanInput{IDs: g.Clean.IDs, PrepareRunner: !g.Clean.DryRun, Policy: c.policy})
@@ -107,6 +104,8 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
             }
         }
         return c.app.Projects.ExecuteClean(ctx, preview, c.policy)
+    case "abandon":
+        return c.abandon(ctx)
     case "exec":
         return c.exec(ctx)
     case "ssh":
@@ -126,9 +125,6 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
         return nil, c.input.WithNative(ctx, nil, func() error {
             return c.app.Machines.Forward(ctx, deref(g.Target), g.Forward.Port, g.Forward.LocalPort, c.policy, p.err, c.progress)
         })
-    }
-    if path == "cloud" {
-        return c.cloudHub(ctx)
     }
     if strings.HasPrefix(path, "cloud ") {
         return c.cloud(ctx, path)
@@ -167,11 +163,11 @@ func (c *invocation) progress(event client.Progress) {
 }
 
 func (c *invocation) run(ctx context.Context) (any, error) {
-    in, err := c.uxCRunArgs()
+    in, err := c.runInput()
     if err != nil {
         return nil, err
     }
-    return c.uxCRunInput(ctx, in)
+    return c.submitRun(ctx, in)
 }
 
 type logAcknowledgement struct {
@@ -182,7 +178,7 @@ type logAcknowledgement struct {
 }
 
 func (c *invocation) logs(ctx context.Context) (any, error) {
-    return c.uxEDirectLogs(ctx)
+    return c.directLogs(ctx)
 }
 
 func (c *invocation) exec(ctx context.Context) (any, error) {

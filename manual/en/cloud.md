@@ -2,17 +2,21 @@
 
 [Home](../../README.md) · [Command reference](commands.md) · [简体中文](../zh-Hans/cloud.md)
 
-## Start with your cloud overview
+## Choose the operation
+
+Use direct commands to manage resources:
 
 ```bash
-loaf cloud -i
+loaf cloud login --prompt autodl-main
+loaf cloud list --account autodl-main
+loaf cloud info INSTANCE_ID --account autodl-main
+loaf cloud acquire -i
 ```
 
-Explicit `-i` / `--interactive` opens **My instances, Find compute / rent, Requests needing attention, Accounts and profiles, Exit** in a terminal. The header identifies the current account and Standard/Pro product. Switching is session-only; explicitly set a default to save it. The first page queries only that scope. Expired login still leaves local request recovery and account/login navigation available. Without `-i`, bare `loaf cloud` returns offline help, even in a terminal. `--json` cannot combine with `-i`.
-
-Search, filter by state and refresh existing instances, retaining partial results and their coverage. Details offer binding/retry, native SSH, redacted connection details, project selection and applicable power actions. Power changes require separate confirmation; the menu observes them for two minutes. Direct commands still default to submission-only, including explicit `--wait 0s`; accepted is not completed.
-
-Pending requests prioritize uncertain creation, created-but-unconnected instances and unresolved power changes. Recovery uses the saved principal and resource, regardless of the menu scope. Associate a platform-verified instance or explicitly confirm that creation did not happen. Power recovery observes the original request without resubmitting it.
+GPU acquisition has a dedicated interactive flow for comparing candidates and
+reviewing costs. Other operations use their command arguments and, when needed,
+a single confirmation. Bare `loaf cloud`, with or without `-i`, shows offline
+help. Use `--json` for automation; it cannot combine with `-i`.
 
 ## Rent a GPU in one guided flow
 
@@ -25,7 +29,7 @@ With `-i`, the Huh wizard collects four groups of choices:
 1. **Compute:** search the actual GPU model names, choose the card count and allowed regions. Resource floors are optional advanced conditions.
 2. **Selection or automatic acquisition:** select a currently available host, or set a whole-instance hourly price cap and wait for matching stock.
 3. **Environment and storage:** select a base or personal image by its framework/Python/CUDA label, then choose disk expansion. Expanded storage has a separate daily price cap.
-4. **Review:** check the account, product, image, prices and conditions; choose an alias and optional post-ready actions. Type `yes` to authorize at most one instance.
+4. **Review:** check the account, product, image, prices and conditions; choose an alias. Type `yes` to authorize at most one instance.
 
 Regions are grouped by the platform's data center, with one choice per display area. Selecting an area includes all of its internal region IDs. A flag or profile restricted to particular IDs keeps that exact scope; only explicitly selecting the whole group expands it. `--region` and catalog JSON retain canonical IDs.
 
@@ -33,9 +37,9 @@ With no region preference, the wizard preselects regions marked public by the pl
 
 The header keeps the complete route visible: **Mode → GPUs → Host/conditions → Image/disk → Approve → Acquire → Connect**. `●` marks the current step, `✓` marks earlier completed choices, and `○` marks upcoming steps. Only the current step's fields expand; going back updates the position.
 
-Use arrows to navigate, `/` to search, Space to toggle multiple choices, Enter to continue, and Shift+Tab to move between fields. Each page offers back/cancel navigation where choices change. Ctrl+C cancels. A plain-terminal fallback uses numbered choices; Enter keeps the marked choice, comma-separated numbers select multiple entries, and `0` clears them. Existing flags and profiles prefill the wizard. Complete named commands retain their direct path; `--yes` skips the wizard. Without `-i`, missing inputs produce diagnostics instead. A single saved account can be selected for this invocation without changing its global default. With no account, the wizard can return from native login to acquisition.
+Use arrows to navigate, `/` to search, Space to toggle multiple choices, Enter to continue, and Shift+Tab to move between fields. Each page offers back/cancel navigation where choices change. Ctrl+C cancels. A plain-terminal fallback uses numbered choices; Enter keeps the marked choice, comma-separated numbers select multiple entries, and `0` clears them. Existing flags and profiles prefill the wizard. Ordinary complete commands run directly; with `-i`, configured inputs open at review. `--yes` skips the wizard. Without `-i`, missing inputs produce diagnostics instead. A single saved account can be selected for this invocation without changing its global default. With no account, the wizard can return from native login to acquisition.
 
-A complete profile opens at review. Go back to change individual groups without losing the draft. Review also offers save-without-renting and an equivalent command without payment approval.
+A complete profile opens at review. Go back to change individual groups without losing the draft. Review can display an equivalent command without payment approval. Save reusable preferences with `cloud profile save`.
 
 **Selection fixes one candidate.** The review requotes that candidate with the chosen environment and storage. If stock or price changes, return to selection; Loaf never silently buys a different host. For web Pro, a candidate is a model/region/specification combination, not a physical host reservation. The first guided path supports pay-as-you-go, base/personal images; period billing, coupons and community-application creation are not offered.
 
@@ -65,8 +69,6 @@ Directories return canonical values, not live stock. `--query` searches names/ID
 
 `profile save` stores effective preferences offline using existing precedence, even before renting; replacing a personal name needs `--replace`. `remove` deletes only the personal profile, with interactive confirmation or batch `--yes`. A same-named project profile remains effective. Profile views report sources and overrides without editing project files.
 
-The review can optionally select the ready machine for this project and save a personal profile under its alias. Saved preferences contain resource/image conditions, not accounts, instance IDs or payment approval. An existing profile is not silently replaced. Use `--profile` to prefill another acquisition.
-
 ### Use the same workflow without prompts
 
 ```bash
@@ -91,7 +93,7 @@ Finite JSON still has one stdout result. Default `--json` suppresses progress; o
 loaf cloud bind --request REQUEST_ID --json
 ```
 
-This recovers the alias and frozen resource from the receipt, never rents again. `cloud info`, `cloud start`, `cloud stop` and `cloud bind` can offer an instance picker when invoked interactively without an ID; noninteractive callers must supply exact IDs or bound aliases. Whole-instance power changes still require explicit confirmation.
+This recovers the alias and frozen resource from the receipt, never rents again. `cloud info`, `cloud start`, `cloud stop` and `cloud bind` require an exact instance ID, bound alias or saved request; they do not open an instance-management menu. Whole-instance power changes still require explicit confirmation.
 
 ## Acquire and connect AutoDL compute
 
@@ -159,7 +161,10 @@ Cloud runner operations share one private, command-scoped OpenSSH master per bou
 
 Connection readiness runs only fixed `/bin/true` probes, at most ten seconds each. Transient connection and platform-read failures retry every five seconds. Trust, authentication and configuration failures immediately give a safe classification and action. Probe counts are separate from allocation attempts; ordinary foreground `exec` is never replayed.
 
-For first-host trust, interactive recovery opens a native OpenSSH fingerprint decision without password/key authentication, then strictly authenticates the same instance. A changed host key stops automatic connection and requires manual investigation, without a key-removal shortcut. After a timeout, continue checking the original instance, view redacted connection details, or keep the result and exit. Rebinding the same frozen identity is idempotent; a different resource still needs explicit `--replace`.
+Establish first-host trust through native SSH, then retry `cloud bind` for the
+same instance or saved request. A changed host key requires manual investigation;
+Loaf never removes the old key automatically. Rebinding the same frozen identity
+is idempotent; a different resource still needs explicit `--replace`.
 
 ### Choose conditions in configuration or directly
 

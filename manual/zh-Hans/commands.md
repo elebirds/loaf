@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `--lang` | `string` | 界面语言：auto、en 或 zh-Hans。 |
 | `--json` | `bool` | 输出 JSON；exec、logs -f、cloud watch 和持续 notify serve 使用 NDJSON。 |
-| `--interactive` | `bool` | 打开菜单并引导补齐缺项；需要终端，不可与 --json 合用。 |
+| `--interactive` | `bool` | 允许按需补齐当前命令的输入和确认；提示需要终端，不可与 --json 合用。 |
 | `--trace` | `bool` | 为有限命令报告脱敏 SSH 阶段耗时及连接／重试计数。 |
 | `--target` | `string` | 覆盖当前项目的目标别名。 |
 | `--help` | `bool` | 显示帮助。 |
@@ -29,6 +29,7 @@
 | `loaf wait` | `loaf wait --tag experiment` | 等待选定任务完成。 |
 | `loaf pull` | `loaf pull` | 下载已保存任务的选定输出。 |
 | `loaf clean` | `loaf clean r_example --dry-run` | 清理已结束任务的远端数据。 |
+| `loaf abandon` | `loaf abandon r_example --dry-run` | 放弃准备并回收其远端数据。 |
 | `loaf sync` | `loaf sync --dry-run` | 将当前工作源码同步到受管远端缓存。 |
 | `loaf queue` | `loaf queue` | 将任务加入可选的单机 FIFO 队列。 |
 | `loaf queue list` | `loaf queue list` | 列出所选机器的队列和共享并发额度。 |
@@ -58,7 +59,7 @@
 
 | 命令 | 最简调用 | 用途 |
 | --- | --- | --- |
-| `loaf cloud` | `loaf cloud -i` | 管理云资源；使用 --interactive 打开概览。 |
+| `loaf cloud` | `loaf cloud` | 查询和管理云资源。 |
 | `loaf cloud catalog` | `loaf cloud catalog gpu` | 查找 GPU、地区和镜像选项。 |
 | `loaf cloud catalog gpu` | `loaf cloud catalog gpu` | 列出平台 GPU 型号。 |
 | `loaf cloud catalog region` | `loaf cloud catalog region` | 按名称和标识列出地区。 |
@@ -123,9 +124,9 @@
 
 使用 `loaf help COMMAND` 查看参数描述、内置默认值、范围及示例；`loaf help COMMAND --json` 增加结构化参数元数据。清单与帮助来自同一命令声明。[参数构造](guide.md#准确构造参数)说明原样 argv、重复选项、CSV、false/零/空值和 Shell 边界。[配置参考](configuration.md)解释生效优先级，[JSON](json.md)说明结果与错误。
 
-`loaf -i` 打开项目概览。`machine`、`queue`、`notify`、`events`、`status` 只有带 `-i / --interactive` 才打开浏览器，否则即使在终端中也保持有限查询。明确 ID／选项仍保留直接语义，缺项向导也须显式开启。交互需要终端，与 `--json` 冲突，也不代表批准变更。
+命令直接执行。`-i / --interactive` 只允许补齐当前命令的输入或确认。裸 `loaf` 和 `loaf cloud` 即使带 `-i` 也显示离线帮助；`machine`、`status`、`queue`、`notify`、`events` 保持有限查询语义。交互输入需要终端，与 `--json` 冲突，也不代表批准变更。
 
-`logs`、`stop`、`outputs`、`pull` 不带 ID 时选择最近已提交或未确认任务。`wait` 必须明确 ID 或标签，`clean` 必须明确 ID。其他常用调用：
+`logs`、`stop`、`outputs`、`pull` 不带 ID 时选择最近已提交或未确认任务。`wait` 必须明确 ID 或标签，`clean`、`abandon` 必须明确 ID。其他常用调用：
 
 ```bash
 loaf run

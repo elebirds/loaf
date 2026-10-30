@@ -125,7 +125,6 @@ func TestCloudUXHumanWizardSelectsActualHostAndNeverConfirmsImplicitly(t *testin
             answers := []string{"", "1", "", "", "", "", "2", "", "", "", "", "", "", "", "", "no"}
             if accept {
                 answers[len(answers)-1] = "yes"
-                answers[13] = "1,2"
             }
             o.In = strings.NewReader(strings.Join(answers, "\n") + "\n")
             code, out, stderr := run(t, o, "-i", "cloud", "acquire")
@@ -134,38 +133,11 @@ func TestCloudUXHumanWizardSelectsActualHostAndNeverConfirmsImplicitly(t *testin
                     t.Fatal(code, out, stderr, p.creates, p.picked)
                 }
                 settings, err := o.Config.Load()
-                if err != nil || settings.Resources["gpu"].AutoDL.Image == nil || *settings.Resources["gpu"].AutoDL.Image != "base-1" {
+                if err != nil || len(settings.Resources) != 0 || settings.Targets["gpu"].Cloud == nil {
                     t.Fatal(settings, err)
                 }
             } else if code == 0 || p.creates != 0 {
                 t.Fatal(code, out, stderr, p.creates)
-            }
-        })
-    }
-}
-
-func TestCloudUXOptionalProfileReplacementNeedsConfirmation(t *testing.T) {
-    for _, answer := range []string{"", "yes"} {
-        t.Run(map[string]string{"": "keep", "yes": "replace"}[answer], func(t *testing.T) {
-            o, p := uxFixture(t)
-            original := "original-image"
-            if err := o.Config.SaveCloudProfile(context.Background(), "gpu", cloud.Profile{AutoDL: cloud.AutoDLProfile{Image: &original}}, false); err != nil {
-                t.Fatal(err)
-            }
-            o.Interactive = true
-            answers := []string{"", "1", "", "", "", "", "2", "", "", "", "", "", "", "2", "", "yes", answer}
-            o.In = strings.NewReader(strings.Join(answers, "\n") + "\n")
-            code, out, diagnostic := run(t, o, "-i", "cloud", "acquire")
-            if code != 0 || p.creates != 1 {
-                t.Fatal(code, out, diagnostic)
-            }
-            settings, err := o.Config.Load()
-            want := original
-            if answer == "yes" {
-                want = "base-1"
-            }
-            if err != nil || *settings.Resources["gpu"].AutoDL.Image != want {
-                t.Fatal(settings, err)
             }
         })
     }

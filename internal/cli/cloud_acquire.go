@@ -3,6 +3,7 @@ package cli
 import (
     "context"
     "errors"
+    "github.com/elebirds/loaf/internal/cli/interaction"
     "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/fault"
     "sync/atomic"
@@ -46,7 +47,7 @@ func (c *invocation) acquireOnce(ctx context.Context, in client.CloudAcquireInpu
         }
     }()
     var approval client.ApproveCloud
-    if c.uxInteractive() {
+    if c.interactiveInput() {
         approval = c.approveCloud
     }
     if len(approvals) > 0 {
@@ -60,23 +61,12 @@ func (c *invocation) acquireCloud(ctx context.Context) (any, error) {
     if err != nil {
         return nil, err
     }
-    wizard := c.uxInteractive() && !in.Yes && !in.DryRun && in.Name == ""
-    if c.uxInteractive() && !in.Yes && !in.DryRun && !wizard {
-        _, e := c.app.Resources.CloudPreview(ctx, in)
-        var f *fault.Error
-        if errors.As(e, &f) && (f.Message == "cloud_account_unknown" || f.Input != nil && f.Input.Reason == "missing_argument") {
-            wizard = true
-        }
-    }
+    wizard := c.interactiveInput() && !in.Yes && !in.DryRun
     if !wizard {
         if in.Name == "" {
             return nil, fault.Invalid("name", "missing_argument", "cloud_name_required")
         }
         result, e := c.acquireOnce(ctx, in)
-        if e != nil && result.Binding != nil {
-            binding, recovered := c.recoverCloudBinding(ctx, *result.Binding, e)
-            result.Binding, e = &binding, recovered
-        }
         return acquisitionData(result), e
     }
     c.output.cloudWizard = true
@@ -86,12 +76,14 @@ func (c *invocation) acquireCloud(ctx context.Context) (any, error) {
     }
     for {
         if err := draft.edit(ctx, c); err != nil {
+            if errors.Is(err, interaction.ErrCanceled) {
+                c.output.cloudDeclined = true
+                draft.present(c)
+                return draft.plan, err
+            }
             return nil, err
         }
-        if draft.savedOnly {
-            profiles, e := c.app.Resources.CloudProfiles(ctx, draft.savedName)
-            return cloudProfilesResult{Profiles: profiles}, e
-        }
+        draft.present(c)
         editRequested := &atomic.Bool{}
         c.editAcquisition = editRequested
         result, e := c.acquireOnce(ctx, draft.in, func(work context.Context, approval client.CloudApproval) error {
@@ -99,18 +91,8 @@ func (c *invocation) acquireCloud(ctx context.Context) (any, error) {
         })
         c.editAcquisition = nil
         if editRequested.Load() && canEditCloudAcquisition(result) {
-            draft.approvedPlan = nil
-            draft.step = 0
+            draft.move(cloudRestart)
             continue
-        }
-        if e != nil && result.Binding != nil {
-            binding, recovered := c.recoverCloudBinding(ctx, *result.Binding, e)
-            result.Binding, e = &binding, recovered
-        }
-        if e == nil && result.Binding != nil && result.Binding.Status == "ready" {
-            if err := draft.finish(ctx, c); err != nil {
-                return acquisitionData(result), err
-            }
         }
         var f *fault.Error
         if draft.mode == "select" && errors.As(e, &f) && f.Code == "NO_MATCH" {
@@ -119,11 +101,11 @@ func (c *invocation) acquireCloud(ctx context.Context) (any, error) {
                 return acquisitionData(result), er
             }
             if choice == "next" {
-                draft.step = 1
+                draft.move(cloudRetryCandidate)
                 continue
             }
             if choice == "back" {
-                draft.step = 0
+                draft.move(cloudRestart)
                 continue
             }
         }

@@ -2,24 +2,26 @@
 
 [Home](../../README.md) · [Command reference](commands.md) · [Notifications and queues](async.md) · [简体中文](../zh-Hans/guide.md)
 
-## Choose an overview or a direct command
+## Use one command workflow
 
-In a terminal, `loaf -i` opens the current project's local overview.
-Start a run, browse tasks and logs, collect results, manage machines, or open
-cloud resources. **More** contains source sync, queues, notifications and events.
-A complete command keeps its direct path; you do not need to visit a menu first.
+Run experiments directly; the same commands serve people and agents:
 
 ```bash
-loaf --help
-loaf help run --json
-loaf run --wait 10s --json -- python3 train.py
+loaf run -- python3 train.py
+loaf status
+loaf logs -f
+loaf pull
 ```
 
-Without `-i` / `--interactive`, calls return help, finite results or missing-input
-errors, even with a terminal. Menus and missing-input guidance require that flag;
-it cannot combine with `--json` and requires terminal input. Help/version stay
-offline. Native SSH/exec streams and explicit authentication prompts keep their
-own contracts. Interactive mode does not approve a paid or destructive action.
+Add `--json` for structured results. `loaf help run --json` describes parameters.
+`-i` permits input or confirmation for the current operation; it does not open
+an application dashboard. Ordinary queries stay finite, including with `-i`.
+Bare `loaf` and `loaf cloud` show offline help with or without that flag.
+
+Use `loaf cloud acquire -i` to compare GPUs, choose an environment and review
+costs. Login, machine registration and deletion confirmation use local prompts.
+Interactive input requires a terminal and cannot combine with `--json`; native
+SSH/exec streams retain their own authentication contracts.
 
 ## Set up a research machine
 
@@ -38,20 +40,11 @@ Already have an SSH Host alias? Use `loaf machine add lab --ssh lab-gpu`. Connec
 
 List saved machines with `loaf machine list`, inspect one with `loaf machine show lab`, and remove an alias with `loaf machine remove lab`. These commands only read or update local settings, not remote machines. Removing an alias leaves saved runs and remote data intact. A project still selecting that alias requires explicit reselection; its TOML is not rewritten and another machine is never chosen implicitly.
 
-For an interactive machine browser, run `loaf machine -i`. Search saved aliases,
-open a detail, or add a connection; `machine add/use/show/remove` also guide a
-caller with `-i` when inputs are missing. Complete calls stay direct. JSON and
-noninteractive calls require those inputs; use `machine list --json` to query.
-Aliases use 1–64 ASCII letters, digits, `_` or `-`, starting with a letter or digit.
-
-For a machine bound to a cloud instance, choose **Inspect cloud instance** in its
-detail view. This read-only query uses the selected entry's saved binding; later
-alias changes or account/product defaults do not redirect it to another instance.
-
-Registering an alias does not select it for a project. A picker changes only the
-current action; **Set as this project's machine** or `machine use` saves a project
-choice. Replacing a shared alias changes future operations in projects using it,
-while existing tasks retain their saved bindings.
+For guided registration, use `loaf machine add -i`. Other machine commands
+use explicit names. Aliases use 1–64 ASCII letters, digits, `_` or `-`, starting
+with a letter or digit. Registering an alias does not select it for a project;
+`machine use NAME` saves that selection. Replacing an alias affects future
+operations, while existing tasks retain their original bindings.
 
 `machine add` saves the connection locally; `check` actually connects. JSON and non-TTY commands do not ask for passwords or host trust. Establish host trust with native SSH first. For these static targets, authentication must then work through a key, SSH agent, or native SSH connection sharing; a one-off password login without connection sharing does not authenticate later commands. Loaf never saves passwords or disables host-key verification.
 
@@ -97,12 +90,9 @@ loaf logs
 
 `run` checks execution prerequisites, deploys the matching runner, synchronizes working sources, and copies an independent work directory under the same project lock. It then starts a detached supervisor and returns a run ID. There is no required `check`, `sync`, project initialization, or launch script before each run. Later syncs do not change an existing run's code.
 
-With a command and usable machine configured, `loaf run` submits directly. Only
-a call with `-i` missing one of those inputs opens guidance and a review;
-an explicitly invalid target or configuration still fails. JSON, noninteractive
-and dry-run calls never fill gaps through forms. **Run this project** in the root
-overview always offers a local review, including exact argv, setup, source size,
-outputs and configuration sources. Environment values remain private.
+Supply the command after `--` or save `run.command` in the project, and select
+a machine with `machine use` or `--target`. Missing inputs return an actionable
+error rather than entering a separate run editor. `--dry-run` is optional.
 
 Acceptance means the supervisor owns the task, not that training succeeded. Close the local terminal or SSH connection and query the saved ID later:
 
@@ -111,7 +101,7 @@ loaf status <run-id>
 loaf logs <run-id> -f
 ```
 
-Direct `status` queries list the latest submitted or submission-uncertain runs in this project, bounded to 20 by default (`--limit` or `[ps].limit` changes the bound). An ID queries that run only; bare interactive `status` instead opens the local browser described below. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection and remote location when project defaults change; `--target` cannot redirect an ID query.
+Direct `status` queries list the latest submitted or submission-uncertain runs in this project, bounded to 20 by default (`--limit` or `[ps].limit` changes the bound). An ID queries that run only; `-i` does not change the query into a browser. Failed queries preserve successful rows and do not label training as failed. `logs` without an ID selects the latest submitted or submission-uncertain run, not an older fallback. Proven preflight/sync failures do not replace it. Saved runs keep their original connection and remote location when project defaults change; `--target` cannot redirect an ID query.
 
 If preparation fails after saving a run ID locally, the error result retains that ID and its original binding. A saved `submission: "preparing"` record can be read with `inspect <run-id>` or `status <run-id> --local`; it stays out of history lists and latest-run selection. A live `status <run-id>` queries the same binding without starting or resuming execution. Preparation is not confirmed submission.
 
@@ -127,26 +117,9 @@ The plan includes target selection, literal entry-point argv, setup presence, en
 
 ### Find tasks and inspect them offline
 
-`loaf status -i` first shows saved project records without querying
-remote machines. Select a task, or choose **Refresh live** under **Search and
-actions**. Search covers only loaded rows; exact filters apply before the query
-limit. Returning preserves the filters and selection. `~` marks a dated
-observation, `Q!` a current query failure, `Q~` a saved query failure and `S!` a
-local save failure. Old observations are not live status.
-
-Known-ID calls, explicit list options, JSON and piped calls stay direct—even
-`status --wait 0s` or `status --local=false`. **Open a saved ID** also lets you
-inspect preparation records that do not appear in history. Task actions keep the
-selected ID and original binding; they do not resolve latest again.
-
-A run started from the overview shows its submission result and next actions
-together. Open the task, logs or outputs, then return to the same result;
-**Details** is optional. These actions never submit the experiment again.
-After cleanup, the saved receipt removes stale logs/output actions without
-another connection or submission.
-In task details, **Subscribe to this task** lets you choose recipients and
-review replay before saving a subscription for that exact ID. It does not
-start notification delivery.
+Use `loaf status` for live observations, `loaf status --local` for saved facts,
+and `loaf inspect ID` for one saved binding. A dated observation is not live
+status. Task IDs keep follow-up operations on the original machine.
 
 Give a task a readable name and repeatable tags when submitting:
 
@@ -187,12 +160,6 @@ Normal output shows preparation stages and streams logs during `run --wait`. JSO
 loaf logs <run-id> --tail 100 --json
 loaf logs <run-id> -f --json
 ```
-
-In a task's **Logs** view, choose recent logs or following. Leave tail lines
-blank for project/user settings; `0` skips the initial tail when following. **Cursor and
-recovery options** holds saved cursors, cursor files and the disconnected-wait
-budget. Direct `logs` commands still run without this menu, including the
-existing latest rule when the ID is omitted.
 
 Log tails default to 100 lines and at most 256 KiB of log text. `log.truncated` reports omitted output. Following reads emit `data.type = "chunk"` and a final `"end"`, with the run observation under `data.run`; stream errors emit `"error"` with the ordinary error object. Offsets count bytes in the source log. Program output is not translated or interpreted as metrics. Programs must flush their own output for timely logs.
 
@@ -267,10 +234,7 @@ Outputs include a PyTorch checkpoint, metrics, model parameters, and held-out in
 
 ## Inspect a machine and forward a service
 
-Open a saved machine under **Machines and connections** to check it, start SSH,
-run a foreground command or open a tunnel. These actions retain that selected
-alias for this visit; they do not change the project's default machine. Use a
-complete command to go directly to the native stream:
+Inspect or access the selected machine with direct commands:
 
 ```bash
 loaf exec -- nvidia-smi
@@ -352,12 +316,6 @@ loaf pull r_A r_B --into ./comparison --concurrency 2 --json
 
 `outputs` reads only each run's frozen output selection. It reports relative paths, type, bytes, modification time and missing roots, with visited-root and entry coverage. Depth is relative to each output root (root = 0); limits are 0–20 levels and 1–1000 entries. `truncated` and `depth_limited` make unvisited contents explicit. It does not read file contents, checksum files, follow links or require a successful/live task. Ordinary browsing does not upload a helper; a missing/mismatched executable returns `RUNNER_REQUIRED`. Only `--prepare-runner` authorizes repair. `pull` keeps its existing automatic preparation.
 
-From the interactive overview, **Results and cleanup** selects explicit tasks
-before browsing metadata and reviewing a download. A directory selection
-includes its descendants; the browsing depth does not limit the subsequent
-download. Direct `outputs` and `pull` calls keep their behavior without a review
-form.
-
 Quote a literal filename to keep spaces and wildcard characters intact:
 
 ```bash
@@ -386,27 +344,46 @@ not total Run storage. Review coverage before using it to plan downloads.
 
 ```bash
 loaf clean <run-id> --dry-run --json
-loaf clean <run-id>
+loaf clean <run-id> -i
 loaf clean <run-id> --yes --json
 ```
 
-Cleanup requires explicit IDs; it never selects the latest task or all tasks implicitly. The preview names the bound machine and remote data that would be removed without deploying a helper or deleting files. Actual cleanup rechecks ownership, completion, and locks; a preview is not a reserved deletion permit. Human output asks once for confirmation. JSON and noninteractive deletion require `--yes`.
-
-From a task detail or **Results and cleanup**, select the exact tasks and review
-their paths and eligibility. A mixed ineligible selection cannot silently delete
-only the eligible rows. Confirmation defaults to keeping remote data. Recovery
-returns only unfinished original IDs to a fresh preview and another confirmation.
+Cleanup requires explicit IDs; it never selects the latest task or all tasks implicitly. The preview names the bound machine and remote data that would be removed without deploying a helper or deleting files. Actual cleanup rechecks ownership, completion, and locks; a preview is not a reserved deletion permit. Use `-i` for one human confirmation, or supply `--yes` for an explicitly authorized noninteractive deletion.
 
 Cleanup removes the selected task's remote working files, logs, and outputs. Collect anything you need first: downloaded local results are kept, but remote payload deletion cannot be undone. Only confirmed submissions with a freshly verified terminal result are eligible. Active, submission-uncertain, unowned, or unconfirmed tasks are refused rather than stopped implicitly. Unsubmitted preparation data (`submission: "preparing"`) cannot currently be reclaimed with `clean`. Other runs, source caches, shared data, and environments are not removed.
 
 A small deletion receipt and ID claim remain to prevent a delayed request from executing the same task again. `status` retains the original execution outcome and reports cleanup metadata; `logs`, `pull`, and `stop` return `RUN_CLEANED`. Cleaning the newest run does not make those commands silently select an older one. For partial failure or lost confirmation, inspect the reported IDs and retry only those same explicit IDs.
 
 
-## Sync working code
+## Reclaim a failed preparation
 
-In the overview, **More → Review source sync** shows the local selection first.
-Only **Sync now** connects. Changing the machine returns to review; it does not
-save a project default.
+If source transfer or work-copy preparation failed, use the run ID retained in
+the error result:
+
+```bash
+loaf abandon <run-id> --dry-run --json
+loaf abandon <run-id> --yes --json
+```
+
+`abandon` permanently prevents that ID from starting, then removes only its run
+payload. IDs are explicit; there is no latest/all default. The preview changes
+no files and deploys no helper. Without `--yes`, human confirmation requires
+`loaf -i abandon <run-id>`. Shared source cache, other tasks and local downloads
+are retained; abandonment does not repair an incomplete source sync.
+
+The remote owner must prove launch admission has not happened. A local
+`preparing` or `uncertain` value alone is insufficient. A dispatched launch is
+refused even if its Supervisor has not yet published a PID. For accepted tasks,
+use `status`, `stop` and ordinary `clean`; for queued preparation, use
+`queue cancel` and `queue clean` with the saved queue request ID.
+
+On `ABANDON_UNCONFIRMED` (exit 3), retry this command with the same authorized ID.
+`no_start_at` confirms the permanent fence; `cleaned_at` separately confirms data
+removal. A fence remains valid after cancellation or a partial deletion. Inspect
+saved evidence with `loaf inspect <run-id> --json`. Abandonment does not invent a
+training exit result or change the original submission value.
+
+## Sync working code
 
 From the project directory, preview the selected files before uploading:
 

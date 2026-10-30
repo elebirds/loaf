@@ -20,28 +20,22 @@ import (
 )
 
 type cloudDraft struct {
-    browse                          bool
-    environmentReset                bool
-    savedOnly                       bool
-    savedName                       string
-    approvedPlan                    *cloud.Plan
-    approvedTarget, approvedAccount string
-    offset                          int
-    in                              client.CloudAcquireInput
-    mode                            string
-    step                            int
-    selected                        *cloud.Offer
-    models                          []cloud.CatalogItem
-    regions                         []cloud.CatalogItem
-    plan                            cloud.Plan
-    actions                         []string
-    cudaExplicit                    bool
+    environmentReset bool
+    approved         *cloudApproved
+    offset           int
+    in               client.CloudAcquireInput
+    mode             string
+    stage            cloudStage
+    selected         *cloud.Offer
+    models, regions  []cloud.CatalogItem
+    plan             cloud.Plan
+    cudaExplicit     bool
 }
 
 func cloudPointer[T any](v T) *T { return &v }
 
 func (d *cloudDraft) scope(c *invocation) string {
-    return d.scopeAt(c, min(d.step+1, 4))
+    return d.scopeAt(c, min(int(d.stage)+1, 4))
 }
 
 func (d *cloudDraft) scopeAt(c *invocation, current int) string {
@@ -50,9 +44,6 @@ func (d *cloudDraft) scopeAt(c *invocation, current int) string {
         account = *d.in.Select.Account
     }
     title := cloudScope(c.output.locale, account, d.plan.Product, d.in.Name)
-    if d.browse {
-        return title + "\n" + c.output.locale.Text("cloud_readonly_no_allocation")
-    }
     if d.environmentReset {
         title += "\n" + c.output.locale.Text("cloud_scope_environment_reset")
     }
@@ -67,7 +58,7 @@ func (d *cloudDraft) title(c *invocation, id string) string {
 }
 
 func (d *cloudDraft) selectChoice(ctx context.Context, c *invocation, id string, choices []interaction.Choice, value string) (string, error) {
-    current := min(d.step+1, 4)
+    current := min(int(d.stage)+1, 4)
     switch id {
     case "cloud_wizard_mode":
         current = 0
@@ -106,6 +97,7 @@ func (d *cloudDraft) navField(c *invocation) *interaction.Field {
 }
 
 func (d *cloudDraft) setup(ctx context.Context, c *invocation) error {
+    d.move(cloudRestart)
     r, l := c.app.Resources, c.output.locale
     d.cudaExplicit = d.in.Plan.Explicit.AutoDL.CUDAFrom != nil
     accounts := r.Settings.Cloud.Accounts
@@ -129,7 +121,9 @@ func (d *cloudDraft) setup(ctx context.Context, c *invocation) error {
             names = append(names, n)
         }
         sort.Strings(names)
-        if len(names) == 1 {
+        if len(names) == 0 {
+            name = "__login"
+        } else if len(names) == 1 {
             name = names[0]
         } else {
             choices := []interaction.Choice{}
@@ -154,17 +148,10 @@ func (d *cloudDraft) setup(ctx context.Context, c *invocation) error {
         if err != nil {
             return err
         }
-        c.grammar.Cloud.Login.Name = v
-        c.grammar.Cloud.Login.RememberPassword = true
-        if _, err := c.login(ctx); err != nil {
+        if _, err := c.loginRequest(ctx, client.LoginInput{Name: v, Product: copyCloudValue(d.in.Select.Product), Remember: true}); err != nil {
             return err
         }
-        settings, err := r.Config.Load()
-        if err != nil {
-            return err
-        }
-        r.Settings = settings
-        accounts = settings.Cloud.Accounts
+        accounts = r.Settings.Cloud.Accounts
         name = v
     }
     d.in.Select.Account = cloudPointer(name)
@@ -205,12 +192,12 @@ func (d *cloudDraft) setup(ctx context.Context, c *invocation) error {
     if d.in.CloneFrom == nil {
         d.normalizeProductEnvironment(accounts[name].Credential.Mode)
     }
-    if d.in.CloneFrom == nil && e == nil && d.plan.Requirements.MaxComputeHourlyPrice != nil && (d.in.Plan.Profile != "" || d.in.Plan.Explicit.GPUModels != nil) {
+    if e == nil && d.plan.Requirements.MaxComputeHourlyPrice != nil {
         d.mode = "auto"
         if d.in.OfferID != "" {
             d.mode = "select"
         }
-        d.step = 3
+        d.move(cloudStartReview)
         return nil
     }
     mode, err := d.selectChoice(ctx, c, "cloud_wizard_mode", []interaction.Choice{{Label: l.Text("cloud_mode_select"), Value: "select"}, {Label: l.Text("cloud_mode_auto"), Value: "auto"}}, d.mode)
@@ -218,7 +205,6 @@ func (d *cloudDraft) setup(ctx context.Context, c *invocation) error {
         return err
     }
     d.mode = mode
-    c.grammar.Cloud.Account, c.grammar.Cloud.Product = d.in.Select.Account, d.in.Select.Product
     err = c.cloudBusy(ctx, l.Text("cloud_loading_catalog"), d.scope(c), func(work context.Context) error {
         page, e := d.catalog(work, c, cloud.CatalogInput{Category: "gpu", Limit: 1000})
         if e != nil {
@@ -274,59 +260,55 @@ func (d *cloudDraft) normalizeProductEnvironment(mode string) {
 }
 
 func (d *cloudDraft) edit(ctx context.Context, c *invocation) error {
-    for d.step < 4 {
-        var back bool
+    for d.stage < cloudDone {
+        var next cloudTransition
         var err error
-        switch d.step {
-        case 0:
-            back, err = d.compute(ctx, c)
-        case 1:
-            back, err = d.candidate(ctx, c)
-        case 2:
-            back, err = d.environment(ctx, c)
-        case 3:
-            back, err = d.review(ctx, c)
+        switch d.stage {
+        case cloudCompute:
+            next, err = d.compute(ctx, c)
+        case cloudCandidate:
+            next, err = d.candidate(ctx, c)
+        case cloudEnvironment:
+            next, err = d.environment(ctx, c)
+        case cloudReview:
+            next, err = d.review(ctx, c)
         }
         if err != nil {
             return err
         }
-        if back {
-            if d.step > 0 {
-                d.step--
-            } else {
-                mode, e := d.selectChoice(ctx, c, "cloud_wizard_mode", []interaction.Choice{{Label: c.output.locale.Text("cloud_mode_select"), Value: "select"}, {Label: c.output.locale.Text("cloud_mode_auto"), Value: "auto"}}, d.mode)
-                if e != nil {
-                    return e
-                }
-                d.mode = mode
-            }
-        } else {
-            d.step++
+        if next == cloudCancel {
+            d.move(next)
+            return interaction.ErrCanceled
         }
+        if next == cloudBack && d.stage == cloudCompute {
+            mode, err := d.selectChoice(ctx, c, "cloud_wizard_mode", []interaction.Choice{{Label: c.output.locale.Text("cloud_mode_select"), Value: "select"}, {Label: c.output.locale.Text("cloud_mode_auto"), Value: "auto"}}, d.mode)
+            if err != nil {
+                return err
+            }
+            d.mode = mode
+        }
+        d.move(next)
     }
     return nil
 }
 
-func (d *cloudDraft) compute(ctx context.Context, c *invocation) (bool, error) {
+func (d *cloudDraft) compute(ctx context.Context, c *invocation) (cloudTransition, error) {
     l := c.output.locale
     before := d.in.Plan.Explicit
     defer func() {
         if !reflect.DeepEqual(before, d.in.Plan.Explicit) {
-            d.selected, d.in.OfferID, d.offset, d.in.Plan.InventoryOffset = nil, "", 0, 0
-            d.in.Plan.Compatibility = nil
-            d.in.Plan.ImageName = ""
-            d.approvedPlan = nil
+            d.invalidateCandidate()
         }
     }()
     if len(d.models) == 0 {
         page, err := d.catalog(ctx, c, cloud.CatalogInput{Category: "gpu", Limit: 1000})
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
         d.models = page.Items
         page, err = d.catalog(ctx, c, cloud.CatalogInput{Category: "region", Limit: 1000})
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
         d.regions = page.Items
         c.output.regionCatalog = page.Items
@@ -365,10 +347,10 @@ func (d *cloudDraft) compute(ctx context.Context, c *invocation) (bool, error) {
     }
     fields = append(fields, advanced, nav)
     if err := d.page(ctx, c, "cloud_step_compute", fields...); err != nil {
-        return false, err
+        return cloudStay, err
     }
     if nav.Value == "cancel" {
-        return false, interaction.ErrCanceled
+        return cloudCancel, nil
     }
     back := nav.Value == "back"
     models := gpu.Values
@@ -376,7 +358,7 @@ func (d *cloudDraft) compute(ctx context.Context, c *invocation) (bool, error) {
         models = []string{gpu.Value}
     }
     if len(models) == 0 && !gpu.Multiple {
-        return false, fault.Invalid("--gpu-model", "missing_argument", "cloud_model_required")
+        return cloudStay, fault.Invalid("--gpu-model", "missing_argument", "cloud_model_required")
     }
     n, _ := parseCloudInteger(count.Value)
     d.in.Plan.Explicit.GPUModels = append([]string{}, models...)
@@ -388,7 +370,7 @@ func (d *cloudDraft) compute(ctx context.Context, c *invocation) (bool, error) {
     d.in.Plan.Explicit.Regions = regionIDs
     d.plan.Requirements.GPUModels, d.plan.Requirements.GPUCount, d.plan.Requirements.Regions = models, n, regionIDs
     if back {
-        return true, nil
+        return cloudBack, nil
     }
     if advanced.Value == "yes" {
         values := []*int{&d.plan.Requirements.MinGPUMemoryGiB, &d.plan.Requirements.MinCPUs, &d.plan.Requirements.MinMemoryGiB, &d.plan.Requirements.MinDiskGiB}
@@ -404,7 +386,7 @@ func (d *cloudDraft) compute(ctx context.Context, c *invocation) (bool, error) {
             }})
         }
         if err := d.page(ctx, c, "cloud_step_compute", fields...); err != nil {
-            return false, err
+            return cloudStay, err
         }
         for i, f := range fields {
             *values[i], _ = parseCloudInteger(f.Value)
@@ -414,10 +396,10 @@ func (d *cloudDraft) compute(ctx context.Context, c *invocation) (bool, error) {
         d.in.Plan.Explicit.MinMemoryGiB = cloudPointer(*values[2])
         d.in.Plan.Explicit.MinDiskGiB = cloudPointer(*values[3])
     }
-    return false, nil
+    return cloudNext, nil
 }
 
-func (d *cloudDraft) candidate(ctx context.Context, c *invocation) (bool, error) {
+func (d *cloudDraft) candidate(ctx context.Context, c *invocation) (cloudTransition, error) {
     l := c.output.locale
     if d.mode == "auto" {
         cap := ""
@@ -440,10 +422,10 @@ func (d *cloudDraft) candidate(ctx context.Context, c *invocation) (bool, error)
         wait := &interaction.Field{Title: l.Text("cloud_wizard_wait"), Value: waiting, Choices: []interaction.Choice{{Label: l.Text("cloud_wait_continuous"), Value: "continuous"}, {Label: l.Text("cloud_wait_bounded"), Value: "bounded"}}}
         nav := d.navField(c)
         if err := d.page(ctx, c, "cloud_step_candidate", price, wait, nav); err != nil {
-            return false, err
+            return cloudStay, err
         }
         if nav.Value == "cancel" {
-            return false, interaction.ErrCanceled
+            return cloudCancel, nil
         }
         d.in.Plan.Explicit.MaxComputeHourlyPrice = cloudPointer(price.Value)
         d.in.Plan.Explicit.Continuous = cloudPointer(wait.Value == "continuous")
@@ -464,11 +446,11 @@ func (d *cloudDraft) candidate(ctx context.Context, c *invocation) (bool, error)
                 duration.Value = *previousWait
             }
             if err := d.page(ctx, c, "cloud_step_candidate", duration); err != nil {
-                return false, err
+                return cloudStay, err
             }
             d.in.Plan.Explicit.WaitTimeout = &duration.Value
         }
-        return nav.Value == "back", nil
+        return cloudNavigation(nav.Value), nil
     }
     return d.pickCandidate(ctx, c)
 }
@@ -498,7 +480,7 @@ func offerDetail(o cloud.Offer, l *i18n.Localizer) string {
     return l.Text("cloud_host_details", map[string]any{"GPU": number(o.GPUMemoryGiB), "CPU": number(o.CPUs), "Memory": number(o.MemoryGiB), "Disk": number(o.DiskGiB), "Driver": driver, "CUDA": cuda})
 }
 
-func (d *cloudDraft) environment(ctx context.Context, c *invocation) (bool, error) {
+func (d *cloudDraft) environment(ctx context.Context, c *invocation) (cloudTransition, error) {
     l := c.output.locale
     kind := "base"
     query := ""
@@ -524,7 +506,7 @@ func (d *cloudDraft) environment(ctx context.Context, c *invocation) (bool, erro
                 return e
             })
             if err != nil {
-                return false, err
+                return cloudStay, err
             }
             items = page.Items
             image = &interaction.Field{Title: l.Text("cloud_wizard_image"), Description: cloudCoverage(l, page.Examined, page.Complete)}
@@ -600,10 +582,10 @@ func (d *cloudDraft) environment(ctx context.Context, c *invocation) (bool, erro
         }
         fields = append(fields, expansion, storage, nav)
         if err := d.page(ctx, c, "cloud_step_environment", fields...); err != nil {
-            return false, err
+            return cloudStay, err
         }
         if nav.Value == "cancel" {
-            return false, interaction.ErrCanceled
+            return cloudCancel, nil
         }
         n, _ := parseCloudInteger(expansion.Value)
         if d.plan.Product == "standard" {
@@ -637,7 +619,7 @@ func (d *cloudDraft) environment(ctx context.Context, c *invocation) (bool, erro
         }
         switch nav.Value {
         case "back":
-            return true, nil
+            return cloudBack, nil
         case "private", "base":
             kind = nav.Value
             query = ""
@@ -647,7 +629,7 @@ func (d *cloudDraft) environment(ctx context.Context, c *invocation) (bool, erro
         case "search":
             value, err := c.input.Text(ctx, interaction.TextPrompt{Title: l.Text("cloud_image_refine")})
             if err != nil {
-                return false, err
+                return cloudStay, err
             }
             query = value
             continue
@@ -655,16 +637,16 @@ func (d *cloudDraft) environment(ctx context.Context, c *invocation) (bool, erro
         if d.in.CloneFrom == nil && len(items) == 0 {
             continue
         }
-        return false, nil
+        return cloudNext, nil
     }
 }
 
-func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
+func (d *cloudDraft) review(ctx context.Context, c *invocation) (cloudTransition, error) {
     l := c.output.locale
     if d.selected != nil {
         page, err := d.search(ctx, c)
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
         found := false
         for _, o := range page.Matches {
@@ -677,11 +659,10 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
         }
         if !found {
             fmt.Fprintln(c.output.err, l.Text("cloud_candidate_changed"))
-            d.step = 2
-            return true, nil
+            return cloudRetryCandidate, nil
         }
         if d.selected.ComputeHourlyPrice == nil {
-            return false, fault.New("PRICE_UNVERIFIABLE", "cloud_price_unverifiable", nil)
+            return cloudStay, fault.New("PRICE_UNVERIFIABLE", "cloud_price_unverifiable", nil)
         }
         d.in.Plan.Explicit.MaxComputeHourlyPrice = cloudPointer(d.selected.ComputeHourlyPrice.Amount)
         if d.selected.StorageDailyPrice != nil {
@@ -691,16 +672,16 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
     if d.in.CloneFrom != nil {
         _, plan, err := c.app.Resources.CloudClonePlan(ctx, d.in)
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
         if err := cloud.ValidateAcquisition(plan, "session"); err != nil {
-            return false, err
+            return cloudStay, err
         }
         d.plan = plan
     } else {
         preview, err := c.app.Resources.CloudPreview(ctx, d.in)
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
         d.plan = preview.Plan
     }
@@ -713,7 +694,7 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
         }
         page, err := d.catalog(ctx, c, cloud.CatalogInput{Category: "image", Kind: kind, Query: id, Limit: 1000})
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
         for _, item := range page.Items {
             if item.ID == id {
@@ -725,7 +706,7 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
     }
     settings, err := c.app.Resources.Config.Load()
     if err != nil {
-        return false, err
+        return cloudStay, err
     }
     name := &interaction.Field{Title: l.Text("cloud_wizard_name"), Value: d.in.Name, Validate: func(s string) error {
         if !config.ValidName(s) {
@@ -736,14 +717,10 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
         }
         return nil
     }}
-    actions := &interaction.Field{Title: l.Text("cloud_wizard_after"), Description: l.Text("cloud_optional_choices"), Multiple: true, Values: d.actions, Choices: []interaction.Choice{{Label: l.Text("cloud_after_select"), Value: "select"}}}
-    if d.in.CloneFrom == nil {
-        actions.Choices = append(actions.Choices, interaction.Choice{Label: l.Text("cloud_after_save"), Value: "save"})
-    }
     nav := d.navField(c)
     nav.Choices = append(nav.Choices, interaction.Choice{Label: l.Text("cloud_review_command"), Value: "command"})
     if d.in.CloneFrom == nil {
-        nav.Choices = append(nav.Choices, interaction.Choice{Label: l.Text("cloud_review_save"), Value: "save"}, interaction.Choice{Label: l.Text("cloud_hub_scope"), Value: "scope"})
+        nav.Choices = append(nav.Choices, interaction.Choice{Label: l.Text("cloud_hub_scope"), Value: "scope"})
     }
     summary := ""
     for _, row := range cloudPlanRows(l, d.plan, c.output.regionCatalog) {
@@ -753,35 +730,25 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
         summary += row.Label + "  " + row.Value
     }
     summary += "\n\n" + l.Text("cloud_ui_notice_acquire")
-    fields := []*interaction.Field{name, actions, nav}
-    if c.profileOnly {
-        nav.Value = "save"
-        nav.Choices = append([]interaction.Choice{{Label: l.Text("cloud_review_save"), Value: "save"}}, nav.Choices[1:4]...)
-        fields = []*interaction.Field{nav}
-        nav.Description = summary
-    } else {
-        payment := &interaction.Field{Title: l.Text("cloud_ui_type_yes"), Description: summary, Validate: func(s string) error {
-            if nav.Value != "next" {
-                return nil
-            }
-            if strings.TrimSpace(s) != "yes" {
-                return errors.New(l.Text("cloud_confirm_required"))
-            }
+    payment := &interaction.Field{Title: l.Text("cloud_ui_type_yes"), Description: summary, Validate: func(s string) error {
+        if nav.Value != "next" {
             return nil
-        }}
-        fields = append(fields, payment)
-    }
+        }
+        if strings.TrimSpace(s) != "yes" {
+            return errors.New(l.Text("cloud_confirm_required"))
+        }
+        return nil
+    }}
+    fields := []*interaction.Field{name, nav, payment}
     if err := c.input.PageWithSummary(ctx, l.Text("cloud_step_review"), d.scope(c), fields...); err != nil {
-        return false, err
+        return cloudStay, err
     }
     d.in.Name = name.Value
-    d.actions = actions.Values
-    c.grammar.Cloud.Acquire.Name = name.Value
     if nav.Value == "cancel" {
-        return false, interaction.ErrCanceled
+        return cloudCancel, nil
     }
     if nav.Value == "back" {
-        return true, nil
+        return cloudBack, nil
     }
     switch nav.Value {
     case "command":
@@ -789,115 +756,24 @@ func (d *cloudDraft) review(ctx context.Context, c *invocation) (bool, error) {
         command := shellCommand(args)
         _, err := c.input.SelectWithSummary(ctx, l.Text("cloud_review_command"), command, []interaction.Choice{{Label: l.Text("cloud_nav_back"), Value: "back"}}, "back")
         if err != nil {
-            return false, err
+            return cloudStay, err
         }
-        d.step = 4
-        return true, nil
-    case "save":
-        if err := d.save(ctx, c); err != nil {
-            return false, err
-        }
-        d.savedOnly = true
-        return false, nil
+        return cloudStay, nil
     case "scope":
-        h := cloudHub{call: c, selection: d.in.Select}
-        if err := h.chooseScope(ctx); err != nil {
-            return false, err
+        changed, err := d.chooseScope(ctx, c)
+        if err != nil {
+            return cloudStay, err
         }
-        if !reflect.DeepEqual(h.selection, d.in.Select) {
-            d.in.Select = h.selection
-            d.selected = nil
-            d.in.OfferID = ""
-            d.offset = 0
-            d.in.Plan.InventoryOffset = 0
-            d.in.Plan.Explicit.Regions = nil
-            d.in.Plan.Explicit.AutoDL = cloud.AutoDLProfile{}
-            d.in.Plan.Compatibility = nil
-            d.in.Plan.ImageName = ""
-            d.in.Plan.Profile = ""
+        if changed {
+            d.invalidateScope()
             if err := d.setup(ctx, c); err != nil {
-                return false, err
-            }
-            d.step = 1
-            return true, nil
-        }
-        d.step = 4
-        return true, nil
-    }
-    if c.profileOnly {
-        return false, interaction.ErrCanceled
-    }
-    snapshot := d.plan
-    d.approvedPlan = &snapshot
-    d.approvedTarget = d.in.Name
-    d.approvedAccount = *d.in.Select.Account
-    return false, nil
-}
-
-func (d *cloudDraft) save(ctx context.Context, c *invocation) error {
-    value := d.in.Plan.Profile
-    if value == "" {
-        value = d.in.Name
-    }
-    field := &interaction.Field{Title: c.output.locale.Text("cloud_profile_save_name"), Value: value, Validate: func(s string) error {
-        if !config.ValidName(s) {
-            return errors.New(c.output.locale.Text("cloud_name_required"))
-        }
-        return nil
-    }}
-    if err := c.input.Page(ctx, c.output.locale.Text("cloud_review_save"), field); err != nil {
-        return err
-    }
-    name := field.Value
-    settings, err := c.app.Resources.Config.Load()
-    if err != nil {
-        return err
-    }
-    _, replace := settings.Resources[name]
-    if replace {
-        yes, e := c.input.Confirm(ctx, interaction.Confirmation{Title: c.output.locale.Text("cloud_profile_replace", map[string]any{"Value": name}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: c.output.locale.Text("yes"), RejectLabel: c.output.locale.Text("no")})
-        if e != nil {
-            return e
-        }
-        if !yes {
-            return interaction.ErrCanceled
-        }
-    }
-    if err := c.app.Resources.SaveCloudProfile(ctx, name, cloudPreferences(d.plan), replace); err != nil {
-        return err
-    }
-    d.savedName = name
-    return nil
-}
-
-func (d *cloudDraft) finish(ctx context.Context, c *invocation) error {
-    for _, action := range d.actions {
-        switch action {
-        case "select":
-            if _, err := c.app.Machines.UseTarget(ctx, d.in.Name); err != nil {
-                return err
-            }
-        case "save":
-            settings, err := c.app.Resources.Config.Load()
-            if err != nil {
-                return err
-            }
-            _, replace := settings.Resources[d.in.Name]
-            if replace {
-                accepted, err := c.input.Confirm(ctx, interaction.Confirmation{Title: c.output.locale.Text("cloud_profile_replace", map[string]any{"Value": d.in.Name}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: c.output.locale.Text("yes"), RejectLabel: c.output.locale.Text("no")})
-                if err != nil {
-                    return err
-                }
-                if !accepted {
-                    continue
-                }
-            }
-            if err := c.app.Resources.SaveCloudProfile(ctx, d.in.Name, cloudPreferences(d.plan), replace); err != nil {
-                return err
+                return cloudStay, err
             }
         }
+        return cloudStay, nil
     }
-    return nil
+    d.rememberApproval()
+    return cloudNext, nil
 }
 
 // parseCloudInteger shares the same normalization for form validation and use.
@@ -906,12 +782,8 @@ func parseCloudInteger(value string) (int, error) {
     return strconv.Atoi(width.Narrow.String(strings.TrimSpace(value)))
 }
 
-func cloudPreferences(p cloud.Plan) cloud.Profile {
-    return cloud.ProfileFromPlan(p)
-}
-
 func (d *cloudDraft) approve(ctx context.Context, c *invocation, approval client.CloudApproval) error {
-    if d.approvedPlan != nil && approval.Target == d.approvedTarget && approval.Account == d.approvedAccount && approval.Plan != nil && reflect.DeepEqual(*approval.Plan, *d.approvedPlan) {
+    if d.approved.matches(approval) {
         return nil
     }
     return c.approveCloud(ctx, approval)

@@ -51,6 +51,7 @@ func main() {
     var runner application.RunnerVerifier
     var syncer application.Synchronizer
     var cleaner application.RunCleaner
+    var abandoner application.RunAbandoner
     var browser application.OutputBrowser
     var puller application.OutputPuller
     var runs *execution.Service
@@ -97,6 +98,7 @@ func main() {
         runs = &execution.Service{Index: state, Metadata: state, Observations: state, Check: executionCheck{client}, Runner: prepare, Send: sender, Remote: client}
         syncer = sources.Service{Check: client, Runner: prepare, Send: sender}
         cleaner = execution.CleanupService{Runs: runs, Index: state, Remote: client, Runner: prepare}
+        abandoner = execution.AbandonService{Runs: runs, Index: state, Remote: client}
         browser = execution.OutputBrowser{Remote: client, Runner: prepare}
         puller = sources.PullService{Remote: client, Runner: prepare, Receive: sender}
     }
@@ -114,7 +116,7 @@ func main() {
         Events: events, Notify: notifications,
         Config: store, State: state, Trace: trace, Cloud: cloudService, Auth: authentication,
         Runs: runs, Checker: checker, Runner: runner, Syncer: syncer, Outputs: browser,
-        Puller: puller, Cleaner: cleaner, Operations: operations, CWD: cwd,
+        Puller: puller, Cleaner: cleaner, Abandoner: abandoner, Operations: operations, CWD: cwd,
     }, settings)
     app.Queue = application.NewQueueService(app.Projects, queueRemote, notifications)
     code := cli.Execute(ctx, os.Args[1:], cli.Options{

@@ -224,6 +224,9 @@ func AvailabilityError(ref task.RunRef) error {
     if err := currentVersion(ref); err != nil {
         return err
     }
+    if ref.Abandonment != nil && ref.Abandonment.NoStartAt != nil {
+        return abandonFault("RUN_ABANDONED", nil)
+    }
     if ref.Cleanup == nil {
         return nil
     }

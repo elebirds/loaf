@@ -16,11 +16,12 @@ contains a stable `code` and localized `message`, plus an optional localized
 Fields not applicable to that result are omitted. `data`/`error` are omitted when
 absent, not filled with dummy values. Consumers must tolerate additional fields.
 
-Forms and operation menus require explicit `-i` / `--interactive`; that flag
-cannot combine with `--json`. A terminal alone never enables them. Prefer
+GPU forms and local confirmation use explicit `-i` / `--interactive`; login also
+accepts its own `--prompt` / `--verify` options. `--json` never prompts and cannot
+combine with `-i`. A terminal alone never enables forms. Prefer
 explicit `machine list`, `queue list`, `notify deliveries` and `events list`
 queries; bare `loaf --json` returns offline help. Complete direct commands do
-not require an interactive overview or a separate preview first.
+not require a menu or a separate preview first.
 
 | Operation exit | Meaning |
 | --- | --- |
@@ -68,6 +69,7 @@ per card. CLI memory floors use GiB; platform disk-expansion flags use GB.
 | `check` | One target report; batch uses `checks[]` and selected/completed/failed/unexamined counts |
 | `wait` | Every selected run and completed/pending/query_errors/state_errors/examined/unexamined/interrupted/timed_out coverage |
 | `clean` | `runs[]` with per-run cleanup results and codes; execution outcome remains separate |
+| `abandon` | `dry_run`, `runs[]` with `run`, `path`, `eligible`, optional `no_start_at`, `cleaned_at`, `error_code` and `state_error` |
 | `events list` | Source-bound `events`, `source_id`, `next_cursor` and `has_more`; events retain original source identity |
 | `notify destination list`, `notify subscriptions`, `notify deliveries` | Safe destination, subscription or delivery rows; delivery dispatch and SDK evidence remain separate |
 | `notify bind NAME --current` | Safe `destination` metadata and a `verified_at` timestamp after read-only current-thread verification and persistence |
@@ -90,6 +92,15 @@ examined, not the number of matches; unresolved rows remain visible. Do not
 interpret a bounded empty list as proof that no matching tasks/resources exist.
 For `OUTPUT_MISSING`, inspect downloaded and missing paths before deciding what
 remains to retrieve. `changed_files` is absent when transfer completion is unverified.
+
+An abandonment row's `no_start_at` proves preparation can no longer start;
+`cleaned_at` separately proves its payload was removed. `ABANDON_UNCONFIRMED`
+uses operation exit 3 and retains any confirmed fields. Retry the same explicit
+ID. A local `state_error` never erases these remote facts. Saved task results
+expose the same metadata under optional `abandonment` (`requested_at`,
+`no_start_at`, `cleaned_at`), independently of `submission`, `status` and
+`exit_code`. `run.preparation_abandoned` is a public lifecycle event, not a
+training failure or a stop result.
 
 ## Structured help and input errors
 

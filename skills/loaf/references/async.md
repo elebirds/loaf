@@ -21,7 +21,7 @@ cannot change that copy/spec; external datasets and machine environment are not
 automatically frozen. `queue submit --dry-run` stays local.
 
 Use `queue list --json`, `notify deliveries --json` and `events list --json` for
-explicit queries, even if interactive hubs offer more actions. Keep the original
+explicit queries, with or without `-i`. Keep the original
 Queue/Run IDs for follow-ups. Public queue details do not export the frozen
 private execution specification; do not substitute current config to recreate it.
 

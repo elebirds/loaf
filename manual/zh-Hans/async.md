@@ -5,14 +5,9 @@
 任务结束后需要交付结果，使用通知；协作项目需要共享机器，使用队列。
 直接 Run 和云资源操作不需要经过队列，也能发送通知。
 
-终端中的 `loaf queue -i`、`loaf notify -i`、`loaf events -i` 打开各自中心，也可从 `loaf -i` 的
-「更多」进入。不加 `-i` 时，即使 Agent 分配了 PTY 也保持有限查询。
-显式子命令保持直接调用；`queue --limit 100`、`queue --trace=false`
-等显式默认命令选项仍表示查询，不会进入菜单。
-
 脚本和 Agent 使用明确查询，例如 `loaf queue list --json`、
 `loaf notify deliveries --json`、`loaf events list --json`。
-即使交互概览提供更多动作，这些调用仍保持查询语义。
+这些调用无论是否带 `-i` 都保持有限查询语义。
 使用 `loaf help queue submit --json` 可在不连接远端时查看提交参数。
 只读列表没有 `--dry-run`；预览属于 `queue submit`、`queue clean`、`notify prune` 等操作。
 
@@ -135,10 +130,6 @@ loaf notify serve
 
 ## 分别查看事实与投递证据
 
-通知中心可选择接收位置、订阅或投递，查看证据及适用动作。事件浏览器可切换本地、资源、
-项目、队列来源，远端来源先明确选机。搜索只筛选当前页／读取窗口，不扫描全部历史。
-从任务详情创建订阅时沿用保存的 Run ID，不附加当前 target；保存订阅不会启动 Bridge 或 Channel。
-
 ```bash
 loaf events list --source project --limit 100 --json
 loaf events list --source resources --json
@@ -173,10 +164,6 @@ Socket 写入或普通 Webhook 接收不能证明 Agent 已处理。
 使用 NDJSON 投递记录，最后输出 end/error 记录。进度不会混入有限 JSON。
 
 ## 将固定输入加入单机队列
-
-交互队列中心显示容量、派发状态及有界请求列表；搜索仅作用于已加载请求，需要更多时应刷新
-或明确提高数量上限。本次改选机器不改变项目默认值。从中心提交会先核对离线计划，再明确
-入队一次；完整 `queue submit` 命令仍保持直接调用。
 
 ```bash
 loaf queue enable --slots 1
@@ -227,6 +214,32 @@ loaf queue clean QUEUE_REQUEST_ID --yes --json
 
 远端磁盘仍保留时，本地断线不会删除远端状态。机器关机时不能运行或派发；
 销毁磁盘会失去同盘队列及事件状态，需要保留的事实应在销毁前交付或导出。
+
+## 销毁远端磁盘前，分别保留事实与文件
+
+| 数据 | 保存位置 | 远端磁盘销毁后 |
+| --- | --- | --- |
+| Run 事实 | 项目 `.loaf-control-v2/state.sqlite3` | 本地只保留此前已采集或明确导出的事实。 |
+| 队列请求及事实 | SSH 用户的 `~/.local/share/loaf/queue-v1/state.sqlite3` | 仅有订阅不能恢复同盘队列。 |
+| 工作副本、日志和输出文件 | 项目 `runs/RUN_ID/` | 只保留已下载或另行保存的文件。 |
+| 云操作收据与资源事实 | 本地 `state-v3/state.db` | 不依赖实例磁盘，继续在本地保留。 |
+| 已接收 Inbox、投递及来源游标 | 本地 `state-v3/state.db` | 保留至显式清理符合条件的数据；投递证据不是输出文件备份。 |
+
+通过云平台销毁磁盘前，先完成或明确停止受影响的工作，再下载需要的输出：
+
+```bash
+loaf pull RUN_ID
+loaf events list --source project --subject run:RUN_ID --limit 1000 --json > run-events-page-1.json
+```
+
+核对下载文件。事实页的 `has_more` 为 true 时，使用返回的 `next_cursor` 作为下一次
+`--cursor`，逐页另存，不覆盖前页。游标仅覆盖一个来源，不表示跨来源快照。
+需要的日志另行保存；事件只有公开摘要，不包含日志正文。
+
+远端 `events list` 只返回页面，不会自动存入本地 Inbox；Bridge 才会采集保存订阅匹配的事实。
+`notify serve --once` 只处理有界一批，不保证已读完积压；`last_synced_at` 也不能证明远端历史已完整复制。
+来源丢失后仍可用 `events list --source local` 读取已接收事实，投递继续保留实测证据。
+订阅显示来源查询错误，不会伪造缺失事实，也不会因此重新投递。
 
 ## 一个队列订阅关联两个来源
 

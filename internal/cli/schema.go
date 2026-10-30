@@ -33,8 +33,9 @@ type grammar struct {
     SSH         struct{}       `cmd:"" name:"ssh" group:"machines" help:"interactive_short" example:"loaf ssh"`
     Forward     forwardCommand `cmd:"" group:"machines" help:"forward_short" example:"loaf forward 6006"`
     Clean       cleanCommand   `cmd:"" group:"experiments" help:"clean_short" example:"loaf clean r_example --dry-run"`
+    Abandon     abandonCommand `cmd:"" group:"experiments" help:"abandon_short" example:"loaf abandon r_example --dry-run"`
     Sync        syncCommand    `cmd:"" group:"experiments" help:"sync_short" example:"loaf sync --dry-run"`
-    Cloud       cloudCommand   `cmd:"" group:"resources" help:"cloud_short" example:"loaf cloud -i"`
+    Cloud       cloudCommand   `cmd:"" group:"resources" help:"cloud_short" example:"loaf cloud"`
     Queue       queueCommand   `cmd:"" group:"experiments" help:"queue_short" example:"loaf queue"`
     Events      eventsCommand  `cmd:"" group:"diagnostics" help:"events_short" example:"loaf events"`
     Notify      notifyCommand  `cmd:"" group:"diagnostics" help:"notify_short" example:"loaf notify"`
@@ -42,11 +43,11 @@ type grammar struct {
 }
 
 type machineCommand struct {
-    List   struct{}       `cmd:"" default:"1" help:"machine_list_short" example:"loaf machine list"`
-    Show   uxAMachineName `cmd:"" help:"machine_show_short" example:"loaf machine show lab"`
-    Add    addCommand     `cmd:"" help:"add_short" example:"loaf machine add lab --ssh lab-gpu"`
-    Use    useCommand     `cmd:"" help:"use_short" example:"loaf machine use lab"`
-    Remove uxAMachineName `cmd:"" help:"remove_short" example:"loaf machine remove lab"`
+    List   struct{}     `cmd:"" default:"1" help:"machine_list_short" example:"loaf machine list"`
+    Show   requiredName `cmd:"" help:"machine_show_short" example:"loaf machine show lab"`
+    Add    addCommand   `cmd:"" help:"add_short" example:"loaf machine add lab --ssh lab-gpu"`
+    Use    requiredName `cmd:"" help:"use_short" example:"loaf machine use lab"`
+    Remove requiredName `cmd:"" help:"remove_short" example:"loaf machine remove lab"`
 }
 
 type requiredName struct {
@@ -69,9 +70,6 @@ type addCommand struct {
     SSH       string `help:"flag_ssh"`
     RemoteDir string `default:"~/.local/share/loaf/projects" help:"flag_remote" value-type:"path" ux-group:"advanced"`
     Replace   bool   `help:"flag_replace" ux-group:"advanced"`
-}
-type useCommand struct {
-    Name string `arg:"" optional:"" help:"name_arg" value-type:"name"`
 }
 type checkCommand struct {
     Runner  bool          `help:"flag_runner" ux-group:"advanced"`
@@ -151,6 +149,12 @@ type cleanCommand struct {
     Yes    bool     `short:"y" help:"clean_flag_yes" ux-group:"advanced"`
 }
 
+type abandonCommand struct {
+    IDs    []string `arg:"" sep:"none" help:"clean_ids_arg" value-type:"run-id"`
+    DryRun bool     `help:"abandon_flag_dry_run"`
+    Yes    bool     `short:"y" help:"abandon_flag_yes" ux-group:"advanced"`
+}
+
 type cloudCommand struct {
     Catalog         catalogCommand       `cmd:"" help:"cloud_catalog_short" example:"loaf cloud catalog gpu"`
     Profile         profileCommand       `cmd:"" help:"cloud_profile_short" example:"loaf cloud profile"`
@@ -172,7 +176,7 @@ type cloudCommand struct {
     AccountCommands accountsCommand      `cmd:"" name:"account" help:"cloud_account_short" example:"loaf cloud account"`
 }
 type cloudInstanceCommand struct {
-    ID string `arg:"" optional:"" help:"cloud_instance_arg" value-type:"instance-id"`
+    ID string `arg:"" help:"cloud_instance_arg" value-type:"instance-id"`
 }
 
 type cloudListCommand struct {
@@ -183,7 +187,7 @@ type credentialsCommand struct {
     ShowPassword bool   `help:"cloud_flag_password"`
 }
 type powerCommand struct {
-    ID       string        `arg:"" optional:"" help:"cloud_instance_arg" value-type:"instance-id"`
+    ID       string        `arg:"" help:"cloud_instance_arg" value-type:"instance-id"`
     Yes      bool          `help:"cloud_flag_yes"`
     Wait     time.Duration `help:"cloud_flag_power_wait" value-type:"duration"`
     Progress string        `enum:"auto,plain,json,none" default:"auto" help:"cloud_flag_progress"`
@@ -233,8 +237,8 @@ type acquireCommand struct {
 type bindCommand struct {
     Name         string        `arg:"" optional:"" help:"name_arg" value-type:"name"`
     Progress     string        `enum:"auto,plain,json,none" default:"auto" help:"cloud_flag_progress"`
-    Instance     string        `help:"cloud_flag_instance"`
-    Request      string        `help:"cloud_flag_request"`
+    Instance     string        `help:"cloud_flag_instance" exactly-one-of:"--instance --request" requires:"name"`
+    Request      string        `help:"cloud_flag_request" conflicts-with:"--instance"`
     RemoteDir    *string       `help:"flag_remote" value-type:"path"`
     Replace      bool          `help:"flag_replace"`
     ReadyTimeout time.Duration `default:"5m" help:"cloud_flag_ready" value-type:"duration"`

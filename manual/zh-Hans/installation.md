@@ -4,6 +4,10 @@
 
 从 [Releases](https://github.com/elebirds/loaf/releases) 下载匹配平台的压缩包及校验文件。文件名中，`darwin` 表示 macOS，`linux` 表示 Linux，`arm64` 对应 Apple Silicon/ARM64，`amd64` 对应 Intel/AMD x86-64。将压缩包解压到新目录。
 
+可用命令以压缩包内的手册为准。仓库 `main` 分支可能包含公开下载版尚未提供的功能；
+`VERSION` 记录目标版本，不表示该版本已经发布。试用 `main` 请按下文从源码构建。
+替换仍用于管理已有任务的 CLI 前，请先按[升级步骤](upgrading.md)保留匹配的旧二进制。
+
 压缩包包含一个可执行文件、双语 README、Skill、示例、`BUILD.json` 及第三方许可证原文。解压后，在该目录执行：
 
 ```bash

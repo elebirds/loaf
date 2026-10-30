@@ -90,7 +90,8 @@ func Execute(ctx context.Context, args []string, o Options) int {
         }
     }
     l, langErr := i18n.New(preferred, o.Env)
-    if langErr != nil && !early.languageSet && o.Env["LOAF_LANG"] == "" && (early.help || early.version || len(args) > 0 && (args[0] == "help" || args[0] == "version")) {
+    offlineHelp := early.help || early.version || early.command == "" || early.command == "cloud" || early.command == "help" || early.command == "version"
+    if langErr != nil && !early.languageSet && o.Env["LOAF_LANG"] == "" && offlineHelp {
         l, langErr = i18n.New("auto", o.Env)
     }
     p := &presenter{json: early.json, out: o.Out, err: o.Err, locale: l, trace: o.Trace, dark: true}
@@ -116,25 +117,11 @@ func Execute(ctx context.Context, args []string, o Options) int {
     if err != nil {
         return p.finish(nil, err)
     }
-    ui := early.interactive && !early.help && !early.version && early.command != "help" && parsed.path != "version"
-    if ui && early.json {
+    interactive := early.interactive && !early.help && !early.version && early.command != "help" && parsed.path != "version"
+    if interactive && early.json {
         return p.finish(nil, inputFailure("conflicting_arguments", "--interactive/--json", "ui_json_conflict", nil, parsed.node))
     }
-    if ui && !o.Interactive {
-        return p.finish(nil, inputFailure("invalid_value", "--interactive", "ui_terminal_required", nil, parsed.node))
-    }
-    if ui && (parsed.path == "cloud" || parsed.path == "") {
-        // Root/cloud hubs still resolve all defaults and global options through
-        // Kong. Explicit help stays offline even when its resolved node is root.
-        defaults := "list"
-        if parsed.path == "" {
-            defaults = "help"
-        }
-        if _, err := parser.Parse(append(append([]string{}, args...), defaults)); err != nil {
-            return p.finish(nil, parseFailure())
-        }
-        parsed.help = false
-    }
+    ui := interactive && !parsed.help
     if parsed.help {
         help := helpData(parsed.node, l)
         if p.json {
@@ -144,19 +131,6 @@ func Execute(ctx context.Context, args []string, o Options) int {
             return 1
         }
         return 0
-    }
-    if ui && uxBareEntry(parser, args, early, "machine") && parsed.path == "machine list" {
-        parsed.path = "machine"
-    }
-    // Explicit default-command flags retain finite query semantics, even when
-    // they spell a default value such as --limit 100 or --trace=false.
-    if ui && uxBareEntry(parser, args, early, "queue") && parsed.path == "queue list" {
-        parsed.path = "queue"
-    }
-    if ui {
-        if hub := uxIHubCommand(parser, args, early); hub != "" {
-            parsed.path = hub
-        }
     }
     p.command = parsed.path
     p.styled = o.TerminalOutput && o.Env["TERM"] != "dumb" && o.Env["NO_COLOR"] == ""
@@ -192,11 +166,7 @@ func Execute(ctx context.Context, args []string, o Options) int {
     input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: ui && o.TerminalError && o.Env["TERM"] != "dumb" && o.Env["NO_COLOR"] == "", Compact: true, PageHelp: l.Text(pageHelp), ReadPassword: o.ReadPassword, ChoiceError: l.Text(helpPrefix + "choice_invalid"), SelectHelp: l.Text(helpPrefix + "select_help"), MultiHelp: l.Text(helpPrefix + "multi_help"), PlainMultiHelp: l.Text(helpPrefix + "multi_plain")})
     call := invocation{ui: ui, app: o.App, options: o, grammar: model, output: p, input: input, policy: client.CallPolicy{Batch: p.json || !o.Interactive}}
     var result any
-    if parsed.path == "status" && call.uxDStatusInteractive(parsed.statusOptions) {
-        result, err = call.uxDTasks(ctx)
-    } else {
-        result, err = call.dispatch(ctx, parsed.path)
-    }
+    result, err = call.dispatch(ctx, parsed.path)
     p.dark = input.Dark()
     if p.json && (parsed.path == "exec" || parsed.path == "cloud watch" || parsed.path == "logs" && model.Logs.Follow || parsed.path == "notify serve" && !model.Notify.Serve.Once) {
         return p.finishStream(result, err)
@@ -303,7 +273,7 @@ func exitCode(view *errorView) int {
             code = 3
         }
         switch view.Code {
-        case "SUBMISSION_UNKNOWN", "STOP_UNCONFIRMED", "EXEC_UNCONFIRMED", "CLEAN_UNCONFIRMED", "CLOUD_UNCONFIRMED", "QUEUE_UNCONFIRMED", "DELIVERY_UNCONFIRMED":
+        case "SUBMISSION_UNKNOWN", "STOP_UNCONFIRMED", "EXEC_UNCONFIRMED", "CLEAN_UNCONFIRMED", "ABANDON_UNCONFIRMED", "CLOUD_UNCONFIRMED", "QUEUE_UNCONFIRMED", "DELIVERY_UNCONFIRMED":
             code = 3
         }
     }

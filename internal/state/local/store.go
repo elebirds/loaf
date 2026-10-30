@@ -144,8 +144,16 @@ func (s *Store) SaveRun(ctx context.Context, ref task.RunRef) error {
         }
         // A confirmed rejection may retire an uncertain attempt back to
         // preparation. Accepted runs and cleanup receipts cannot be withdrawn.
-        if old.Cleanup != nil || old.Submission == "submitted" && ref.Submission != "submitted" {
+        if old.Cleanup != nil || old.Abandonment != nil && old.Abandonment.NoStartAt != nil || old.Submission == "submitted" && ref.Submission != "submitted" {
             ref = old
+        } else if old.Abandonment != nil {
+            // An intent is not no-start proof. A concurrent confirmed launch
+            // may win and retire that intent; a proven fence above never does.
+            if ref.Submission == "submitted" {
+                ref.Abandonment = nil
+            } else {
+                ref.Abandonment = old.Abandonment
+            }
         }
     } else if !errors.Is(err, sql.ErrNoRows) {
         return stateError(err)

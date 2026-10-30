@@ -48,6 +48,16 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
     } else if v.CleanupPending {
         fmt.Fprintf(out, "  %s", l.Text("clean_status_pending"))
     }
+    if v.Abandonment != nil {
+        state := "abandon_status_pending"
+        if v.Abandonment.NoStartAt != nil {
+            state = "abandon_status_fenced"
+        }
+        if v.Abandonment.CleanedAt != nil {
+            state = "abandon_status_cleaned"
+        }
+        fmt.Fprintf(out, "  %s", l.Text(state))
+    }
     if v.QueryInterrupted {
         fmt.Fprintf(out, "  %s", l.Text("wait_interrupted_row"))
     }
@@ -76,6 +86,9 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
 }
 
 func printRunNext(out io.Writer, v execution.View, l *i18n.Localizer, waited bool) {
+    if v.Abandonment != nil {
+        return
+    }
     if v.Submission == "preparing" {
         fmt.Fprintln(out, l.Text("run_next_inspect", map[string]any{"ID": v.ID}))
         return

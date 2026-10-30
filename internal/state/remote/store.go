@@ -21,7 +21,7 @@ import (
 )
 
 const Namespace = ".loaf-control-v2"
-const SchemaVersion = 2
+const SchemaVersion = 3
 const applicationID = 0x4c4f4152
 
 // Path returns the database path without touching the filesystem.
@@ -49,9 +49,15 @@ CREATE TABLE cleanup_receipts (
     root TEXT NOT NULL, project_id TEXT NOT NULL, summary TEXT NOT NULL,
     cleaned_at TEXT, device TEXT NOT NULL, inode TEXT NOT NULL
 );
+CREATE TABLE abandon_receipts (
+    run_id TEXT PRIMARY KEY REFERENCES run_claims(run_id), version TEXT NOT NULL,
+    root TEXT NOT NULL, project_id TEXT NOT NULL, no_start_at TEXT NOT NULL,
+    cleaned_at TEXT, payload_present INTEGER NOT NULL CHECK(payload_present IN (0,1)),
+    device TEXT NOT NULL, inode TEXT NOT NULL
+);
 ` + eventlog.Schema + `
 PRAGMA application_id=1280262482;
-PRAGMA user_version=2;`
+PRAGMA user_version=3;`
 
 // Initialize claims an empty project directory. Existing projects are verified,
 // never imported or converted from another format.

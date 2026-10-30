@@ -98,10 +98,15 @@ func receive(in io.Reader, out, diagnostic io.Writer, args []string) error {
             return errors.New("TRANSFER_FAILED")
         }
         return nil
+    }, func(root string) error {
+        if runID == "" {
+            return nil
+        }
+        return preparationAvailability(wire.Request{Root: root, ProjectID: args[2], RunID: runID})
     })
 }
 
-func updateCache(root, project string, receive func(string, *os.File) error) error {
+func updateCache(root, project string, receive func(string, *os.File) error, guards ...func(string) error) error {
     root, err := initProject(root, project)
     if err != nil {
         return err
@@ -111,6 +116,11 @@ func updateCache(root, project string, receive func(string, *os.File) error) err
         return err
     }
     defer lock.Close()
+    for _, guard := range guards {
+        if err := guard(root); err != nil {
+            return err
+        }
+    }
     if _, err := loadCacheState(root); err != nil {
         return err
     }

@@ -15,8 +15,6 @@ import (
 
     "github.com/charmbracelet/x/ansi"
     "github.com/creack/pty"
-    "github.com/elebirds/loaf/internal/cli/interaction"
-    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/cloud"
     "github.com/elebirds/loaf/internal/i18n"
 )
@@ -207,7 +205,7 @@ func TestCloudWizardTerminalEntryShowsBothModesAndAllSteps(t *testing.T) {
     }
 }
 
-func TestCloudLifecycleRichReviewAndHub(t *testing.T) {
+func TestCloudAcquireRichReviewEndsAfterOneResult(t *testing.T) {
     for _, tc := range []struct {
         lang       string
         cols, rows int
@@ -230,14 +228,15 @@ func TestCloudLifecycleRichReviewAndHub(t *testing.T) {
             o.Interactive, o.TerminalError = true, true
             o.Env["TERM"] = "xterm-256color"
             ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-            done := make(chan int, 1)
+            done, joined := make(chan int, 1), make(chan struct{})
             go func() {
+                defer close(joined)
                 done <- execute(ctx, []string{"-i", "--lang", tc.lang, "cloud", "acquire", "--profile=train"}, o)
             }()
-            t.Cleanup(func() { cancel(); terminal.Close(); master.Close(); <-drained })
+            t.Cleanup(func() { cancel(); <-joined; terminal.Close(); master.Close(); <-drained })
             l, _ := i18n.New(tc.lang, nil)
             previous := 0
-            for _, step := range []struct{ title, keys string }{{"cloud_wizard_name", "\r"}, {"cloud_wizard_after", "\r"}, {"cloud_wizard_navigation", "\r"}, {"cloud_ui_type_yes", "yes\r"}} {
+            for _, step := range []struct{ title, keys string }{{"cloud_wizard_name", "\r"}, {"cloud_wizard_navigation", "\r"}, {"cloud_ui_type_yes", "yes\r"}} {
                 if step.title == "cloud_ui_type_yes" {
                     for !strings.Contains(output.snapshot()[previous:], "┃ >") {
                         select {
@@ -246,8 +245,16 @@ func TestCloudLifecycleRichReviewAndHub(t *testing.T) {
                         case <-time.After(time.Millisecond):
                         }
                     }
+                } else if step.title == "cloud_wizard_navigation" {
+                    for !strings.Contains(output.snapshot()[previous:], "↑↓") {
+                        select {
+                        case <-ctx.Done():
+                            t.Fatal(output.snapshot())
+                        case <-time.After(time.Millisecond):
+                        }
+                    }
                 } else {
-                    waitWizardText(t, ctx, output, "┃ "+l.Text(step.title))
+                    waitWizardText(t, ctx, output, l.Text(step.title))
                 }
                 if step.title == "cloud_ui_type_yes" {
                     exportCloudScreen(t, fmt.Sprintf("review-%s-%d-%d", tc.lang, tc.cols, tc.rows), output.raw())
@@ -263,105 +270,9 @@ func TestCloudLifecycleRichReviewAndHub(t *testing.T) {
             case <-ctx.Done():
                 t.Fatal(output.snapshot())
             }
-            // Reuse the restored terminal for the root overview, then exit.
-            ctx2, stop := context.WithTimeout(context.Background(), 5*time.Second)
-            defer stop()
-            before := len(output.snapshot())
-            go func() { done <- execute(ctx2, []string{"-i", "--lang", tc.lang, "cloud"}, o) }()
-            for !strings.Contains(output.snapshot()[before:], l.Text("cloud_hub_title")) {
-                select {
-                case <-ctx2.Done():
-                    t.Fatal(output.snapshot())
-                case <-time.After(time.Millisecond):
-                }
-            }
-            exportCloudScreen(t, fmt.Sprintf("hub-%s-%d-%d", tc.lang, tc.cols, tc.rows), output.raw())
-            _, _ = io.WriteString(master, "\x1b[B\x1b[B\x1b[B\x1b[B\r")
-            select {
-            case code := <-done:
-                if code != 0 {
-                    t.Fatal(code, output.snapshot())
-                }
-            case <-ctx2.Done():
-                t.Fatal(output.snapshot())
-            }
+
         })
     }
 }
 
 func (w *wizardTerminal) raw() string { w.mu.Lock(); defer w.mu.Unlock(); return w.text.String() }
-
-type manyBrowseCloud struct{ *uxCloud }
-
-func (p *manyBrowseCloud) Search(context.Context, cloud.Plan, int) (cloud.InventoryPage, error) {
-    p.searches++
-    page := cloud.InventoryPage{Examined: 100, Complete: false, HasMore: true, NextOffset: 100}
-    for n := 0; n < 100; n++ {
-        page.Offers = append(page.Offers, cloud.Offer{ID: fmt.Sprintf("host-%03d", n), Model: "RTX 4090", GPUCount: 1, Available: cloudPointer(true), CPUs: cloudPointer(16 + n), ComputeHourlyPrice: &cloud.Money{Amount: "2.00", Currency: "CNY"}})
-    }
-    return page, nil
-}
-
-func TestCloudHubRichBoundedBrowseAndPagedResult(t *testing.T) {
-    o, base := uxFixture(t)
-    p := &manyBrowseCloud{base}
-    o.Cloud.Open = func(context.Context, string, cloud.Account, string) (cloud.Provider, error) { return p, nil }
-    settings, _ := o.Config.Load()
-    master, terminal, err := pty.Open()
-    if err != nil {
-        t.Fatal(err)
-    }
-    _ = pty.Setsize(terminal, &pty.Winsize{Rows: 18, Cols: 80})
-    drained := make(chan struct{})
-    go func() { defer close(drained); _, _ = io.Copy(io.Discard, master) }()
-    output := &wizardTerminal{File: terminal}
-    locale, _ := i18n.New("zh-Hans", nil)
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    t.Cleanup(func() { cancel(); terminal.Close(); master.Close(); <-drained })
-    call := &invocation{ui: true, app: client.New(o.Dependencies, settings), options: Options{In: terminal, Err: output}, output: &presenter{locale: locale, out: io.Discard, err: output}, grammar: &grammar{}, input: interaction.New(interaction.Options{In: terminal, Err: output, Rich: true, Interactive: true, Compact: true, PageHelp: locale.Text("cloud_ui_form_help"), SelectHelp: locale.Text("cloud_select_help")})}
-    h := &cloudHub{call: call, selection: client.CloudSelect{Account: cloudPointer("main"), Product: cloudPointer("standard")}}
-    waitFresh := func(start int, text string) {
-        t.Helper()
-        for !strings.Contains(output.snapshot()[start:], text) {
-            select {
-            case <-ctx.Done():
-                t.Fatal(text, output.snapshot())
-            case <-time.After(time.Millisecond):
-            }
-        }
-    }
-    done := make(chan error, 1)
-    go func() { done <- h.search(ctx, client.CloudSearchInput{Select: h.selection, Limit: 100}) }()
-    waitFresh(0, "┃ "+locale.Text("cloud_wizard_host"))
-    exportCloudScreen(t, "browse-zh-Hans-80-18", output.raw())
-    _, _ = io.WriteString(master, "\r")
-    waitFresh(0, "┃ "+locale.Text("cloud_browse_actions"))
-    start := len(output.snapshot())
-    _, _ = io.WriteString(master, "\x1b[A\x1b[A\r") // Back -> More -> Sort.
-    waitFresh(start, "┃ › "+locale.Text("cloud_candidates_sort_price"))
-    start = len(output.snapshot())
-    _, _ = io.WriteString(master, "\x1b[B\x1b[B\r")
-    waitFresh(start, "┃ "+locale.Text("cloud_wizard_host"))
-    start = len(output.snapshot())
-    _, _ = io.WriteString(master, "\r")
-    waitFresh(start, "┃ "+locale.Text("cloud_browse_actions"))
-    _, _ = io.WriteString(master, "\r")
-    if err := <-done; err != nil || p.creates != 0 || p.searches != 1 {
-        t.Fatal(err, p.creates, p.searches)
-    }
-    catalog := cloud.CatalogPage{Account: "main", Product: "standard", Category: "image", Complete: true, Examined: 40}
-    for n := 0; n < 40; n++ {
-        catalog.Items = append(catalog.Items, cloud.CatalogItem{ID: fmt.Sprintf("image-%02d", n), Name: fmt.Sprintf("PyTorch version %02d", n)})
-    }
-    start = len(output.snapshot())
-    go func() { done <- h.show(ctx, catalog, nil) }()
-    waitFresh(start, "第 1 /")
-    start = len(output.snapshot())
-    _, _ = io.WriteString(master, "\x1b[A\r")
-    waitFresh(start, "第 2 /")
-    exportCloudScreen(t, "result-zh-Hans-80-18", output.raw())
-    _, _ = io.WriteString(master, "\r")
-    if err := <-done; err != nil {
-        t.Fatal(err)
-    }
-}

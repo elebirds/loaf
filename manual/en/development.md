@@ -7,7 +7,7 @@
 Loaf is a modular monolith with two executables, not a required daemon or API server:
 
 ```text
-loaf: Kong declarations → interaction / rendering
+loaf: Kong declarations → command adapters / rendering
                         → client.Projects / Machines / Resources
                         → run / cloud / source selection
                         → OpenSSH / rsync / AutoDL / state / credentials
@@ -16,6 +16,12 @@ loaf-runner: short control request ← SSH / rsync
           → managed project + one Supervisor per accepted run
           → project SQLite control state + ordinary payload files
 ```
+
+The CLI is the shared workflow for people and agents. Only GPU acquisition has
+a multi-step TUI; login, machine registration and destructive actions use local
+input or confirmation. There is no root dashboard or cross-command navigation.
+Configuration is a command-local snapshot; a resource workflow refreshes its
+own settings after an explicit account/configuration change.
 
 ### Responsibilities and dependencies
 
@@ -31,6 +37,14 @@ loaf-runner: short control request ← SSH / rsync
 The application resolves a plan, checks prerequisites, and saves the run identity and frozen binding as `preparing`. Source synchronization then receives the working files; the runner exclusively claims that ID and prepares its independent work copy. The client saves `uncertain` before attempting one launch, then records confirmed acceptance as `submitted`. A lost response leads to observation of **the same ID**, not another launch with a new ID. Accepted submission, observed execution state, observation failure and local-save failure remain distinct results. Canceling a wait does not stop an accepted run.
 
 SQL transactions cover short metadata updates only; they never span SSH, HTTP, file copying or process runtime. Existing OS locks still govern source receive/copy, lifecycle admission, process lifetime and payload access. Cleanup removes only the selected terminal run payload and private execution data, retaining its claim and public deletion summary so a delayed launch cannot resurrect it. Local cleanup availability is separate from execution outcome.
+
+## Product boundaries
+
+Keep direct execution simple: run already prepares, synchronizes and submits.
+The GPU form and flags share the same Resources workflow. Put new behavior in
+its owning use case, not in menu navigation or a second command model.
+Test the changed path and its concrete side effects; reuse the existing shared
+checks and isolated integration entry point instead of adding another gate.
 
 ## Development
 

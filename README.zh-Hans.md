@@ -44,10 +44,9 @@ loaf pull
 任务完成后状态为 `succeeded`。`pull` 会打印下载目录；
 `loaf-results/<run-id>/outputs/result.txt` 中包含 `result=42`。
 
-在终端运行 `loaf -i`，可从项目概览运行程序、查看任务与日志、下载产物，
-或管理机器和 AutoDL 资源。队列与通知放在“更多”中。
-`loaf machine -i` 和 `loaf status -i` 可打开对应浏览器。
-不加 `-i` 时，即使有终端也只返回有限结果或缺参错误；裸 `loaf` 返回帮助。
+你和 Agent 使用相同的命令。需要比较 GPU、预算和镜像时，
+`loaf cloud acquire -i` 提供专用交互流程。普通操作保持直接调用；
+裸 `loaf` 和 `loaf -i` 显示帮助。
 
 ### 运行自己的项目
 

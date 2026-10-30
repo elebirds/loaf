@@ -11,7 +11,7 @@ import (
     "github.com/elebirds/loaf/internal/cloud"
 )
 
-func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (bool, error) {
+func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (cloudTransition, error) {
     l := c.output.locale
     order := "price"
     var page cloud.SearchResult
@@ -20,7 +20,7 @@ func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (bool, er
         if reload {
             err := c.cloudBusy(ctx, l.Text("cloud_loading_stock"), d.scope(c), func(work context.Context) error { var e error; page, e = d.search(work, c); return e })
             if err != nil {
-                return false, err
+                return cloudStay, err
             }
             reload = false
         }
@@ -31,11 +31,11 @@ func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (bool, er
             }
             choice, err := d.selectChoice(ctx, c, "cloud_no_match", choices, "back")
             if err != nil {
-                return false, err
+                return cloudStay, err
             }
             switch choice {
             case "cancel":
-                return false, interaction.ErrCanceled
+                return cloudCancel, nil
             case "auto":
                 d.mode = "auto"
                 return d.candidate(ctx, c)
@@ -44,7 +44,7 @@ func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (bool, er
                 reload = true
                 continue
             default:
-                return true, nil
+                return cloudBack, nil
             }
         }
         candidates := append([]cloud.Offer{}, page.Matches...)
@@ -74,13 +74,13 @@ func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (bool, er
             nav.Choices = append(nav.Choices, interaction.Choice{Label: l.Text("cloud_candidates_more"), Value: "more"})
         }
         if err := c.input.PageWithSummary(ctx, l.Text("cloud_step_candidate"), d.scope(c)+"\n"+cloudCoverage(l, page.Examined, page.Complete), choice, nav); err != nil {
-            return false, err
+            return cloudStay, err
         }
         switch nav.Value {
         case "cancel":
-            return false, interaction.ErrCanceled
+            return cloudCancel, nil
         case "back":
-            return true, nil
+            return cloudBack, nil
         case "refresh":
             reload = true
             continue
@@ -96,22 +96,19 @@ func (d *cloudDraft) pickCandidate(ctx context.Context, c *invocation) (bool, er
             var err error
             order, err = d.selectChoice(ctx, c, "cloud_candidates_sort", options, order)
             if err != nil {
-                return false, err
+                return cloudStay, err
             }
             continue
         }
         for _, offer := range candidates {
             if offer.ID == choice.Value {
-                selected := offer
-                d.selected = &selected
-                d.in.OfferID = offer.ID
-                d.in.Plan.InventoryOffset = d.offset
+                d.chooseCandidate(offer)
                 break
             }
         }
         d.in.Plan.Explicit.Continuous = cloudPointer(false)
         d.in.Plan.Explicit.WaitTimeout = nil
-        return false, nil
+        return cloudNext, nil
     }
 }
 

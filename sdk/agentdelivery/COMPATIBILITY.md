@@ -38,6 +38,10 @@ negotiation, transport-write versus explicit ACK evidence, duplicate/conflicting
 message IDs, and shutdown of owned connections. The module is also tested with
 `GOWORK=off`, independently of Loaf.
 
+Lifecycle regressions also cover a closed or changed Desktop owner, lost Claude
+ACK caches after helper restart, and a Bridge killed after a possible send.
+These are isolated peer/subprocess tests, not new native-version acceptance.
+
 The Codex transport uses WebSocket frames over the Unix socket. Sending raw
 JSONL through the native byte proxy does not perform the required HTTP upgrade;
 the adapter therefore connects using the pinned WebSocket library directly.

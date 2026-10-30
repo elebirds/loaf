@@ -44,13 +44,19 @@ func (c *invocation) cloudNavigation(path string, data any, err error) error {
     if a := c.grammar.Cloud.Product; a != nil {
         context.Product = *a
     }
+    if selected := p.cloudContext; selected != nil {
+        context.Account, context.Product, context.Target = selected.Account, selected.Product, selected.Target
+    }
     setRef := func(ref cloud.Ref) {
         context.Account, context.Product, context.InstanceID = ref.Account, ref.Product, ref.ID
     }
     var receipt *cloud.Receipt
     switch r := data.(type) {
     case cloud.Plan:
-        context.Product, context.Target = r.Product, c.grammar.Cloud.Acquire.Name
+        context.Product = r.Product
+        if context.Target == "" {
+            context.Target = c.grammar.Cloud.Acquire.Name
+        }
     case client.CloudAccounts:
         context.Account = r.Default
     case client.CloudBinding:

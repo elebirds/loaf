@@ -82,6 +82,9 @@ func (s Service) Freeze(projectID string, ids, tags []string) ([]task.RunRef, er
         if err != nil {
             return nil, err
         }
+        if selected[i].Abandonment != nil && selected[i].Abandonment.NoStartAt != nil {
+            return nil, abandonFault("RUN_ABANDONED", nil)
+        }
     }
     return selected, nil
 }

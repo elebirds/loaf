@@ -26,7 +26,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
         return nil, fault.New("BAD_CONFIG", "cloud_config", nil)
     }
     var approval client.ApproveCloud
-    if c.uxInteractive() {
+    if c.interactiveInput() {
         approval = c.approveCloud
     }
     switch path {
@@ -42,7 +42,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
     case "cloud profile remove":
         v := g.Profile.Remove
         if !v.Yes {
-            if !c.uxInteractive() {
+            if !c.interactiveInput() {
                 return nil, fault.Invalid("--yes", "missing_argument", "cloud_confirm_required")
             }
             accepted, e := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("cloud_profile_remove_confirm", map[string]any{"Target": v.Name}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: p.locale.Text("yes"), RejectLabel: p.locale.Text("no")})
@@ -97,7 +97,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
     case "cloud list":
         return complete(r.CloudList(ctx, selectInput, g.List.Limit))
     case "cloud info":
-        id, e := c.chooseCloudInstance(ctx, &selectInput, g.Info.ID)
+        id, e := cloudInstanceID(g.Info.ID)
         if e != nil {
             return nil, e
         }
@@ -109,7 +109,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
         if path == "cloud start" {
             v = g.Start
         }
-        id, e := c.chooseCloudInstance(ctx, &selectInput, v.ID)
+        id, e := cloudInstanceID(v.ID)
         if e != nil {
             return nil, e
         }
@@ -158,23 +158,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
     case "cloud bind":
         v := g.Bind
         if v.Instance == "" && v.Request == "" {
-            id, e := c.chooseCloudInstance(ctx, &selectInput, "")
-            if e != nil {
-                return nil, e
-            }
-            v.Instance = id
-        }
-        if v.Name == "" && v.Request == "" && c.uxInteractive() {
-            name := &interaction.Field{Title: p.locale.Text("cloud_wizard_name"), Value: "gpu", Validate: func(s string) error {
-                if s == "" {
-                    return errors.New(p.locale.Text("cloud_name_required"))
-                }
-                return nil
-            }}
-            if e := c.input.Page(ctx, p.locale.Text("cloud_bind_short"), name); e != nil {
-                return nil, e
-            }
-            v.Name = name.Value
+            return nil, fault.Invalid("instance/--request", "missing_argument", "cloud_instance_required")
         }
         runCtx, cancel := context.WithCancel(ctx)
         defer cancel()
@@ -188,7 +172,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
         if closeErr := feedback.close(); closeErr != nil {
             return result, closeErr
         }
-        return c.recoverCloudBinding(ctx, result, bindErr)
+        return result, bindErr
     case "cloud requests":
         if g.Requests.ID != "" {
             return r.CloudRequest(ctx, selectInput, g.Requests.ID)
@@ -252,10 +236,17 @@ func (c *invocation) cloudEvent(event cloud.Event) error {
 }
 
 func (c *invocation) login(ctx context.Context) (any, error) {
-    v, g, p := c.grammar.Cloud.Login, c.grammar.Cloud, c.output
+    v, g := c.grammar.Cloud.Login, c.grammar.Cloud
+    return c.loginRequest(ctx, client.LoginInput{Name: v.Name, Username: v.Username, PhoneArea: v.PhoneArea, CredentialStore: v.CredentialStore, Product: g.Product, PasswordStdin: v.PasswordStdin, Prompt: v.Prompt, Verify: v.Verify, Remember: v.RememberPassword, Replace: v.Replace, Default: v.Default})
+}
+
+// loginRequest borrows the same native input session for an explicit typed login.
+// Acquisition can authenticate in place without changing its command grammar.
+func (c *invocation) loginRequest(ctx context.Context, in client.LoginInput) (any, error) {
+    p := c.output
     prompts := client.LoginPrompts{}
     plain := c.input.Plain()
-    if !c.policy.Batch && (c.uxInteractive() || v.Prompt || v.Verify) {
+    if !c.policy.Batch && (c.interactiveInput() || in.Prompt || in.Verify) {
         prompts.Username = func(ctx context.Context) (string, error) {
             value, err := plain.Text(ctx, interaction.TextPrompt{Title: p.locale.Text("cloud_username_prompt"), MaxBytes: 4096})
             return value, loginInputError(err, "cloud_username_required")
@@ -273,7 +264,7 @@ func (c *invocation) login(ctx context.Context) (any, error) {
         value, err := c.input.ReadSecretLine(ctx, 4096)
         return value, loginInputError(err, "cloud_password_required")
     }
-    return complete(c.app.Resources.Login(ctx, client.LoginInput{Name: v.Name, Username: v.Username, PhoneArea: v.PhoneArea, CredentialStore: v.CredentialStore, Product: g.Product, PasswordStdin: v.PasswordStdin, Prompt: v.Prompt, Verify: v.Verify, Remember: v.RememberPassword, Replace: v.Replace, Default: v.Default}, c.policy, prompts))
+    return complete(c.app.Resources.Login(ctx, in, c.policy, prompts))
 }
 
 func (f ResourceFlags) plan(product *string) (client.CloudPlanInput, error) {

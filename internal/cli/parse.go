@@ -10,11 +10,10 @@ import (
 )
 
 type parsedCommand struct {
-    grammar       *grammar
-    node          *kong.Node
-    path          string
-    help          bool
-    statusOptions bool
+    grammar *grammar
+    node    *kong.Node
+    path    string
+    help    bool
 }
 type bootstrapOptions struct {
     command       string
@@ -113,13 +112,13 @@ func parse(parser *kong.Kong, g *grammar, args []string, early bootstrapOptions)
         return parsedCommand{}, diagnoseParse(traced)
     }
     if early.version {
-        return parsedCommand{g, parser.Model.Node, "version", false, false}, nil
+        return parsedCommand{g, parser.Model.Node, "version", false}, nil
     }
     if early.help {
-        return parsedCommand{g, node, node.Path(), true, false}, nil
+        return parsedCommand{g, node, node.Path(), true}, nil
     }
     if node == parser.Model.Node || node.Path() == "cloud" {
-        return parsedCommand{g, node, node.Path(), true, false}, nil
+        return parsedCommand{g, node, node.Path(), true}, nil
     }
     context, err := parser.Parse(args)
     if err != nil {
@@ -146,9 +145,9 @@ func parse(parser *kong.Kong, g *grammar, args []string, early bootstrapOptions)
             }
             node = next
         }
-        return parsedCommand{g, node, node.Path(), true, false}, nil
+        return parsedCommand{g, node, node.Path(), true}, nil
     }
-    return parsedCommand{g, node, path, path == "" || path == "cloud", uxDStatusOptions(context)}, nil
+    return parsedCommand{g, node, path, path == "" || path == "cloud"}, nil
 }
 
 func tracedNode(ctx *kong.Context) *kong.Node {
@@ -171,7 +170,7 @@ func targetForbidden(path string) bool {
         return true
     }
     switch path {
-    case "logs", "stop", "pull", "clean", "inspect", "outputs", "wait", "queue show", "queue cancel", "queue clean":
+    case "logs", "stop", "pull", "clean", "abandon", "inspect", "outputs", "wait", "queue show", "queue cancel", "queue clean":
         return true
     }
     return false

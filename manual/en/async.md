@@ -6,15 +6,8 @@ Use a notification to deliver a saved result after a task finishes. Use a queue
 when cooperating projects share a machine. A direct Run or cloud operation can
 notify you without ever entering a queue.
 
-In a terminal, `loaf queue -i`, `loaf notify -i` and `loaf events -i`
-open their respective centers; `loaf -i` also offers them under **More**.
-Without `-i`, these entries return finite queries, including in an Agent's PTY.
-Explicit subcommands stay direct. A default-command option such as
-`queue --limit 100` or `queue --trace=false` is still a query, not a menu request.
-
 For scripts and Agents, use explicit queries such as `loaf queue list --json`,
-`loaf notify deliveries --json` and `loaf events list --json`. These calls stay
-queries even when an interactive overview offers more actions. Use
+`loaf notify deliveries --json` and `loaf events list --json`. These calls return finite queries, with or without `-i`. Use
 `loaf help queue submit --json` to inspect the submission arguments without
 connecting. Read-only lists have no `--dry-run`; previews belong to operations
 such as `queue submit`, `queue clean` and `notify prune`.
@@ -156,13 +149,6 @@ relay; existing permissions still govern any continuation.
 
 ## Read facts and delivery evidence separately
 
-In the notification center, choose a receiving location, subscription or delivery
-to inspect its evidence and applicable actions. The events browser lets you
-choose local, resource, project or queue facts; remote sources require an
-explicit machine choice. Search stays within the displayed page/window and does
-not scan all history. From a task detail, subscribing passes that saved Run ID
-without the current target. Saving a subscription never starts a Bridge or Channel.
-
 ```bash
 loaf events list --source project --limit 100 --json
 loaf events list --source resources --json
@@ -203,12 +189,6 @@ ordinary Webhook acceptance proves Agent processing. Ambiguous sends remain
 Progress is not mixed into finite JSON.
 
 ## Queue fixed inputs on one machine
-
-The interactive queue center shows capacity, dispatch state and a bounded request
-list. Search covers the loaded requests; refresh or explicitly increase the limit
-to inspect more. Choosing another machine affects this visit, not project defaults.
-Submitting from the center reviews an offline plan before one explicit admission;
-complete `queue submit` calls retain their direct path.
 
 ```bash
 loaf queue enable --slots 1
@@ -269,6 +249,37 @@ Ordinary `loaf clean RUN_ID` keeps its confirmed-terminal-Run contract.
 Remote state survives local disconnection while the remote disk remains intact.
 A powered-off machine cannot execute or dispatch. Destroying that disk removes
 same-disk queue/event state; deliver or export required facts beforehand.
+
+## Keep facts and files before destroying a remote disk
+
+| Data | Saved location | After the remote disk is destroyed |
+| --- | --- | --- |
+| Run facts | Project `.loaf-control-v2/state.sqlite3` | Only previously collected or explicitly exported facts remain locally. |
+| Queue requests and facts | SSH user's `~/.local/share/loaf/queue-v1/state.sqlite3` | The same-disk queue cannot be recovered from a subscription alone. |
+| Work copy, logs and output files | Project `runs/RUN_ID/` | Only files already downloaded or otherwise saved remain. |
+| Cloud operation receipts and resource facts | Local `state-v3/state.db` | Retained locally, independently of the instance disk. |
+| Received Inbox, deliveries and source cursors | Local `state-v3/state.db` | Retained locally until explicit eligible pruning; delivery evidence does not back up output files. |
+
+Before destroying a disk through the provider, finish or explicitly stop the
+affected work and download the outputs you need:
+
+```bash
+loaf pull RUN_ID
+loaf events list --source project --subject run:RUN_ID --limit 1000 --json > run-events-page-1.json
+```
+
+Check the downloaded files. For facts, inspect the returned `has_more`; when it
+is true, read the next page with `--cursor` set to `next_cursor`, saving each page
+separately. A cursor covers one source, not a cross-source snapshot. Save any
+required logs separately; an event carries a public summary, not log contents.
+
+Listing remote events returns a page but does not collect it into the Inbox.
+The Bridge collects facts matching saved subscriptions. `notify serve --once`
+handles a bounded batch, not necessarily the entire backlog; `last_synced_at`
+does not establish that all remote history was copied. After source loss,
+`events list --source local` can still read received facts and deliveries retain
+their observed evidence. Source-query failures remain visible in subscriptions;
+they neither recreate missing facts nor authorize another delivery.
 
 ## One queue intent, two independent streams
 

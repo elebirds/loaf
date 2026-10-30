@@ -4,6 +4,7 @@ import (
     "fmt"
     "io"
 
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
     sources "github.com/elebirds/loaf/internal/sync"
@@ -58,6 +59,8 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
         printPull(out, r, l, ok)
     case cleanBatch:
         printClean(out, r, l)
+    case client.AbandonBatch:
+        printAbandon(out, r, l)
     case execution.LocalDetails:
         printLocalDetails(out, r, l)
     case execution.View:
@@ -98,7 +101,7 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
     case checkBatch:
         printCheckBatch(out, r, l)
     case checkResult:
-        uxBPrintCheck(out, r, l)
+        printCheck(out, r, l)
     default:
         return fmt.Errorf("unsupported command result %T", data)
     }

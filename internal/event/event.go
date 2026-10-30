@@ -93,7 +93,7 @@ func (e Envelope) Validate() error {
         return ErrInvalid
     }
     switch e.Type {
-    case "run.accepted", "run.succeeded", "run.failed", "run.stopped", "queue.enqueued", "queue.dispatched", "queue.canceled", "queue.attention_required", "resource.acquired", "resource.ready", "resource.started", "resource.stopped", "resource.attention_required", "attention.required":
+    case "run.accepted", "run.succeeded", "run.failed", "run.stopped", "run.preparation_abandoned", "queue.enqueued", "queue.dispatched", "queue.canceled", "queue.attention_required", "resource.acquired", "resource.ready", "resource.started", "resource.stopped", "resource.attention_required", "attention.required":
     default:
         return ErrInvalid
     }

@@ -2,7 +2,6 @@ package cli
 
 import (
     "context"
-    "errors"
     "io"
     "testing"
     "time"
@@ -139,14 +138,5 @@ func TestCloudReadinessRetriesTransientPlatformReadWithoutAllocating(t *testing.
     result, err := app.Resources.CloudBind(context.Background(), client.CloudBindInput{Name: "api-recovery", Instance: "original", ReadyTimeout: time.Minute})
     if err != nil || result.Status != "ready" || p.gets != 2 || waits != 1 || p.creates != 0 {
         t.Fatal(result, err, p.gets, waits)
-    }
-}
-
-func TestCloudCanceledBindingDoesNotOpenAnotherForm(t *testing.T) {
-    binding := client.CloudBinding{Target: "retained", Instance: cloud.Ref{ID: "original"}, Status: "bound"}
-    call := &invocation{}
-    result, err := call.recoverCloudBinding(context.Background(), binding, fault.Wrap("CLOUD_NOT_READY", "cloud_not_ready", context.Canceled))
-    if !errors.Is(err, context.Canceled) || result.Instance.ID != "original" {
-        t.Fatal(result, err)
     }
 }

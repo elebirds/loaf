@@ -120,7 +120,13 @@ func (r *Resources) Login(ctx context.Context, input LoginInput, policy CallPoli
     if err != nil {
         return result, cloud.Failure(err)
     }
-    return LoginResult{Account: input.Name, Store: source, Identity: session.Identity, Remembered: input.Remember, Standard: session.Standard, Pro: session.Pro}, nil
+    result = LoginResult{Account: input.Name, Store: source, Identity: session.Identity, Remembered: input.Remember, Standard: session.Standard, Pro: session.Pro}
+    settings, err := r.Config.Load()
+    if err != nil {
+        return result, err
+    }
+    r.Settings = settings
+    return result, nil
 }
 
 // Logout erases the selected credential entry, not aliases or saved run bindings.

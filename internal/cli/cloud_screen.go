@@ -152,7 +152,7 @@ func (p *presenter) finishCloud(data any, e *errorView) (bool, error) {
     known := false
     cloneStatus := ""
     var actionErr error
-    displayAction := func(action uxNextAction) string {
+    displayAction := func(action cloudNextAction) string {
         display, err := uxJCommandDisplay(action.Command)
         if err != nil {
             actionErr = errors.Join(actionErr, err)

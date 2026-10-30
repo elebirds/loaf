@@ -1,6 +1,6 @@
 ---
 name: loaf
-description: Use Loaf to run recoverable experiments on existing SSH machines, inspect results and retrieve outputs. Also handle explicitly authorized AutoDL operations, optional FIFO queues, result notifications and completed-task cleanup. No implicit rentals or queue enablement.
+description: Use Loaf to run recoverable experiments on existing SSH machines, inspect results and retrieve outputs. Also handle explicitly authorized AutoDL operations, optional FIFO queues, notifications, completed-task cleanup and failed-preparation abandonment. No implicit rentals or queue enablement.
 ---
 
 # Run an experiment and keep its identity
@@ -42,6 +42,7 @@ still leave useful downloaded selections; inspect the partial result.
 | `submission: "submitted"`, later observation fails | Acceptance is confirmed. Keep the ID and query it; do not submit a replacement. |
 | `submission: "uncertain"` / `SUBMISSION_UNKNOWN` | Query the same ID. Nonzero CLI exit is not permission to run again. |
 | `submission: "preparing"` | Inspect that explicit ID offline. It is not accepted training and is excluded from history/latest selection. |
+| `ABANDON_UNCONFIRMED` | Retain `no_start_at` and `cleaned_at` independently; retry only the same authorized `abandon` ID. |
 | `state_error` | Local saving failed. Retain any verified remote status/exit result; do not treat it as `query_error`. |
 | `QUERY_PARTIAL`, `OUTPUT_MISSING`, or a batch error | Read successful rows and coverage as well as the error. Do not discard all `data`. |
 | `status: "unknown"` or a dated `last_observation` | Current execution is unverified. Do not report failure or a cached state as live. |
@@ -52,15 +53,15 @@ Use finite observations instead of a busy polling loop. Operation exits are
 0 success, 2 input/configuration, 3 unconfirmed mutation, and 1 other failure.
 Public `message`/`hint` are localized; branch on codes and fields.
 
-Use complete commands with `--json`, not simulated menu input. Humans can open
-the available workflows with `loaf -i`; do not add `-i` / `--interactive` to Agent
-calls. Without that flag, even a PTY returns help, finite results or missing-input
-errors. `--json` controls output format and cannot combine with `--interactive`.
+Use complete commands with `--json`, not simulated menu input. Humans use
+`cloud acquire -i` for GPU comparison and local prompts for login, registration
+or confirmation. Do not add `-i` / `--interactive` to Agent calls. Ordinary
+queries stay finite even with `-i`; bare root/cloud show offline help.
+`--json` controls output format and cannot combine with `--interactive`.
 Prefer explicit `machine list`, `queue list`, `notify deliveries` and
 `events list` queries. Use `status --json` for live bounded queries or
-`status --local --json` for saved facts; `status -i` opens a local browser.
-Optional parser arguments can enable human guidance without making them optional
-for scripts: machine add/use/show/remove still need names in machine mode.
+`status --local --json` for saved facts. Names and task IDs remain explicit;
+only guided machine registration fills missing inputs.
 When an input error includes `issues`, correct the listed local omissions
 together; keep the primary code and argument for control flow. The list is not
 evidence that SSH or platform validation ran.
@@ -101,7 +102,7 @@ submitting local project code. It has no sync, setup, run ID, or durability.
 - [Streams](references/streams.md): foreground `exec`, NDJSON, log cursors,
   acknowledged resume files, reconnection and output-consumer failures.
 - [Outputs and cleanup](references/outputs-and-cleanup.md): frozen-group waiting,
-  partial/batch downloads and deletion of explicitly authorized terminal data.
+  partial/batch downloads, failed-preparation abandonment and authorized terminal-data deletion.
 - [Recovery](references/recovery.md): offline inspection, labels, saved bindings,
   diagnostics, old state namespaces, matching CLI versions and stopping a task.
 - [Queues and notifications](references/async.md): explicit FIFO admission,

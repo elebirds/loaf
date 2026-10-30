@@ -52,11 +52,9 @@ loaf pull
 The task finishes with `succeeded`. `pull` prints the download directory;
 `loaf-results/<run-id>/outputs/result.txt` contains `result=42`.
 
-Run `loaf -i` in a terminal to open the current project's overview: run a
-program, browse tasks and logs, retrieve outputs, or manage machines and AutoDL
-resources. Queues and notifications are under **More**. `loaf machine -i` and
-`loaf status -i` open their own browsers. Without `-i`, commands return finite
-results or missing-input errors even in a terminal; bare `loaf` returns help.
+Use the same commands yourself or through an agent. For GPU selection and
+budget review, `loaf cloud acquire -i` opens a focused interactive flow. Ordinary
+commands stay direct; bare `loaf` and `loaf -i` show help.
 
 ### Run your own project
 

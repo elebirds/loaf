@@ -65,35 +65,36 @@ type SubmitInput struct {
 
 // View exposes operational results without leaking private request environments.
 type View struct {
-    ID               string             `json:"run_id"`
-    Version          string             `json:"version"`
-    Name             string             `json:"name,omitempty"`
-    Tags             []string           `json:"tags,omitempty"`
-    Target           string             `json:"target"`
-    RemoteDir        string             `json:"remote_dir"`
-    Status           string             `json:"status"`
-    Submission       string             `json:"submission,omitempty"`
-    Phase            string             `json:"phase,omitempty"`
-    CreatedAt        time.Time          `json:"created_at"`
-    CompletedAt      *time.Time         `json:"completed_at,omitempty"`
-    ExitCode         *int               `json:"exit_code"`
-    Signal           string             `json:"signal,omitempty"`
-    Reason           string             `json:"reason,omitempty"`
-    QueryError       string             `json:"query_error,omitempty"`
-    StateError       string             `json:"state_error,omitempty"`
-    Log              *wire.LogChunk     `json:"log,omitempty"`
-    StopGraceMillis  *int64             `json:"stop_grace_millis,omitempty"`
-    CleanedAt        *time.Time         `json:"cleaned_at,omitempty"`
-    CleanupPending   bool               `json:"cleanup_pending,omitempty"`
-    LastObservation  *task.ObservedRun  `json:"last_observation,omitempty"`
-    LastQueryFailure *task.QueryFailure `json:"last_query_failure,omitempty"`
-    ObservedAt       time.Time          `json:"observed_at,omitzero"`
-    QueryInterrupted bool               `json:"query_interrupted,omitempty"`
-    Ref              task.RunRef        `json:"-"`
+    ID               string               `json:"run_id"`
+    Version          string               `json:"version"`
+    Name             string               `json:"name,omitempty"`
+    Tags             []string             `json:"tags,omitempty"`
+    Target           string               `json:"target"`
+    RemoteDir        string               `json:"remote_dir"`
+    Status           string               `json:"status"`
+    Submission       string               `json:"submission,omitempty"`
+    Phase            string               `json:"phase,omitempty"`
+    CreatedAt        time.Time            `json:"created_at"`
+    CompletedAt      *time.Time           `json:"completed_at,omitempty"`
+    ExitCode         *int                 `json:"exit_code"`
+    Signal           string               `json:"signal,omitempty"`
+    Reason           string               `json:"reason,omitempty"`
+    QueryError       string               `json:"query_error,omitempty"`
+    StateError       string               `json:"state_error,omitempty"`
+    Log              *wire.LogChunk       `json:"log,omitempty"`
+    StopGraceMillis  *int64               `json:"stop_grace_millis,omitempty"`
+    CleanedAt        *time.Time           `json:"cleaned_at,omitempty"`
+    CleanupPending   bool                 `json:"cleanup_pending,omitempty"`
+    Abandonment      *task.RunAbandonment `json:"abandonment,omitempty"`
+    LastObservation  *task.ObservedRun    `json:"last_observation,omitempty"`
+    LastQueryFailure *task.QueryFailure   `json:"last_query_failure,omitempty"`
+    ObservedAt       time.Time            `json:"observed_at,omitzero"`
+    QueryInterrupted bool                 `json:"query_interrupted,omitempty"`
+    Ref              task.RunRef          `json:"-"`
 }
 
 func view(ref task.RunRef, r *wire.RunRecord) View {
-    v := View{ID: ref.ID, Version: ref.Version, Name: ref.Name, Tags: ref.Tags, Target: ref.Target, RemoteDir: ref.RemoteDir, CreatedAt: ref.CreatedAt, Status: "unknown", Submission: ref.Submission, Ref: ref}
+    v := View{ID: ref.ID, Version: ref.Version, Name: ref.Name, Tags: ref.Tags, Target: ref.Target, RemoteDir: ref.RemoteDir, CreatedAt: ref.CreatedAt, Status: "unknown", Submission: ref.Submission, Abandonment: ref.Abandonment, Ref: ref}
     if ref.Cleanup != nil {
         summary := ref.Cleanup.Summary
         v.Status, v.Phase, v.CreatedAt = summary.Status, summary.Phase, summary.CreatedAt
@@ -253,7 +254,7 @@ func (s Service) Submit(ctx context.Context, in SubmitInput, progress func(strin
 
 func definiteRejection(code string) bool {
     switch code {
-    case "BAD_COMMAND", "BAD_ENV", "BAD_FORMAT", "VERSION_MISMATCH", "UNSAFE_PATH", "PROJECT_MISMATCH", "RUN_NOT_FOUND", "COPY_FAILED", "START_FAILED":
+    case "BAD_COMMAND", "BAD_ENV", "BAD_FORMAT", "VERSION_MISMATCH", "UNSAFE_PATH", "PROJECT_MISMATCH", "RUN_NOT_FOUND", "COPY_FAILED", "START_FAILED", "RUN_ABANDONED":
         return true
     }
     return false
@@ -318,7 +319,7 @@ func (s Service) Observe(ctx context.Context, ref task.RunRef, wait time.Duratio
     if err := currentVersion(ref); err != nil {
         return view(ref, nil), err
     }
-    if ref.Cleanup != nil {
+    if ref.Cleanup != nil || ref.Abandonment != nil && ref.Abandonment.NoStartAt != nil {
         return view(ref, nil), nil
     }
     bound := ref
@@ -593,6 +594,9 @@ func remoteFault(err error) error {
     }
     if errorCode(err) == "BAD_LOG_CURSOR" {
         return fault.New("BAD_CONFIG", "log_cursor_invalid", nil)
+    }
+    if errorCode(err) == "RUN_ABANDONED" {
+        return abandonFault("RUN_ABANDONED", err)
     }
     if errorCode(err) == "LOG_CHANGED" {
         f := fault.New("LOG_CHANGED", "log_changed", nil)

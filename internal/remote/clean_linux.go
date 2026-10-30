@@ -282,6 +282,9 @@ func removeRunTree(ctx context.Context, root *os.Root, name string) error {
 }
 
 func cleanedAvailability(req wire.Request, dir string) error {
+    if err := preparationAvailability(req); err != nil {
+        return err
+    }
     receipt, err := cleanupReceipt(req, dir)
     if err != nil {
         return err

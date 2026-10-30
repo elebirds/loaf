@@ -36,6 +36,12 @@ type RunCleaner interface {
     Clean(context.Context, execution.CleanResult, bool) (execution.CleanResult, error)
 }
 
+// RunAbandoner fences explicit preparations without changing execution status.
+type RunAbandoner interface {
+    Preview(context.Context, task.RunRef, bool, bool) (execution.AbandonResult, error)
+    Abandon(context.Context, execution.AbandonResult, bool) (execution.AbandonResult, error)
+}
+
 // OutputBrowser reads bounded metadata within frozen outputs.
 type OutputBrowser interface {
     List(context.Context, task.RunRef, int, int, bool, bool) (execution.OutputListing, error)
@@ -64,6 +70,7 @@ type Dependencies struct {
     Runner     RunnerVerifier
     Syncer     Synchronizer
     Cleaner    RunCleaner
+    Abandoner  RunAbandoner
     Outputs    OutputBrowser
     Puller     OutputPuller
     Runs       *execution.Service
@@ -76,16 +83,17 @@ type Dependencies struct {
 
 // Projects owns project planning and durable run workflows.
 type Projects struct {
-    Notify   NotificationService
-    Config   *config.Store
-    State    *local.Store
-    Settings config.Global
-    Runs     *execution.Service
-    Syncer   Synchronizer
-    Cleaner  RunCleaner
-    Outputs  OutputBrowser
-    Puller   OutputPuller
-    CWD      string
+    Notify    NotificationService
+    Config    *config.Store
+    State     *local.Store
+    Settings  config.Global
+    Runs      *execution.Service
+    Syncer    Synchronizer
+    Cleaner   RunCleaner
+    Abandoner RunAbandoner
+    Outputs   OutputBrowser
+    Puller    OutputPuller
+    CWD       string
 }
 
 // Machines owns configured targets and foreground machine operations.
@@ -132,7 +140,7 @@ func New(d Dependencies, settings config.Global) *App {
         Events:    d.Events,
         Notify:    d.Notify,
         Queue:     d.Queue,
-        Projects:  &Projects{Notify: d.Notify, Config: d.Config, State: d.State, Settings: settings, Runs: d.Runs, Syncer: d.Syncer, Cleaner: d.Cleaner, Outputs: d.Outputs, Puller: d.Puller, CWD: d.CWD},
+        Projects:  &Projects{Notify: d.Notify, Config: d.Config, State: d.State, Settings: settings, Runs: d.Runs, Syncer: d.Syncer, Cleaner: d.Cleaner, Abandoner: d.Abandoner, Outputs: d.Outputs, Puller: d.Puller, CWD: d.CWD},
         Machines:  &Machines{Config: d.Config, State: d.State, Settings: settings, Checker: d.Checker, Runner: d.Runner, Operations: d.Operations, Trace: d.Trace, CWD: d.CWD},
         Resources: &Resources{Notify: d.Notify, Config: d.Config, Settings: settings, Cloud: d.Cloud, Auth: d.Auth, Operations: d.Operations, CWD: d.CWD},
     }

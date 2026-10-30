@@ -10,6 +10,7 @@ import (
     "github.com/elebirds/loaf/internal/event"
     "github.com/elebirds/loaf/internal/i18n"
     "github.com/elebirds/loaf/internal/queue"
+    execution "github.com/elebirds/loaf/internal/run"
 )
 
 func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
@@ -139,7 +140,7 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
             }
         }
         if r.Preview != nil {
-            return true, uxHPrintQueuePreview(out, *r.Preview, l)
+            return true, printQueuePreview(out, *r.Preview, l)
         }
         if r.Request != nil {
             if err := printQueueRequest(out, *r.Request, l); err != nil {
@@ -159,7 +160,7 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
 
 func eventTypeText(kind string, l *i18n.Localizer) string {
     switch kind {
-    case "run.accepted", "run.succeeded", "run.failed", "run.stopped", "queue.enqueued", "queue.dispatched", "queue.canceled", "queue.attention_required", "resource.acquired", "resource.ready", "resource.started", "resource.stopped", "resource.attention_required", "attention.required":
+    case "run.accepted", "run.succeeded", "run.failed", "run.stopped", "run.preparation_abandoned", "queue.enqueued", "queue.dispatched", "queue.canceled", "queue.attention_required", "resource.acquired", "resource.ready", "resource.started", "resource.stopped", "resource.attention_required", "attention.required":
         return l.Text("event_type_" + strings.ReplaceAll(kind, ".", "_"))
     }
     return kind
@@ -334,4 +335,18 @@ func printQueueResult(out io.Writer, r queue.Result, l *i18n.Localizer) error {
         return err
     }
     return nil
+}
+
+func printQueuePreview(out io.Writer, preview execution.RunPreview, l *i18n.Localizer) error {
+    var body strings.Builder
+    printPreview(&body, preview, l)
+    for _, item := range []struct{ key, value string }{
+        {"name", fmt.Sprintf("%q", []string{preview.Metadata.Name})},
+        {"tags", fmt.Sprintf("%q", preview.Metadata.Tags)},
+        {"notifications", fmt.Sprintf("%q", preview.Notifications)},
+    } {
+        fmt.Fprintln(&body, l.Text("ux_h_"+item.key)+": "+item.value)
+    }
+    _, err := io.WriteString(out, body.String())
+    return err
 }

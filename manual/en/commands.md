@@ -10,7 +10,7 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | --- | --- | --- |
 | `--lang` | `string` | Interface language: auto, en, or zh-Hans. |
 | `--json` | `bool` | Print JSON; exec, logs -f, cloud watch and continuous notify serve stream NDJSON. |
-| `--interactive` | `bool` | Open menus and guide missing inputs; requires a terminal and cannot combine with --json. |
+| `--interactive` | `bool` | Allow command-local input and confirmation when needed; prompts require a terminal. Cannot combine with --json. |
 | `--trace` | `bool` | Report safe SSH-stage timings and connection/retry counts for a finite command. |
 | `--target` | `string` | Override the project's target alias. |
 | `--help` | `bool` | Show help. |
@@ -29,6 +29,7 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 | `loaf wait` | `loaf wait --tag experiment` | Wait for selected tasks to finish. |
 | `loaf pull` | `loaf pull` | Download selected outputs from a saved run. |
 | `loaf clean` | `loaf clean r_example --dry-run` | Remove completed tasks' remote data. |
+| `loaf abandon` | `loaf abandon r_example --dry-run` | Cancel preparation and remove its remote data. |
 | `loaf sync` | `loaf sync --dry-run` | Synchronize working sources to the managed remote cache. |
 | `loaf queue` | `loaf queue` | Queue work on one machine with optional FIFO dispatch. |
 | `loaf queue list` | `loaf queue list` | List the selected machine’s queue and shared capacity. |
@@ -58,7 +59,7 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 
 | Command | Minimal call | Purpose |
 | --- | --- | --- |
-| `loaf cloud` | `loaf cloud -i` | Manage cloud resources; use --interactive for the overview. |
+| `loaf cloud` | `loaf cloud` | Inspect and manage cloud resources. |
 | `loaf cloud catalog` | `loaf cloud catalog gpu` | Discover GPU, region and image choices. |
 | `loaf cloud catalog gpu` | `loaf cloud catalog gpu` | List canonical GPU models. |
 | `loaf cloud catalog region` | `loaf cloud catalog region` | List regions by name and identifier. |
@@ -123,9 +124,9 @@ Generated from the CLI grammar. NAME, IDs, hosts and environment references in e
 
 Use `loaf help COMMAND` for parameter descriptions, built-in defaults, ranges and examples; `loaf help COMMAND --json` adds machine-readable argument and flag metadata. The same declarations produce this list and the help interface. [Argument construction](guide.md#construct-arguments-without-guessing) covers literal argv, repeated flags, CSV, false/zero/empty values and Shell boundaries. [Configuration](configuration.md) explains effective precedence. [JSON](json.md) explains result types and errors.
 
-`loaf -i` opens the project overview. `machine`, `queue`, `notify`, `events` and `status` open their browsers only with `-i` / `--interactive`; otherwise they return finite queries, even in a terminal. Explicit IDs/options retain direct semantics. Missing-input guidance also requires `-i`. Interactive mode needs a terminal, conflicts with `--json` and never grants mutation approval.
+Commands execute directly. `-i / --interactive` only enables input or confirmation for the current command. Bare `loaf` and `loaf cloud` show offline help, including with `-i`; `machine`, `status`, `queue`, `notify` and `events` keep finite query semantics. Interactive input requires a terminal, conflicts with `--json`, and never grants approval.
 
-`logs`, `stop`, `outputs` and `pull` select the latest submitted or uncertain task when their ID is omitted. `wait` needs explicit IDs or tags; `clean` always needs explicit IDs. Additional common calls:
+`logs`, `stop`, `outputs` and `pull` select the latest submitted or uncertain task when their ID is omitted. `wait` needs explicit IDs or tags; `clean` and `abandon` always need explicit IDs. Additional common calls:
 
 ```bash
 loaf run

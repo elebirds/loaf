@@ -10,10 +10,6 @@ import (
     "github.com/elebirds/loaf/internal/ssh"
 )
 
-func printCheckBatch(out io.Writer, r checkBatch, l *i18n.Localizer) {
-    uxBPrintCheckBatch(out, r, l)
-}
-
 func printResourceObservation(out io.Writer, r *ssh.ResourceObservation, l *i18n.Localizer) {
     if !r.ObservedAt.IsZero() {
         fmt.Fprintln(out, l.Text("probe_observed", map[string]any{"Value": r.ObservedAt.Format(time.RFC3339)}))

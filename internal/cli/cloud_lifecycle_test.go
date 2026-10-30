@@ -12,8 +12,8 @@ import (
     "github.com/elebirds/loaf/internal/cloud"
 )
 
-func TestCloudHubHelpNeverOpensProvider(t *testing.T) {
-    for _, args := range [][]string{{"cloud"}, {"cloud", "--json"}, {"cloud", "--help"}, {"help", "cloud"}, {"cloud", "--help", "--json"}} {
+func TestCloudBareHelpNeverOpensProvider(t *testing.T) {
+    for _, args := range [][]string{{"cloud"}, {"cloud", "-i"}, {"cloud", "--json"}, {"cloud", "--help"}, {"help", "cloud"}, {"cloud", "--help", "--json"}} {
         o, _ := uxFixture(t)
         o.Interactive = len(args) > 1
         o.Cloud.Open = func(context.Context, string, cloud.Account, string) (cloud.Provider, error) {
@@ -24,49 +24,6 @@ func TestCloudHubHelpNeverOpensProvider(t *testing.T) {
         if code != 0 || stderr != "" || out == "" {
             t.Fatal(args, code, out, stderr)
         }
-    }
-}
-
-func TestCloudHubSessionScopeDoesNotChangeDefault(t *testing.T) {
-    o, p := uxFixture(t)
-    if code, out, err := run(t, o, "cloud", "account", "add", "other", "--token-env", "OTHER_TOKEN", "--json"); code != 0 {
-        t.Fatal(out, err)
-    }
-    seen := []string{}
-    o.Cloud.Open = func(_ context.Context, name string, _ cloud.Account, product string) (cloud.Provider, error) {
-        seen = append(seen, name+"/"+product)
-        return p, nil
-    }
-    o.Interactive = true
-    // Settings / scope / other / Pro / back / exit.
-    o.In = strings.NewReader("4\n1\n2\n2\n7\n5\n")
-    code, out, err := run(t, o, "-i", "cloud")
-    if code != 0 || strings.Contains(out+err, "OTHER_TOKEN") {
-        t.Fatal(code, out, err)
-    }
-    settings, e := o.Config.Load()
-    if e != nil || settings.Cloud.DefaultAccount != "main" {
-        t.Fatal(settings, e)
-    }
-    if !reflect.DeepEqual(seen, []string{"main/standard", "other/pro"}) {
-        t.Fatal("unexpected scope traversal", seen)
-    }
-}
-
-type lifecycleCloud struct{ *uxCloud }
-
-func (p *lifecycleCloud) List(context.Context, int) (cloud.Page, error) {
-    return cloud.Page{Complete: false, Examined: 1, Instances: []cloud.Instance{{Ref: cloud.Ref{Provider: "autodl", Product: "standard", Account: "main", ID: "only-instance"}, Name: "machine", Status: "running", Region: "west"}}}, nil
-}
-func TestCloudHubExistingCredentialsRemainRedacted(t *testing.T) {
-    o, base := uxFixture(t)
-    p := &lifecycleCloud{base}
-    o.Cloud.Open = func(context.Context, string, cloud.Account, string) (cloud.Provider, error) { return p, nil }
-    o.Interactive = true
-    o.In = strings.NewReader("1\n1\n3\n1\n8\n4\n5\n")
-    code, out, err := run(t, o, "-i", "cloud")
-    if code != 0 || strings.Contains(out+err, "fixture-ssh-secret") || p.creates != 0 || !strings.Contains(err, "only-instance") {
-        t.Fatal(code, out, err, p.creates)
     }
 }
 
@@ -131,25 +88,6 @@ func TestCloudEquivalentArgvRoundTrips(t *testing.T) {
         if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &second) != nil || !reflect.DeepEqual(first.Data.Plan, second.Data.Plan) {
             t.Fatalf("%v\n%d %s %s\n%+v\n%+v", argv, code, out, stderr, first.Data.Plan, second.Data.Plan)
         }
-    }
-}
-
-func TestCloudCompleteProfileStartsAtReviewAndCanSaveBeforeRent(t *testing.T) {
-    o, p := uxFixture(t)
-    code, out, stderr := run(t, o, "cloud", "profile", "save", "train", "--gpu-model=RTX 4090", "--image=base-1", "--max-compute-hourly-price=3", "--continuous", "--json")
-    if code != 0 {
-        t.Fatal(out, stderr)
-    }
-    o.Interactive = true
-    // Review: alias, optional actions, save-only, no payment; profile name.
-    o.In = strings.NewReader("\n\n5\n\nsaved\n")
-    code, out, stderr = run(t, o, "-i", "cloud", "acquire", "--profile=train")
-    if code != 0 || p.creates != 0 || strings.Contains(stderr, "How would you like") {
-        t.Fatal(code, out, stderr, p.creates)
-    }
-    settings, _ := o.Config.Load()
-    if settings.Resources["saved"].AutoDL.Image == nil {
-        t.Fatal("profile not saved")
     }
 }
 
@@ -264,24 +202,6 @@ func TestCloudEquivalentCommandClearsConflictingInheritedEnvironment(t *testing.
     }
 }
 
-func TestCloudCompleteAnyGPUProfileKeepsExplicitEmptyModelList(t *testing.T) {
-    o, p := uxFixture(t)
-    code, out, stderr := run(t, o, "cloud", "profile", "save", "any-gpu", "--gpu-model=", "--image=base-1", "--max-compute-hourly-price=3", "--json")
-    if code != 0 {
-        t.Fatal(code, out, stderr)
-    }
-    o.Interactive = true
-    o.In = strings.NewReader("\n\n5\n\nany-copy\n")
-    code, out, stderr = run(t, o, "-i", "cloud", "acquire", "--profile=any-gpu")
-    if code != 0 || p.creates != 0 || strings.Contains(stderr, "How would you like") {
-        t.Fatal(code, out, stderr)
-    }
-    settings, _ := o.Config.Load()
-    if v := settings.Resources["any-copy"].GPUModels; v == nil || len(v) != 0 {
-        t.Fatal(v)
-    }
-}
-
 func TestCloudDraftResetsOnlyIncompatibleInheritedProductFields(t *testing.T) {
     d := cloudDraft{plan: cloud.Plan{Product: "standard", AutoDL: cloud.ImageOptions{CUDAFrom: 128, GPUSpecID: 9, GPUSpecUUID: "pro-spec", ExpandSystemDiskGB: 50}}}
     d.normalizeProductEnvironment("session")
@@ -292,29 +212,5 @@ func TestCloudDraftResetsOnlyIncompatibleInheritedProductFields(t *testing.T) {
     d.normalizeProductEnvironment("session")
     if d.plan.AutoDL.CUDAFrom != 128 || d.environmentReset {
         t.Fatal("explicit conflicting input was silently changed")
-    }
-}
-
-func TestCloudHubUsesItsScopeInsteadOfAProfileProduct(t *testing.T) {
-    o, p := uxFixture(t)
-    if err := o.Config.SaveCloudProfile(context.Background(), "default", cloud.Profile{Product: cloudPointer("pro")}, false); err != nil {
-        t.Fatal(err)
-    }
-    products := []string{}
-    o.Cloud.Open = func(_ context.Context, _ string, _ cloud.Account, product string) (cloud.Provider, error) {
-        products = append(products, product)
-        return p, nil
-    }
-    o.Interactive = true
-    // Root / market / GPU catalog / back / back / exit.
-    o.In = strings.NewReader("2\n2\n2\n7\n5\n")
-    code, out, err := run(t, o, "-i", "cloud")
-    if code != 0 {
-        t.Fatal(code, out, err)
-    }
-    for _, product := range products {
-        if product != "standard" {
-            t.Fatal("profile redirected hub scope", products)
-        }
     }
 }

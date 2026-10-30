@@ -83,6 +83,7 @@ type Response struct {
     Outputs       *OutputSelection `json:"outputs,omitempty"`
     Inventory     *OutputInventory `json:"inventory,omitempty"`
     Cleanup       *CleanupReceipt  `json:"cleanup,omitempty"`
+    Abandonment   *AbandonReceipt  `json:"abandonment,omitempty"`
 }
 
 // OutputSelection is a transient read-only selection, not an artifact inventory.

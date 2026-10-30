@@ -99,26 +99,7 @@ func (r *richConsoleInput) Read(p []byte) (int, error) {
         if record.EventType != xwindows.KEY_EVENT {
             continue
         }
-        key := record.KeyEvent()
-        modifiers := uint32(xwindows.SHIFT_PRESSED | xwindows.LEFT_CTRL_PRESSED | xwindows.RIGHT_CTRL_PRESSED | xwindows.LEFT_ALT_PRESSED | xwindows.RIGHT_ALT_PRESSED)
-        if key.Char == 0 || key.Char < 0x80 && key.ControlKeyState&modifiers != 0 {
-            // Preserve native navigation/function keys and their modifiers.
-            if key.VirtualKeyCode != 0 {
-                down := 0
-                if key.KeyDown {
-                    down = 1
-                }
-                r.pending = fmt.Appendf(r.pending, "\x1b[%d;%d;%d;%d;%d;%d_", key.VirtualKeyCode, key.VirtualScanCode, key.Char, down, key.ControlKeyState, key.RepeatCount)
-            }
-            continue
-        }
-        // ConPTY/Alt Unicode input can carry its character on Alt release.
-        if !key.KeyDown && key.VirtualKeyCode != 0x12 {
-            continue
-        }
-        for repeat := uint16(0); repeat < key.RepeatCount; repeat++ {
-            r.appendUnit(key.Char)
-        }
+        r.appendKey(record.KeyEvent())
     }
     if r.ctx.Err() != nil {
         return 0, io.EOF
@@ -126,6 +107,34 @@ func (r *richConsoleInput) Read(p []byte) (int, error) {
     n := copy(p, r.pending)
     r.pending = r.pending[n:]
     return n, nil
+}
+
+func (r *richConsoleInput) appendKey(key xwindows.KeyEventRecord) {
+    // Alt-numpad records compose a Unicode character on Alt release;
+    // their numeric key events must not become extra typed digits.
+    alt := uint32(xwindows.LEFT_ALT_PRESSED | xwindows.RIGHT_ALT_PRESSED)
+    if key.Char == 0 && key.VirtualKeyCode >= 0x60 && key.VirtualKeyCode <= 0x69 && key.ControlKeyState&alt != 0 {
+        return
+    }
+    modifiers := uint32(xwindows.SHIFT_PRESSED | xwindows.LEFT_CTRL_PRESSED | xwindows.RIGHT_CTRL_PRESSED | xwindows.LEFT_ALT_PRESSED | xwindows.RIGHT_ALT_PRESSED)
+    if key.Char == 0 || key.Char < 0x80 && key.ControlKeyState&modifiers != 0 {
+        // Preserve native navigation/function keys and their modifiers.
+        if key.VirtualKeyCode != 0 {
+            down := 0
+            if key.KeyDown {
+                down = 1
+            }
+            r.pending = fmt.Appendf(r.pending, "\x1b[%d;%d;%d;%d;%d;%d_", key.VirtualKeyCode, key.VirtualScanCode, key.Char, down, key.ControlKeyState, key.RepeatCount)
+        }
+        return
+    }
+    // ConPTY/Alt Unicode input can carry its character on Alt release.
+    if !key.KeyDown && key.VirtualKeyCode != 0x12 {
+        return
+    }
+    for repeat := uint16(0); repeat < key.RepeatCount; repeat++ {
+        r.appendUnit(key.Char)
+    }
 }
 
 func (r *richConsoleInput) appendUnit(unit rune) {

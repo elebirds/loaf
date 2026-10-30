@@ -15,6 +15,11 @@
 不能因为进程退出码非零就丢弃它。无结果的 `data`、无错误的 `error` 会省略。
 不适用字段省略；读取方应容忍后续增加字段。
 
+表单与操作菜单需要显式 `-i / --interactive`，不能与 `--json` 合用；仅有终端不会自动开启。
+查询时优先明确使用 `machine list`、
+`queue list`、`notify deliveries`、`events list`；裸 `loaf --json` 返回离线帮助。
+完整直接调用不要求先经过交互概览或单独预览。
+
 | 操作退出码 | 含义 |
 | --- | --- |
 | 0 | CLI 操作成功，包括成功查到失败实验 |
@@ -93,7 +98,12 @@ loaf help run --json
 - `commands`：子命令名与本地化描述。
 - `examples`：包含 `loaf` 可执行文件名的 argv 数组。
 
-云参数还可提供 `group`、`enum`、`requires`、`conflicts_with`、`exactly_one_of`、`applicable_when` 关系注解；模板实际生效值仍须本地校验。
+参数还可提供来自编译后 grammar 的 `group`、`enum`、`requires`、`conflicts_with`、
+`exactly_one_of`、`applicable_when` 关系注解。人类帮助先显示示例，按组区分操作选项和
+继承的全局选项。注解描述输入关系，项目或模板实际生效值仍须本地校验。
+
+`required` 描述解析器的必填规则，不代表全部业务前提。例如 machine add/use/show/remove
+允许省略名称以便人类交互补齐，但不带 `-i` 的调用即使有终端，也会对这个缺项返回 `BAD_CONFIG`。
 
 列表形式为 `repeat` 或 `csv`。静态默认值不等于当前项目/用户的生效值；
 提交的实际配置来源使用 `run --dry-run`。
@@ -105,9 +115,28 @@ loaf help run --json
 不输出原始 argv、配置片段或秘密值。
 版本不匹配另带 `expected_version` 与 `actual_version`。
 
+出现 `error.issues[]` 时，其中的 `argument`/`reason` 一次列出已知的本地语义问题。
+修正所列问题后再调用；这不表示已执行远端检查。语法错误仍保留解析器的单项诊断。
+例如，不提供输入的 `machine add --json` 会在 `issues` 同时列出 `name` 和 `--ssh`，
+主错误参数仍为 `name`。
+无关配置损坏时仍可使用 help/version；显式无效的 `--lang` 仍需修正。
+
+## 保持建议 argv 的含义
+
+可选的 `next_actions` 条目包含 `kind`、以 `loaf` 开头的 `command` argv 数组及
+`requires_confirmation`。直接向进程 API 传递数组，不按空白拆分，也不隐式交给 Shell。
+追加 Loaf 输出选项时，应放在 `--` 前面，而非实验程序的字面参数之后。
+
+建议保留明确对象 ID 和公开输入，不包含凭据、私有环境变量值或 `--yes`。
+缺失的私有输入须明确提供；建议本身及 `requires_confirmation: false` 都不授予新权限。
+不要从公共任务详情拼装历史重跑，也不要为没有预览合同的命令添加 `--dry-run`。
+建议动作取决于当前操作及观察结果；缺少动作不意味着应猜测一个。
+
 ## 不解析提示文字也能跟进云操作
 
-云 envelope 可增加 `context`：操作、账号／产品、目标、模式（`select` 或 `auto`）、阶段、请求 ID 与实例 ID；失败仍保留适用值。`next_actions` 提供 `command` argv 数组、稳定 `kind` 和 `requires_confirmation`；建议不代表授权。原有按阶段变化的 `data` 及键名不变。输入错误还可提供 `error.issues[]` 的 `argument` 和 `reason`。
+云 envelope 可增加 `context`：操作、账号／产品、目标、模式（`select` 或 `auto`）、
+阶段、请求 ID 与实例 ID；失败仍保留适用值。原有按阶段变化的 `data` 及键名不变，
+恢复结果和成功的预览结果可以提供上述建议 argv。
 
 使用 `cloud bind --request ID --json` 继续接入已知租用结果。未确认请求先检查／核对，不重跑 acquire。更改模板或账号默认值不重解释已保存收据。
 

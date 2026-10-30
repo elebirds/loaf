@@ -3,11 +3,9 @@ package cli
 import (
     "fmt"
     "io"
-    "strings"
 
     "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
-    "github.com/elebirds/loaf/internal/ssh"
     sources "github.com/elebirds/loaf/internal/sync"
 )
 
@@ -100,51 +98,7 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
     case checkBatch:
         printCheckBatch(out, r, l)
     case checkResult:
-        fmt.Fprintln(out, l.Text("check_heading", map[string]any{"Target": r.Target}))
-        if r.Report.OS == "" {
-            return nil
-        }
-        fmt.Fprintf(out, "%s: %s / %s\n%s: %s\n", l.Text("platform"), r.Report.OS, r.Report.Arch, l.Text("remote_directory"), r.Report.RemoteDir)
-        w := "no"
-        if r.Report.Writable {
-            w = "yes"
-        }
-        fmt.Fprintf(out, "%s: %s\n%s: %.2f GiB\n", l.Text("writable"), l.Text(w), l.Text("disk"), float64(r.Report.DiskAvailableBytes)/(1<<30))
-        for _, group := range []struct {
-            id    string
-            tools map[string]ssh.Tool
-        }{{"local_tools", r.Report.Local}, {"remote_tools", r.Report.Remote}} {
-            fmt.Fprintln(out, l.Text(group.id)+":")
-            for _, name := range []string{"ssh", "rsync", "python", "uv", "nvidia-smi", "nvcc"} {
-                tool, exists := group.tools[name]
-                if !exists {
-                    continue
-                }
-                value := tool.Path
-                if value == "" {
-                    value = l.Text("missing")
-                }
-                fmt.Fprintf(out, "  %s: %s\n", name, value)
-                if tool.Version != "" {
-                    fmt.Fprintf(out, "    %s\n", strings.ReplaceAll(tool.Version, "\n", "\n    "))
-                }
-            }
-        }
-        if r.Report.Resources != nil {
-            printResourceObservation(out, r.Report.Resources, l)
-        }
-        if r.Report.GPU != "" && (r.Report.Resources == nil || len(r.Report.Resources.GPUs) == 0) {
-            fmt.Fprintf(out, "%s: %s\n", l.Text("gpu"), r.Report.GPU)
-        }
-        if r.Runner != nil {
-            fmt.Fprintln(out, l.Text("runner_verified", map[string]any{"Version": r.Runner.Version, "Path": r.Runner.Path}))
-        }
-        for _, issue := range r.Report.Issues {
-            fmt.Fprintln(out, "- "+l.Text(issue))
-        }
-        if ok {
-            fmt.Fprintln(out, l.Text("check_ok"))
-        }
+        uxBPrintCheck(out, r, l)
     default:
         return fmt.Errorf("unsupported command result %T", data)
     }

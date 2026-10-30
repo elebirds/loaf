@@ -44,14 +44,19 @@ replace `lab-gpu` with your SSH Host alias and run:
 cd examples/cpu
 loaf machine add lab --ssh lab-gpu
 loaf machine use lab
-loaf run
-loaf status
+loaf run --wait 10s
 loaf logs
 loaf pull
 ```
 
 The task finishes with `succeeded`. `pull` prints the download directory;
 `loaf-results/<run-id>/outputs/result.txt` contains `result=42`.
+
+Run `loaf -i` in a terminal to open the current project's overview: run a
+program, browse tasks and logs, retrieve outputs, or manage machines and AutoDL
+resources. Queues and notifications are under **More**. `loaf machine -i` and
+`loaf status -i` open their own browsers. Without `-i`, commands return finite
+results or missing-input errors even in a terminal; bare `loaf` returns help.
 
 ### Run your own project
 

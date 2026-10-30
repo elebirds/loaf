@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | `--lang` | `string` | 界面语言：auto、en 或 zh-Hans。 |
 | `--json` | `bool` | 输出 JSON；exec、logs -f、cloud watch 和持续 notify serve 使用 NDJSON。 |
+| `--interactive` | `bool` | 打开菜单并引导补齐缺项；需要终端，不可与 --json 合用。 |
 | `--trace` | `bool` | 为有限命令报告脱敏 SSH 阶段耗时及连接／重试计数。 |
 | `--target` | `string` | 覆盖当前项目的目标别名。 |
 | `--help` | `bool` | 显示帮助。 |
@@ -57,7 +58,7 @@
 
 | 命令 | 最简调用 | 用途 |
 | --- | --- | --- |
-| `loaf cloud` | `loaf cloud` | 进入云资源概览，管理实例、租用与恢复请求。 |
+| `loaf cloud` | `loaf cloud -i` | 管理云资源；使用 --interactive 打开概览。 |
 | `loaf cloud catalog` | `loaf cloud catalog gpu` | 查找 GPU、地区和镜像选项。 |
 | `loaf cloud catalog gpu` | `loaf cloud catalog gpu` | 列出平台 GPU 型号。 |
 | `loaf cloud catalog region` | `loaf cloud catalog region` | 按名称和标识列出地区。 |
@@ -122,7 +123,9 @@
 
 使用 `loaf help COMMAND` 查看参数描述、内置默认值、范围及示例；`loaf help COMMAND --json` 增加结构化参数元数据。清单与帮助来自同一命令声明。[参数构造](guide.md#准确构造参数)说明原样 argv、重复选项、CSV、false/零/空值和 Shell 边界。[配置参考](configuration.md)解释生效优先级，[JSON](json.md)说明结果与错误。
 
-`status` 不带 ID 时列出最近任务；`logs`、`stop`、`outputs`、`pull` 不带 ID 时选择最近已提交或未确认任务。`wait` 必须明确 ID 或标签，`clean` 必须明确 ID。其他常用调用：
+`loaf -i` 打开项目概览。`machine`、`queue`、`notify`、`events`、`status` 只有带 `-i / --interactive` 才打开浏览器，否则即使在终端中也保持有限查询。明确 ID／选项仍保留直接语义，缺项向导也须显式开启。交互需要终端，与 `--json` 冲突，也不代表批准变更。
+
+`logs`、`stop`、`outputs`、`pull` 不带 ID 时选择最近已提交或未确认任务。`wait` 必须明确 ID 或标签，`clean` 必须明确 ID。其他常用调用：
 
 ```bash
 loaf run

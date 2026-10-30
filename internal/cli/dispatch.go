@@ -3,7 +3,6 @@ package cli
 import (
     "context"
     "encoding/json"
-    "errors"
     "fmt"
     "io"
     "runtime/debug"
@@ -15,10 +14,10 @@ import (
     "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/fault"
     execution "github.com/elebirds/loaf/internal/run"
-    "github.com/elebirds/loaf/internal/ssh"
 )
 
 type invocation struct {
+    ui              bool
     editAcquisition *atomic.Bool
     profileOnly     bool
     app             *client.App
@@ -33,63 +32,19 @@ type invocation struct {
 func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
     g, p := c.grammar, c.output
     switch path {
+    case "":
+        return c.uxRoot(ctx)
     case "version":
         info, _ := debug.ReadBuildInfo()
         return versionData(info), nil
-    case "machine add":
-        connection := g.Machine.Add.SSH
-        if connection == "" {
-            if c.policy.Batch {
-                return nil, fault.Invalid("--ssh", "missing_argument", "ssh_required")
-            }
-            var err error
-            connection, err = c.input.Text(ctx, interaction.TextPrompt{Title: p.locale.Text("ssh_prompt"), Description: p.locale.Text("ssh_prompt_help"), MaxBytes: 8192, Validate: func(value string) error {
-                if _, err := ssh.ParseConnection(value); err != nil {
-                    var f *fault.Error
-                    if errors.As(err, &f) {
-                        return errors.New(p.locale.Text(f.Message, f.Params))
-                    }
-                    return errors.New(p.locale.Text("ssh_input"))
-                }
-                return nil
-            }})
-            if err != nil {
-                return nil, err
-            }
-        }
-        return complete(c.app.Machines.AddTarget(ctx, g.Machine.Add.Name, connection, g.Machine.Add.RemoteDir, g.Machine.Add.Replace))
-    case "machine use":
-        return complete(c.app.Machines.UseTarget(ctx, g.Machine.Use.Name))
-    case "machine", "machine list", "machine show":
-        result, err := c.app.Machines.Targets(ctx, g.Machine.Show.Name)
-        if err != nil {
-            return nil, err
-        }
-        if path == "machine show" {
-            return machineDetails{result}, nil
-        }
-        return result, nil
-    case "machine remove":
-        return complete(c.app.Machines.RemoveTarget(ctx, g.Machine.Remove.Name))
+    case "machine", "machine add", "machine use", "machine list", "machine show", "machine remove":
+        return c.uxAMachineCommand(ctx, path)
     case "check":
-        v := g.Check
-        result, err := c.app.Machines.Check(ctx, client.CheckInput{Target: g.Target, Targets: v.Targets.Values, Timeout: v.Timeout, Runner: v.Runner, Report: v.Report, Policy: c.policy})
-        if result.Single != nil {
-            return p.check(*result.Single), err
-        }
-        if result.Batch != nil {
-            return p.checks(*result.Batch), err
-        }
-        return nil, err
+        return c.uxBDirectCheck(ctx)
     case "sync":
-        v := g.Sync
-        result, err := c.app.Projects.Sync(ctx, client.SyncInput{Target: g.Target, DryRun: v.DryRun, Mode: v.Mode, RespectGitignore: v.RespectGitignore, Exclude: v.Exclude, Policy: c.policy}, c.progress)
-        if err != nil {
-            return nil, err
-        }
-        return result, nil
+        return c.uxCSyncCommand(ctx)
     case "run":
-        return c.run(ctx)
+        return c.uxCRunCommand(ctx)
     case "status":
         v := g.PS
         result, err := c.app.Projects.PS(ctx, client.PSInput{ID: v.ID, Local: v.Local, Wait: v.Wait, Limit: v.Limit, Target: g.Target, Name: v.Name, Since: v.Since, Until: v.Until, Statuses: v.Status, Tags: v.Tag, Policy: c.policy})
@@ -133,7 +88,7 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
         }
         return nil, err
     case "clean":
-        if !g.Clean.DryRun && !g.Clean.Yes && c.policy.Batch {
+        if !g.Clean.DryRun && !g.Clean.Yes && !c.uxInteractive() {
             return nil, fault.Invalid("--yes", "missing_argument", "clean_confirmation_required")
         }
         preview, err := c.app.Projects.PrepareClean(ctx, client.CleanInput{IDs: g.Clean.IDs, PrepareRunner: !g.Clean.DryRun, Policy: c.policy})
@@ -161,12 +116,16 @@ func (c *invocation) dispatch(ctx context.Context, path string) (any, error) {
         if !c.options.Interactive {
             return nil, fault.New("BAD_CONFIG", "interactive_terminal", nil)
         }
-        return nil, c.app.Machines.SSH(ctx, deref(g.Target), client.Streams{In: c.options.In, Out: p.out, Err: p.err})
+        return nil, c.input.WithNative(ctx, nil, func() error {
+            return c.app.Machines.SSH(ctx, deref(g.Target), client.Streams{In: c.options.In, Out: p.out, Err: p.err})
+        })
     case "forward":
         if p.json {
             return nil, fault.New("BAD_CONFIG", "forward_json", nil)
         }
-        return nil, c.app.Machines.Forward(ctx, deref(g.Target), g.Forward.Port, g.Forward.LocalPort, c.policy, p.err, c.progress)
+        return nil, c.input.WithNative(ctx, nil, func() error {
+            return c.app.Machines.Forward(ctx, deref(g.Target), g.Forward.Port, g.Forward.LocalPort, c.policy, p.err, c.progress)
+        })
     }
     if path == "cloud" {
         return c.cloudHub(ctx)
@@ -190,6 +149,8 @@ func (c *invocation) progress(event client.Progress) {
     }
     key := event.Stage + "_progress"
     switch event.Stage {
+    case "sync":
+        key = "sync_start"
     case "sync_update":
         key = "sync_update_warning"
     case "run_accepted":
@@ -206,31 +167,11 @@ func (c *invocation) progress(event client.Progress) {
 }
 
 func (c *invocation) run(ctx context.Context) (any, error) {
-    v := c.grammar.Run
-    args, err := commandArgs(v.Argv, false)
+    in, err := c.uxCRunArgs()
     if err != nil {
         return nil, err
     }
-    feedback := client.RunFeedback{Progress: c.progress}
-    if !c.output.json {
-        lastPhase := ""
-        feedback.Log = func(v execution.View, kind string) error {
-            if v.Phase != "" && v.Phase != lastPhase {
-                lastPhase = v.Phase
-                fmt.Fprintln(c.output.err, c.output.locale.Text("run_phase_"+v.Phase))
-            }
-            return writeLog(c.output.out, v)
-        }
-    }
-    result, err := c.app.Projects.Run(ctx, client.RunInput{Target: c.grammar.Target, Wait: v.Wait, Args: args, Name: v.Name, Tags: v.Tag, Notify: v.Notify, DryRun: v.DryRun, Policy: c.policy}, feedback)
-    if result.Preview != nil {
-        return *result.Preview, err
-    }
-    if result.Run != nil {
-        c.output.waited = result.Observed
-        return *result.Run, err
-    }
-    return nil, err
+    return c.uxCRunInput(ctx, in)
 }
 
 type logAcknowledgement struct {
@@ -241,45 +182,7 @@ type logAcknowledgement struct {
 }
 
 func (c *invocation) logs(ctx context.Context) (any, error) {
-    v, p := c.grammar.Logs, c.output
-    feedback := client.LogsFeedback{Emit: func(view execution.View, kind string) (bool, error) {
-        if p.json {
-            return false, p.stream(struct {
-                Type string         `json:"type"`
-                Run  execution.View `json:"run"`
-            }{kind, view})
-        }
-        if err := writeLog(p.out, view); err != nil {
-            return false, err
-        }
-        return c.options.TerminalOutput, nil
-    }}
-    if !p.json {
-        feedback.Recovery = func(state string) { fmt.Fprintln(p.err, p.locale.Text("log_recovery_"+state)) }
-    }
-    result, err := c.app.Projects.Logs(ctx, client.LogsInput{ID: v.ID, Tail: v.Tail, Follow: v.Follow, Reconnect: v.Reconnect, Resume: v.Resume, ResumeFile: v.ResumeFile, AckCursor: v.AckCursor, RecoveryBudget: v.RecoveryBudget, Policy: c.policy}, feedback)
-    if v.AckCursor != nil && result.View.ID != "" {
-        return logAcknowledgement{RunID: result.View.ID, Acknowledged: result.Acknowledged, Offset: result.Offset, StateError: result.View.StateError}, err
-    }
-    if v.Follow {
-        if err != nil && p.json {
-            return struct {
-                Type string         `json:"type"`
-                Run  execution.View `json:"run"`
-            }{"error", result.View}, err
-        }
-        return nil, err
-    }
-    if p.json {
-        return result.View, err
-    }
-    if err == nil {
-        err = writeLog(p.out, result.View)
-        if result.View.Log != nil && result.View.Log.Truncated {
-            fmt.Fprintln(p.err, p.locale.Text("logs_truncated"))
-        }
-    }
-    return nil, err
+    return c.uxEDirectLogs(ctx)
 }
 
 func (c *invocation) exec(ctx context.Context) (any, error) {
@@ -295,7 +198,12 @@ func (c *invocation) exec(ctx context.Context) (any, error) {
         streams.Out = &execOutput{encoder: encoder, lock: lock, stream: "stdout", writeErr: &p.writeErr}
         streams.Err = &execOutput{encoder: encoder, lock: lock, stream: "stderr", writeErr: &p.writeErr}
     }
-    result, err := c.app.Machines.Exec(ctx, client.ExecInput{Target: deref(c.grammar.Target), CWD: c.grammar.Exec.CWD, Args: args, Policy: c.policy}, streams)
+    var result client.ExecResult
+    err = c.input.WithNative(ctx, nil, func() error {
+        var callErr error
+        result, callErr = c.app.Machines.Exec(ctx, client.ExecInput{Target: deref(c.grammar.Target), CWD: c.grammar.Exec.CWD, Args: args, Policy: c.policy}, streams)
+        return callErr
+    })
     if !p.json {
         return nil, err
     }

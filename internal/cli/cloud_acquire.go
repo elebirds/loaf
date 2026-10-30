@@ -46,7 +46,7 @@ func (c *invocation) acquireOnce(ctx context.Context, in client.CloudAcquireInpu
         }
     }()
     var approval client.ApproveCloud
-    if !c.policy.Batch {
+    if c.uxInteractive() {
         approval = c.approveCloud
     }
     if len(approvals) > 0 {
@@ -60,8 +60,8 @@ func (c *invocation) acquireCloud(ctx context.Context) (any, error) {
     if err != nil {
         return nil, err
     }
-    wizard := !c.policy.Batch && !in.Yes && !in.DryRun && in.Name == ""
-    if !c.policy.Batch && !in.Yes && !in.DryRun && !wizard {
+    wizard := c.uxInteractive() && !in.Yes && !in.DryRun && in.Name == ""
+    if c.uxInteractive() && !in.Yes && !in.DryRun && !wizard {
         _, e := c.app.Resources.CloudPreview(ctx, in)
         var f *fault.Error
         if errors.As(e, &f) && (f.Message == "cloud_account_unknown" || f.Input != nil && f.Input.Reason == "missing_argument") {

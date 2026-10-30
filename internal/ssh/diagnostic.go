@@ -4,6 +4,8 @@ import (
     "errors"
     "io"
     "strings"
+
+    "github.com/elebirds/loaf/internal/fault"
 )
 
 // diagnosticWriter forwards the native stream unchanged, retaining only a
@@ -69,6 +71,17 @@ func FailureReason(err error) string {
     var failure *classifiedConnectionFailure
     if errors.As(err, &failure) {
         return failure.reason
+    }
+    // Check faults retain SSH evidence rather than a native diagnosticWriter.
+    // Reuse the same classifier; expose only its safe reason.
+    var problem *fault.Error
+    if errors.As(err, &problem) {
+        if detail, ok := problem.Params["Detail"].(string); ok && detail != "" {
+            _, reason := diagnosticKind(strings.ToLower(detail))
+            if reason != "unknown_transport" {
+                return reason
+            }
+        }
     }
     return ""
 }

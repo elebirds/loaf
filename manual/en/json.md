@@ -16,6 +16,12 @@ contains a stable `code` and localized `message`, plus an optional localized
 Fields not applicable to that result are omitted. `data`/`error` are omitted when
 absent, not filled with dummy values. Consumers must tolerate additional fields.
 
+Forms and operation menus require explicit `-i` / `--interactive`; that flag
+cannot combine with `--json`. A terminal alone never enables them. Prefer
+explicit `machine list`, `queue list`, `notify deliveries` and `events list`
+queries; bare `loaf --json` returns offline help. Complete direct commands do
+not require an interactive overview or a separate preview first.
+
 | Operation exit | Meaning |
 | --- | --- |
 | 0 | CLI operation succeeded, even if the observed experiment failed |
@@ -100,7 +106,15 @@ loaf help run --json
 - `commands`: child names and localized descriptions.
 - `examples`: argv arrays, including the `loaf` executable name.
 
-Cloud parameters also expose optional `group`, `enum`, `requires`, `conflicts_with`, `exactly_one_of` and `applicable_when` annotations. These describe relationships; effective profile values still need local validation.
+Parameters also expose optional `group`, `enum`, `requires`, `conflicts_with`,
+`exactly_one_of` and `applicable_when` annotations from the compiled grammar.
+Human help puts examples first and groups choices separately from inherited
+global options. Annotations describe input relationships; effective project or
+profile values still need local validation.
+
+`required` describes parser arity, not all workflow requirements. For example,
+machine add/use/show/remove allow an omitted name for human guidance, while JSON
+or noninteractive calls still return `BAD_CONFIG` for that missing input.
 
 List format is `repeat` or `csv` when applicable. A static default is not the
 current effective project/user value. Actual submission provenance is available
@@ -115,9 +129,36 @@ or value, out-of-range, conflicts, invalid configuration, and replaced commands.
 No raw argv dump, source excerpt or secret value is included.
 `expected_version`/`actual_version` accompany task version mismatches.
 
+When present, `error.issues[]` collects independently known local semantic
+problems as `argument`/`reason` pairs. Correct all listed issues before retrying;
+the list does not mean remote checks have run. Syntax errors retain the parser's
+single diagnosis. For example, `machine add --json` without inputs reports both
+`name` and `--ssh` in `issues`, while keeping `name` as the primary argument.
+Help and version remain usable despite unrelated broken
+configuration; an explicitly invalid `--lang` still needs correction.
+
+## Use suggested argv without changing its meaning
+
+An optional `next_actions` item contains `kind`, `command` (an argv array starting
+with `loaf`) and `requires_confirmation`. Pass the array to a process API, not
+through whitespace splitting or implicit Shell evaluation. Add a Loaf output
+option before `--`, never after a program's literal argv separator.
+
+Suggestions retain explicit object IDs and public inputs. They do not contain
+credentials, private environment values or `--yes`. Missing private inputs must
+be supplied explicitly; neither a suggested action nor
+`requires_confirmation: false` grants new authority. Do not manufacture a
+historical rerun from public task details or invent `--dry-run` for a command
+that has no preview contract. Available suggestions depend on the operation and
+observed result; an absent action is not an instruction to guess one.
+
 ## Follow cloud operations without parsing prose
 
-Cloud envelopes optionally add `context` with operation, account/product, target, mode (`select` or `auto`), stage, request ID and instance ID. Applicable values are retained on failures. `next_actions` contains safe argv arrays in `command`, a stable `kind`, and `requires_confirmation`; suggestions do not grant authority. Existing stage-dependent `data` shapes and keys remain intact. Input errors can additionally expose `error.issues[]` with `argument` and `reason`.
+Cloud envelopes optionally add `context` with operation, account/product, target,
+mode (`select` or `auto`), stage, request ID and instance ID. Applicable values
+are retained on failures. Existing stage-dependent `data` shapes and keys remain
+intact; recovery and successful preview results can supply the suggested argv
+described above.
 
 Use `cloud bind --request ID --json` to resume a known acquisition. An uncertain request instead needs inspection/reconciliation; do not repeat acquire. A later profile/account default change does not reinterpret the receipt.
 

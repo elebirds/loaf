@@ -31,7 +31,7 @@ type cloudNextAction struct {
     RequiresConfirmation bool     `json:"requires_confirmation"`
 }
 
-func (c *invocation) cloudNavigation(path string, data any, err error) {
+func (c *invocation) cloudNavigation(path string, data any, err error) error {
     p := c.output
     context := &cloudContext{Operation: strings.TrimPrefix(path, "cloud ")}
     context.Account = c.app.Resources.Settings.Cloud.DefaultAccount
@@ -102,11 +102,21 @@ func (c *invocation) cloudNavigation(path string, data any, err error) {
     }
     p.cloudContext = context
     p.nextActions = nil
+    var constructionErr error
+    action := func(kind string, confirm bool, args ...string) {
+        next, err := uxJNextAction(kind, append([]string{"loaf"}, args...), confirm)
+        if err != nil {
+            constructionErr = errors.Join(constructionErr, err)
+            return
+        }
+        p.nextActions = append(p.nextActions, next)
+    }
     if preview, ok := data.(client.CloudPreview); ok {
         if err == nil {
             in, e := c.acquireInput()
             if e == nil {
-                p.nextActions = append(p.nextActions, cloudNextAction{Kind: "acquire_with_plan", Command: cloudPlanCommand(in, preview), RequiresConfirmation: true})
+                argv := cloudPlanCommand(in, preview)
+                action("acquire_with_plan", true, argv[1:]...)
             }
         } else if preview.Plan.Requirements.GPUCount > 0 {
             p.issues = cloudInputIssues(preview.Plan, preview.AuthMode, preview.CloneSource != nil)
@@ -118,9 +128,6 @@ func (c *invocation) cloudNavigation(path string, data any, err error) {
             mode = a.Credential.Mode
         }
         p.issues = cloudInputIssues(plan, mode, c.grammar.Cloud.Acquire.CloneFrom != nil)
-    }
-    action := func(kind string, confirm bool, args ...string) {
-        p.nextActions = append(p.nextActions, cloudNextAction{Kind: kind, Command: append([]string{"loaf"}, args...), RequiresConfirmation: confirm})
     }
     if context.Stage == "ready" && context.Target != "" {
         action("select_machine", false, "machine", "use", context.Target)
@@ -145,28 +152,24 @@ func (c *invocation) cloudNavigation(path string, data any, err error) {
         }
         action("choose_image", false, args...)
     }
+    return constructionErr
 }
 
-func commandDisplay(args []string) string {
-    parts := make([]string, len(args))
-    for i, arg := range args {
-        if arg != "" && !strings.ContainsAny(arg, " \t\n'\"$`\\;|&<>()*?![]{}") {
-            parts[i] = arg
-        } else {
-            parts[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
-        }
-    }
-    return strings.Join(parts, " ")
-}
-
-func (p *presenter) printCloudActions(data any) {
+func (p *presenter) printCloudActions(data any) error {
     binding, bound := data.(client.CloudBinding)
     for _, a := range p.nextActions {
         if bound && binding.Status == "ready" && a.Kind == "select_machine" {
             continue
         }
-        fmt.Fprintln(p.out, p.locale.Text("cloud_next_action", map[string]any{"Value": commandDisplay(a.Command)}))
+        display, err := uxJCommandDisplay(a.Command)
+        if err != nil {
+            return err
+        }
+        if _, err := fmt.Fprintln(p.out, p.locale.Text("cloud_next_action", map[string]any{"Value": display})); err != nil {
+            return err
+        }
     }
+    return nil
 }
 
 type cloudProfilesResult struct {

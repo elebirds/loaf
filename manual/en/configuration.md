@@ -23,6 +23,10 @@ paths = ["outputs", "checkpoints"]
 
 Target selection follows `--target`, the current project's `loaf machine use` setting, then the TOML `target`. The personal selection never rewrites project TOML. Without `remote_dir`, each project receives a stable ID and a separate path under the target's remote base. Set that base with `loaf machine add ... --remote-dir '~/projects'`.
 
+Picking a machine in a run, sync, connection or queue workflow changes that
+action only. Save a default with `machine use` or the machine center's explicit
+project-selection action. A review page does not save its draft into TOML.
+
 User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v3/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
 
 See [upgrading](upgrading.md) for the v0.6 state boundary and matching old CLIs.
@@ -43,6 +47,18 @@ Personal `[run] wait = "10s"` and `[logs] tail = 100` defaults are also supporte
 Project and user settings also support `[ps] limit = 20` and `[exec] cwd = ""`. List limits accept 1–1000, so an explicit zero is an error rather than a request for the default. An empty exec directory explicitly restores the remote home, even when a lower-priority setting selected another directory. Both settings use flag, project, user, then built-in precedence.
 
 `run.wait` applies to submission only. `status <run-id>` waits only when explicitly given `--wait`; list queries never wait for tasks to finish.
+
+Use `loaf run --dry-run --json` to inspect effective values and their per-field
+sources before a new submission. Help's `default` is a built-in value, not the
+resolved project value. Keep explicit `0s`, `0`, `false` and permitted empty
+values when copying a plan; omission inherits again. Cloud CSV lists replace
+lower-priority lists, while sync exclusions append. A repeatable literal option
+with `--path=` contains an empty path, not an empty list, and is invalid.
+
+The preview exposes environment names only. Keep values in the intended project
+configuration or authorized secret mechanism rather than adding them to copied
+commands, diagnostic reports or notification text. A new preview reads current
+inputs; it does not reconstruct an older run's private execution specification.
 
 For sync strategies, explicit flags override project settings, then user defaults, then built-ins (`mirror` and `respect_gitignore = true`). Each scalar inherits independently; exclusions append across all scopes and never replace built-in safeguards. Setting `respect_gitignore = false` disables Git tracking/ignore selection, not Loaf's own exclusions. `update` leaves removed and newly excluded remote files in place and reports that warning in human output. JSON includes the effective `policy` and selection/exclusion results.
 

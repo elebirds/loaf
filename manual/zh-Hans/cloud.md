@@ -5,10 +5,10 @@
 ## 从云资源概览开始
 
 ```bash
-loaf cloud
+loaf cloud -i
 ```
 
-交互终端打开五项菜单：**我的实例、找算力／租用、待处理请求、账号与模板、退出**。页头显示当前账号和普通／Pro 产品；切换只影响本次会话，选择“设为默认”才保存。首屏只查询这个范围，不遍历其他账号。登录失效后仍可进入本地请求恢复，或从账号菜单重新登录。`loaf cloud --json`、非交互调用和显式帮助仍只返回帮助，不隐式联网。
+显式 `-i / --interactive` 在终端打开五项菜单：**我的实例、找算力／租用、待处理请求、账号与模板、退出**。页头显示当前账号和普通／Pro 产品；切换只影响本次会话，选择“设为默认”才保存。首屏只查询这个范围，不遍历其他账号。登录失效后仍可进入本地请求恢复，或从账号菜单重新登录。不加 `-i` 时，裸 `loaf cloud` 即使在终端中也只返回离线帮助。`--json` 不可与 `-i` 合用。
 
 “我的实例”提供搜索、状态筛选和刷新，保留部分查询结果及覆盖说明。实例详情可重试接入、打开原生 SSH、查看隐藏密码的连接信息、设为当前项目机器，或执行适用的启动／停止操作。启动／停止单独确认后默认观察 2 分钟；直接子命令仍默认仅提交，`--wait 0s` 也只提交，不把“平台接受”当成状态已完成。
 
@@ -17,10 +17,10 @@ loaf cloud
 ## 用一个向导租到 GPU
 
 ```bash
-loaf cloud acquire
+loaf cloud acquire -i
 ```
 
-在交互终端中，Huh 向导分四组收集选择：
+指定 `-i` 后，Huh 向导分四组收集选择：
 
 1. **算力：** 搜索平台实际 GPU 型号，选择卡数、允许地区；资源下限放在可选的高级条件里。
 2. **选卡或抢卡：** 选中当前有库存的主机，或设置整实例小时价格上限，等待符合条件的库存。
@@ -33,7 +33,7 @@ loaf cloud acquire
 
 页头持续展示完整流程：**方式 → 算力 → 主机/条件 → 环境/磁盘 → 授权 → 获取 → 接入**。`●` 标出当前步骤，`✓` 表示之前已完成的选择，`○` 表示后续步骤；当前步骤展开填写，返回时位置随之更新。
 
-方向键移动，`/` 搜索，空格多选，Enter 继续，Shift+Tab 在字段间返回。涉及选择的页面提供返回／取消；Ctrl+C 取消。普通终端使用编号菜单：Enter 保留带标记的选择，逗号分隔编号多选，`0` 清空。已有参数和模板成为预填值；完整的带别名命令仍可直接执行。`--yes`、`--json` 和非交互调用不进入向导。只有一个已保存账号时可为本次调用预选，不更改全局默认；未配置账号时可从原生登录返回获取流程。
+方向键移动，`/` 搜索，空格多选，Enter 继续，Shift+Tab 在字段间返回。涉及选择的页面提供返回／取消；Ctrl+C 取消。普通终端使用编号菜单：Enter 保留带标记的选择，逗号分隔编号多选，`0` 清空。已有参数和模板成为预填值；完整的带别名命令仍可直接执行，`--yes` 跳过向导。不加 `-i` 时缺项直接报错。只有一个已保存账号时可为本次调用预选，不更改全局默认；未配置账号时可从原生登录返回获取流程。
 
 完整模板直接进入核对；需要修改时再返回对应页，保留草稿。核对页也可只保存个人模板，不租用，或查看不含付费批准的等价命令。
 
@@ -98,16 +98,18 @@ loaf cloud bind --request REQUEST_ID --json
 已有静态 SSH 机器不需要配置云账号。AutoDL 可用主账号手机号或完整的 `子用户名@主账号ID` 登录；同一已验证会话按账号权限访问**普通实例**（`standard`）和 **Pro**（`pro`）。密码输入不回显，不提供接收密码值的命令行参数。
 
 ```bash
-loaf cloud login autodl-main --username 'your-subuser@master-id' --default
+loaf cloud login --prompt autodl-main --username 'your-subuser@master-id' --default
 loaf cloud list --account autodl-main
 loaf cloud list --account autodl-main --product pro
 ```
 
+需要原生用户名／密码输入时，显式使用 `--prompt` 或 `-i`；`--verify` 显式请求验证码输入。不指定这些选项时，请提供 `--username`、`--password-stdin` 等输入，或复用已有凭据。认证仍在一个原生输入会话中完成。
+
 ### 选择凭据保存方式
 
 ```bash
-loaf cloud login autodl-main --credential-store keyring   # 默认
-loaf cloud login autodl-main --credential-store file      # 未加密的私有文件
+loaf cloud login --prompt autodl-main --credential-store keyring   # 默认
+loaf cloud login --prompt autodl-main --credential-store file      # 未加密的私有文件
 ```
 
 `keyring` 使用 macOS 钥匙串或 Linux Secret Service（需要可用的用户会话）。`file` 不依赖凭据库服务：保存在 `$XDG_STATE_HOME/loaf/credentials/`，默认 `~/.local/state/loaf/credentials/`，目录权限 `0700`、文件权限 `0600`。文件模式能隔离其他系统用户，不能防止以你身份运行的软件读取。Keyring 失败时不暗中改写文件。CLI 当前支持 macOS/Linux；Windows 暂需通过 WSL 使用。

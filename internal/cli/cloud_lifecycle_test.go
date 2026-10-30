@@ -40,7 +40,7 @@ func TestCloudHubSessionScopeDoesNotChangeDefault(t *testing.T) {
     o.Interactive = true
     // Settings / scope / other / Pro / back / exit.
     o.In = strings.NewReader("4\n1\n2\n2\n7\n5\n")
-    code, out, err := run(t, o, "cloud")
+    code, out, err := run(t, o, "-i", "cloud")
     if code != 0 || strings.Contains(out+err, "OTHER_TOKEN") {
         t.Fatal(code, out, err)
     }
@@ -64,7 +64,7 @@ func TestCloudHubExistingCredentialsRemainRedacted(t *testing.T) {
     o.Cloud.Open = func(context.Context, string, cloud.Account, string) (cloud.Provider, error) { return p, nil }
     o.Interactive = true
     o.In = strings.NewReader("1\n1\n3\n1\n8\n4\n5\n")
-    code, out, err := run(t, o, "cloud")
+    code, out, err := run(t, o, "-i", "cloud")
     if code != 0 || strings.Contains(out+err, "fixture-ssh-secret") || p.creates != 0 || !strings.Contains(err, "only-instance") {
         t.Fatal(code, out, err, p.creates)
     }
@@ -143,7 +143,7 @@ func TestCloudCompleteProfileStartsAtReviewAndCanSaveBeforeRent(t *testing.T) {
     o.Interactive = true
     // Review: alias, optional actions, save-only, no payment; profile name.
     o.In = strings.NewReader("\n\n5\n\nsaved\n")
-    code, out, stderr = run(t, o, "cloud", "acquire", "--profile=train")
+    code, out, stderr = run(t, o, "-i", "cloud", "acquire", "--profile=train")
     if code != 0 || p.creates != 0 || strings.Contains(stderr, "How would you like") {
         t.Fatal(code, out, stderr, p.creates)
     }
@@ -272,7 +272,7 @@ func TestCloudCompleteAnyGPUProfileKeepsExplicitEmptyModelList(t *testing.T) {
     }
     o.Interactive = true
     o.In = strings.NewReader("\n\n5\n\nany-copy\n")
-    code, out, stderr = run(t, o, "cloud", "acquire", "--profile=any-gpu")
+    code, out, stderr = run(t, o, "-i", "cloud", "acquire", "--profile=any-gpu")
     if code != 0 || p.creates != 0 || strings.Contains(stderr, "How would you like") {
         t.Fatal(code, out, stderr)
     }
@@ -308,7 +308,7 @@ func TestCloudHubUsesItsScopeInsteadOfAProfileProduct(t *testing.T) {
     o.Interactive = true
     // Root / market / GPU catalog / back / back / exit.
     o.In = strings.NewReader("2\n2\n2\n7\n5\n")
-    code, out, err := run(t, o, "cloud")
+    code, out, err := run(t, o, "-i", "cloud")
     if code != 0 {
         t.Fatal(code, out, err)
     }

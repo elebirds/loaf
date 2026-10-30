@@ -13,7 +13,8 @@ import (
 type grammar struct {
     Lang        *string        `help:"flag_lang"`
     JSON        bool           `help:"flag_json"`
-    Trace       bool           `help:"flag_trace"`
+    Interactive bool           `short:"i" help:"flag_interactive" conflicts-with:"--json"`
+    Trace       bool           `help:"flag_trace" ux-group:"advanced"`
     Target      *string        `help:"flag_target" config:"target"`
     HelpFlag    bool           `name:"help" short:"h" help:"flag_help"`
     VersionFlag bool           `name:"version" help:"flag_version"`
@@ -33,7 +34,7 @@ type grammar struct {
     Forward     forwardCommand `cmd:"" group:"machines" help:"forward_short" example:"loaf forward 6006"`
     Clean       cleanCommand   `cmd:"" group:"experiments" help:"clean_short" example:"loaf clean r_example --dry-run"`
     Sync        syncCommand    `cmd:"" group:"experiments" help:"sync_short" example:"loaf sync --dry-run"`
-    Cloud       cloudCommand   `cmd:"" group:"resources" help:"cloud_short" example:"loaf cloud"`
+    Cloud       cloudCommand   `cmd:"" group:"resources" help:"cloud_short" example:"loaf cloud -i"`
     Queue       queueCommand   `cmd:"" group:"experiments" help:"queue_short" example:"loaf queue"`
     Events      eventsCommand  `cmd:"" group:"diagnostics" help:"events_short" example:"loaf events"`
     Notify      notifyCommand  `cmd:"" group:"diagnostics" help:"notify_short" example:"loaf notify"`
@@ -41,11 +42,11 @@ type grammar struct {
 }
 
 type machineCommand struct {
-    List   struct{}     `cmd:"" default:"1" help:"machine_list_short" example:"loaf machine list"`
-    Show   requiredName `cmd:"" help:"machine_show_short" example:"loaf machine show lab"`
-    Add    addCommand   `cmd:"" help:"add_short" example:"loaf machine add lab --ssh lab-gpu"`
-    Use    useCommand   `cmd:"" help:"use_short" example:"loaf machine use lab"`
-    Remove requiredName `cmd:"" help:"remove_short" example:"loaf machine remove lab"`
+    List   struct{}       `cmd:"" default:"1" help:"machine_list_short" example:"loaf machine list"`
+    Show   uxAMachineName `cmd:"" help:"machine_show_short" example:"loaf machine show lab"`
+    Add    addCommand     `cmd:"" help:"add_short" example:"loaf machine add lab --ssh lab-gpu"`
+    Use    useCommand     `cmd:"" help:"use_short" example:"loaf machine use lab"`
+    Remove uxAMachineName `cmd:"" help:"remove_short" example:"loaf machine remove lab"`
 }
 
 type requiredName struct {
@@ -64,77 +65,77 @@ type helpCommand struct {
     Command []string `arg:"" optional:"" sep:"none" help:"command_arg"`
 }
 type addCommand struct {
-    Name      string `arg:"" help:"name_arg" value-type:"name"`
+    Name      string `arg:"" optional:"" help:"name_arg" value-type:"name"`
     SSH       string `help:"flag_ssh"`
-    RemoteDir string `default:"~/.local/share/loaf/projects" help:"flag_remote" value-type:"path"`
-    Replace   bool   `help:"flag_replace"`
+    RemoteDir string `default:"~/.local/share/loaf/projects" help:"flag_remote" value-type:"path" ux-group:"advanced"`
+    Replace   bool   `help:"flag_replace" ux-group:"advanced"`
 }
 type useCommand struct {
-    Name string `arg:"" help:"name_arg" value-type:"name"`
+    Name string `arg:"" optional:"" help:"name_arg" value-type:"name"`
 }
 type checkCommand struct {
-    Runner  bool          `help:"flag_runner"`
-    Timeout time.Duration `default:"20s" help:"flag_timeout" value-type:"duration"`
+    Runner  bool          `help:"flag_runner" ux-group:"advanced"`
+    Timeout time.Duration `default:"20s" help:"flag_timeout" value-type:"duration" ux-group:"advanced"`
     Targets csvList       `help:"flag_check_targets" value-type:"csv"`
-    Report  *string       `help:"flag_check_report" value-type:"path"`
+    Report  *string       `help:"flag_check_report" value-type:"path" ux-group:"advanced"`
 }
 type syncCommand struct {
     DryRun           bool     `help:"flag_dry_run"`
     Mode             *string  `help:"flag_sync_mode" builtin-default:"mirror" config:"sync.mode"`
-    RespectGitignore *bool    `help:"flag_respect_gitignore" builtin-default:"true" config:"sync.respect_gitignore"`
-    Exclude          []string `sep:"none" help:"flag_sync_exclude" config:"sync.exclude"`
+    RespectGitignore *bool    `help:"flag_respect_gitignore" builtin-default:"true" config:"sync.respect_gitignore" ux-group:"conditions"`
+    Exclude          []string `sep:"none" help:"flag_sync_exclude" config:"sync.exclude" ux-group:"conditions"`
 }
 type runCommand struct {
-    Notify []string `sep:"none" help:"flag_notify"`
+    Notify []string `sep:"none" help:"flag_notify" ux-group:"advanced"`
     DryRun bool     `help:"flag_run_dry"`
     Name   string   `help:"flag_run_name"`
     Tag    []string `sep:"none" help:"flag_run_tag"`
-    Wait   *string  `help:"flag_wait" builtin-default:"0s" value-type:"duration" config:"run.wait"`
+    Wait   *string  `help:"flag_wait" builtin-default:"0s" value-type:"duration" config:"run.wait" ux-group:"advanced"`
     Argv   []string `arg:"" optional:"" passthrough:"partial" sep:"none"`
 }
 type psCommand struct {
     ID     string   `arg:"" optional:"" help:"run_id_arg" value-type:"run-id"`
-    Wait   string   `default:"0s" help:"flag_ps_wait" builtin-default:"0s" value-type:"duration"`
+    Wait   string   `default:"0s" help:"flag_ps_wait" builtin-default:"0s" value-type:"duration" ux-group:"advanced"`
     Limit  *int     `help:"flag_limit" builtin-default:"20" config:"ps.limit"`
-    Status []string `sep:"none" help:"ps_flag_status"`
+    Status []string `sep:"none" help:"ps_flag_status" ux-group:"conditions"`
     Local  bool     `help:"flag_ps_local"`
-    Name   *string  `help:"ps_flag_name"`
-    Tag    []string `sep:"none" help:"ps_flag_tag"`
-    Since  *string  `help:"ps_flag_since"`
-    Until  *string  `help:"ps_flag_until"`
+    Name   *string  `help:"ps_flag_name" ux-group:"conditions"`
+    Tag    []string `sep:"none" help:"ps_flag_tag" ux-group:"conditions"`
+    Since  *string  `help:"ps_flag_since" ux-group:"conditions"`
+    Until  *string  `help:"ps_flag_until" ux-group:"conditions"`
 }
 type logsCommand struct {
     ID             string         `arg:"" optional:"" help:"run_id_arg" value-type:"run-id"`
     Tail           *int           `help:"flag_tail" builtin-default:"100" config:"logs.tail"`
     Follow         bool           `short:"f" help:"flag_follow"`
-    Resume         *string        `help:"flag_log_resume" value-type:"cursor"`
-    Reconnect      bool           `help:"flag_log_reconnect"`
-    ResumeFile     *string        `help:"flag_resume_file" value-type:"path"`
-    AckCursor      *string        `help:"flag_ack_cursor" value-type:"cursor"`
-    RecoveryBudget *time.Duration `help:"flag_recovery_budget" value-type:"duration"`
+    Resume         *string        `help:"flag_log_resume" value-type:"cursor" ux-group:"advanced"`
+    Reconnect      bool           `help:"flag_log_reconnect" ux-group:"advanced"`
+    ResumeFile     *string        `help:"flag_resume_file" value-type:"path" ux-group:"advanced"`
+    AckCursor      *string        `help:"flag_ack_cursor" value-type:"cursor" ux-group:"advanced"`
+    RecoveryBudget *time.Duration `help:"flag_recovery_budget" value-type:"duration" ux-group:"advanced"`
 }
 type stopCommand struct {
     ID    string  `arg:"" optional:"" help:"run_id_arg" value-type:"run-id"`
-    Grace *string `help:"flag_stop_grace" builtin-default:"10s" value-type:"duration" config:"stop.grace"`
+    Grace *string `help:"flag_stop_grace" builtin-default:"10s" value-type:"duration" config:"stop.grace" ux-group:"advanced"`
 }
 type outputsCommand struct {
     ID            string `arg:"" optional:"" help:"run_id_arg" value-type:"run-id"`
     Depth         int    `default:"2" help:"flag_outputs_depth"`
     Limit         int    `default:"200" help:"flag_outputs_limit"`
-    PrepareRunner bool   `help:"flag_outputs_prepare"`
+    PrepareRunner bool   `help:"flag_outputs_prepare" ux-group:"advanced"`
 }
 type waitCommand struct {
     IDs     []string      `arg:"" optional:"" sep:"none" help:"clean_ids_arg" value-type:"run-id"`
     Tag     []string      `sep:"none" help:"flag_run_tag"`
-    Timeout time.Duration `default:"30m" help:"flag_wait_timeout" value-type:"duration"`
+    Timeout time.Duration `default:"30m" help:"flag_wait_timeout" value-type:"duration" ux-group:"advanced"`
 }
 type pullCommand struct {
     IDs         []string `arg:"" optional:"" sep:"none" help:"clean_ids_arg" value-type:"run-id"`
     Path        []string `sep:"none" help:"flag_pull_path" value-type:"path"`
     To          *string  `help:"flag_pull_to" value-type:"path"`
-    Checksum    *bool    `help:"flag_pull_checksum" builtin-default:"false" config:"pull.checksum"`
+    Checksum    *bool    `help:"flag_pull_checksum" builtin-default:"false" config:"pull.checksum" ux-group:"advanced"`
     Into        *string  `help:"flag_pull_into" value-type:"path"`
-    Concurrency *int     `help:"flag_pull_concurrency"`
+    Concurrency *int     `help:"flag_pull_concurrency" ux-group:"advanced"`
 }
 type execCommand struct {
     CWD  *string  `name:"cwd" help:"exec_flag_cwd" builtin-default:"" value-type:"path" config:"exec.cwd"`
@@ -147,7 +148,7 @@ type forwardCommand struct {
 type cleanCommand struct {
     IDs    []string `arg:"" sep:"none" help:"clean_ids_arg" value-type:"run-id"`
     DryRun bool     `help:"clean_flag_dry_run"`
-    Yes    bool     `short:"y" help:"clean_flag_yes"`
+    Yes    bool     `short:"y" help:"clean_flag_yes" ux-group:"advanced"`
 }
 
 type cloudCommand struct {
@@ -309,9 +310,9 @@ type eventsCommand struct {
 
 type eventListCommand struct {
     Source  string `default:"local" enum:"local,resources,project,queue" help:"flag_event_source"`
-    Subject string `help:"flag_event_subject"`
-    Cursor  string `help:"flag_event_cursor" value-type:"cursor"`
-    Limit   int    `default:"100" help:"flag_event_limit"`
+    Subject string `help:"flag_event_subject" ux-group:"conditions"`
+    Cursor  string `help:"flag_event_cursor" value-type:"cursor" ux-group:"advanced"`
+    Limit   int    `default:"100" help:"flag_event_limit" ux-group:"advanced"`
 }
 
 type notifyCommand struct {
@@ -343,27 +344,27 @@ type destinationAddCommand struct {
     Name              string `arg:"" help:"name_arg" value-type:"name"`
     Kind              string `required:"" enum:"codex,codex-desktop,claude-channel,claude-resume,webhook" help:"flag_destination_kind"`
     Session           string `help:"flag_destination_session"`
-    Endpoint          string `help:"flag_destination_endpoint"`
-    CWD               string `name:"cwd" help:"flag_destination_cwd" value-type:"path"`
-    BearerEnv         string `help:"flag_bearer_env"`
-    AllowInsecureHTTP bool   `name:"allow-insecure-http" help:"flag_allow_insecure_http"`
-    Replace           bool   `help:"flag_destination_replace"`
+    Endpoint          string `help:"flag_destination_endpoint" ux-group:"advanced"`
+    CWD               string `name:"cwd" help:"flag_destination_cwd" value-type:"path" ux-group:"advanced"`
+    BearerEnv         string `help:"flag_bearer_env" ux-group:"advanced"`
+    AllowInsecureHTTP bool   `name:"allow-insecure-http" help:"flag_allow_insecure_http" ux-group:"advanced"`
+    Replace           bool   `help:"flag_destination_replace" ux-group:"advanced"`
 }
 
 type subscribeCommand struct {
     Subject     string   `arg:"" help:"event_subject_arg"`
     Destination []string `required:"" sep:"none" help:"flag_subscription_destination"`
-    Source      string   `default:"project" enum:"local,resources,project,queue" help:"flag_event_source"`
-    Replay      bool     `default:"true" help:"flag_subscription_replay"`
+    Source      string   `default:"project" enum:"local,resources,project,queue" help:"flag_event_source" ux-group:"advanced"`
+    Replay      bool     `default:"true" help:"flag_subscription_replay" ux-group:"advanced"`
 }
 
 type deliveryListCommand struct {
-    Limit int `default:"100" help:"flag_event_limit"`
+    Limit int `default:"100" help:"flag_event_limit" ux-group:"advanced"`
 }
 
 type notifyServeCommand struct {
     Once     bool          `help:"flag_notify_once"`
-    Interval time.Duration `default:"5s" help:"flag_notify_interval" value-type:"duration"`
+    Interval time.Duration `default:"5s" help:"flag_notify_interval" value-type:"duration" ux-group:"advanced"`
 }
 
 type notifyChannelCommand struct {
@@ -383,7 +384,7 @@ type queueCommand struct {
 }
 
 type queueListCommand struct {
-    Limit int `default:"100" help:"flag_event_limit"`
+    Limit int `default:"100" help:"flag_event_limit" ux-group:"advanced"`
 }
 type queueEnableCommand struct {
     Slots int `default:"1" help:"flag_queue_slots"`
@@ -392,7 +393,7 @@ type queueSubmitCommand struct {
     DryRun bool     `help:"flag_queue_dry_run"`
     Name   string   `help:"flag_run_name"`
     Tag    []string `sep:"none" help:"flag_run_tag"`
-    Notify []string `sep:"none" help:"flag_notify"`
+    Notify []string `sep:"none" help:"flag_notify" ux-group:"advanced"`
     Argv   []string `arg:"" optional:"" passthrough:"partial" sep:"none" help:"run_args"`
 }
 type queueIDCommand struct {
@@ -401,7 +402,7 @@ type queueIDCommand struct {
 type queueCleanCommand struct {
     IDs    []string `arg:"" sep:"none" help:"queue_ids_arg" value-type:"request-id"`
     DryRun bool     `help:"flag_queue_clean_dry_run"`
-    Yes    bool     `short:"y" help:"clean_flag_yes"`
+    Yes    bool     `short:"y" help:"clean_flag_yes" ux-group:"advanced"`
 }
 
 // csvList retains explicit empty replacement and the existing CSV flag grammar.
@@ -453,8 +454,8 @@ type notifyResolveCommand struct {
 }
 type notifyResendCommand struct {
     ID             string `arg:"" help:"notify_id_arg"`
-    AllowDuplicate bool   `help:"flag_allow_duplicate"`
-    Yes            bool   `help:"flag_notify_resend_yes"`
+    AllowDuplicate bool   `help:"flag_allow_duplicate" ux-group:"advanced"`
+    Yes            bool   `help:"flag_notify_resend_yes" ux-group:"advanced"`
 }
 type notifySubscriptionCommand struct {
     Show    notifyIDCommand `cmd:"" help:"notify_subscription_show_short" example:"loaf notify subscription show sub_example"`
@@ -465,7 +466,7 @@ type notifySubscriptionCommand struct {
 type notifyPruneCommand struct {
     Before string `required:"" help:"flag_notify_before" value-type:"time"`
     DryRun bool   `help:"flag_notify_prune_dry_run"`
-    Yes    bool   `help:"flag_notify_prune_yes"`
+    Yes    bool   `help:"flag_notify_prune_yes" ux-group:"advanced"`
 }
 
 type subscriptionListCommand struct {

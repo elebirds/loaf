@@ -59,7 +59,7 @@ func TestCloudApprovalDoesNotRepeatPlanInTranscript(t *testing.T) {
     o, p := uxFixture(t)
     o.Interactive = true
     o.In = strings.NewReader("yes\n")
-    code, out, diagnostic := run(t, o, "--lang", "zh-Hans", "cloud", "acquire", "test", "--image", "base-1", "--gpu-model", "RTX 4090", "--max-compute-hourly-price", "3.00", "--continuous", "--progress=none")
+    code, out, diagnostic := run(t, o, "-i", "--lang", "zh-Hans", "cloud", "acquire", "test", "--image", "base-1", "--gpu-model", "RTX 4090", "--max-compute-hourly-price", "3.00", "--continuous", "--progress=none")
     if code != 0 || p.creates != 1 || strings.Count(diagnostic, "RTX 4090") != 1 || strings.Count(diagnostic, "仅授权一台") != 1 || strings.Contains(diagnostic, "standard") || strings.Contains(out, "base-1") {
         t.Fatal(code, out, diagnostic)
     }
@@ -104,7 +104,7 @@ func TestCloudDeclinedDoesNotDumpApprovedConditions(t *testing.T) {
     o, p := uxFixture(t)
     o.Interactive = true
     o.In = strings.NewReader("no\n")
-    code, out, _ := run(t, o, "--lang", "zh-Hans", "cloud", "acquire", "test", "--image", "base-1", "--gpu-model", "RTX 4090", "--max-compute-hourly-price", "3.00")
+    code, out, _ := run(t, o, "-i", "--lang", "zh-Hans", "cloud", "acquire", "test", "--image", "base-1", "--gpu-model", "RTX 4090", "--max-compute-hourly-price", "3.00")
     if code != 2 || p.creates != 0 || !strings.Contains(out, "已取消租用") || strings.Contains(out, "base-1") || strings.Contains(out, "RTX 4090") {
         t.Fatal(code, out, p.creates)
     }

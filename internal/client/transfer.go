@@ -3,13 +3,11 @@ package client
 import (
     "context"
     "path"
-    "path/filepath"
     "sync"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     sources "github.com/elebirds/loaf/internal/sync"
-    "github.com/elebirds/loaf/internal/task"
 )
 
 // SyncInput contains source-policy overrides; preview performs no remote work.
@@ -129,94 +127,51 @@ type PullResult struct {
 
 // Pull validates all selections before transfer and never mirrors local deletion.
 func (c *Projects) Pull(ctx context.Context, in PullInput, emit ProgressFunc) (PullResult, error) {
-    multi := len(in.IDs) > 1 || in.Into != nil
-    concurrency := 1
-    if in.Concurrency != nil {
-        concurrency = *in.Concurrency
-    }
-    if (multi && (value(in.Into) == "" || len(in.IDs) == 0 || in.To != nil)) || (!multi && in.Concurrency != nil) || concurrency < 1 || concurrency > 4 || (concurrency > 1 && !in.Policy.Batch) {
-        return PullResult{}, fault.Invalid("--into/--to/--concurrency", "conflicting_arguments", "pull_batch_flags")
+    multi, concurrency, err := pullOptions(in)
+    if err != nil {
+        return PullResult{}, err
     }
     if c.Runs == nil || c.Puller == nil {
         return PullResult{}, fault.New("SSH_FAILED", "ssh_missing", nil)
     }
-    project, file, err := c.boundProject(ctx)
+    plan, err := c.PreviewPull(ctx, in)
     if err != nil {
+        if plan.failure != nil {
+            return PullResult{Batch: plan.failure}, err
+        }
         return PullResult{}, err
-    }
-    policy, err := config.ResolvePull(c.Settings.Pull, file.Pull, config.PullSettings{Checksum: in.Checksum})
-    if err != nil {
-        return PullResult{}, err
-    }
-    if in.To != nil && *in.To == "" {
-        return PullResult{}, fault.New("BAD_CONFIG", "pull_destination", nil)
     }
     if multi {
-        refs, err := c.Runs.Freeze(project.ID, in.IDs, nil)
-        if err != nil {
-            return PullResult{}, err
-        }
-        batch, err := c.batchPull(ctx, project, refs, value(in.Into), in.Paths, policy, concurrency, in.Policy.Batch)
+        batch, err := c.batchPull(ctx, plan, concurrency, in.Policy.Batch, emit)
         return PullResult{Batch: &batch}, err
     }
-    id := ""
-    if len(in.IDs) > 0 {
-        id = in.IDs[0]
-    }
-    ref, err := c.Runs.Select(project.ID, id)
-    if err != nil {
-        return PullResult{}, err
-    }
-    selected := ref.Outputs
-    if in.Paths != nil {
-        selected = in.Paths
-    }
-    selected, err = sources.OutputPaths(selected)
-    if err != nil {
-        return PullResult{}, err
-    }
-    destination, err := sources.Destination(project.Root, c.CWD, value(in.To), ref.ID, policy)
-    if err != nil {
-        return PullResult{}, err
-    }
+    ref, selected := plan.refs[0], plan.Runs[0]
     progress(emit, Progress{Stage: "pull", Target: ref.Target, RunID: ref.ID})
-    pulled, err := c.Puller.Pull(ctx, ref, destination, selected, policy, in.Policy.Batch)
+    pulled, err := c.Puller.Pull(ctx, ref, selected.Destination, selected.Paths, plan.Preferences.Policy, in.Policy.Batch)
     return PullResult{Single: &pulled}, err
 }
 
-func (c *Projects) batchPull(ctx context.Context, project config.Project, refs []task.RunRef, into string, paths []string, policy config.PullPolicy, concurrency int, batch bool) (PullBatch, error) {
-    parent, err := sources.Destination(project.Root, c.CWD, into, "", policy)
-    if err != nil {
-        return PullBatch{}, err
-    }
+func (c *Projects) batchPull(ctx context.Context, plan PullPreview, concurrency int, batch bool, emit ProgressFunc) (PullBatch, error) {
+    refs, policy := plan.refs, plan.Preferences.Policy
     result := PullBatch{Runs: make([]PullRow, len(refs)), Selected: len(refs)}
-    destinations := make([]string, len(refs))
-    selections := make([][]string, len(refs))
-    for i, ref := range refs {
-        selected := ref.Outputs
-        if paths != nil {
-            selected = paths
-        }
-        selections[i], err = sources.OutputPaths(selected)
-        if err != nil {
-            return result, err
-        }
-        destinations[i], err = sources.Destination(project.Root, c.CWD, filepath.Join(parent, ref.ID), ref.ID, policy)
-        if err != nil {
-            return result, err
-        }
-        result.Runs[i].Result = sources.PullResult{RunID: ref.ID, Target: ref.Target, Destination: destinations[i], Policy: policy, Paths: selections[i], DownloadedPaths: []string{}, MissingPaths: []string{}}
+    for i, row := range plan.Runs {
+        result.Runs[i].Result = sources.PullResult{RunID: row.ID, Target: row.Target, Destination: row.Destination, Policy: policy, Paths: row.Paths, DownloadedPaths: []string{}, MissingPaths: []string{}}
     }
     examined := make([]bool, len(refs))
     jobs := make(chan int)
     var workers sync.WaitGroup
+    var progressMu sync.Mutex
     for range min(concurrency, len(refs)) {
         workers.Go(func() {
             for i := range jobs {
                 if ctx.Err() != nil {
                     continue
                 }
-                pulled, err := c.Puller.Pull(ctx, refs[i], destinations[i], selections[i], policy, batch)
+                progressMu.Lock()
+                progress(emit, Progress{Stage: "pull", Target: refs[i].Target, RunID: refs[i].ID})
+                progressMu.Unlock()
+                row := plan.Runs[i]
+                pulled, err := c.Puller.Pull(ctx, refs[i], row.Destination, row.Paths, policy, batch)
                 examined[i] = true
                 result.Runs[i] = PullRow{Result: pulled, Error: err}
             }

@@ -12,6 +12,12 @@ Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigati
 
 ## Diagnose and continue the same operation
 
+For local input failures, use `error.argument`, `reason` and the optional
+`issues[]`; follow `help_command` as argv to inspect the real syntax. Correct
+known local issues together, without reading credentials or querying a platform
+to fill them. Help/version remain offline despite unrelated config failures.
+Read-only lists have no `--dry-run`; use only an operation's existing preview.
+
 Cloud runner operations reuse a private native SSH master only within one CLI invocation, without borrowing the user's master. Let one `pull` select multiple paths instead of launching a separate CLI for every file. Finite reads/downloads may make one bounded transient-transport retry; mutations and foreground commands are not replayed. Inspect `error.stage` and the original error code/diagnostic to distinguish cloud lookup, SSH authentication, runner verification, sync, submission, observation, and download failures. Do not reinstall a runner merely because its verification connection failed.
 
 `check --trace --json` or a finite runner command with `--trace` reports safe phase timings, private-master/retry counts and stable recovery reasons. Inspect the trace even on success when diagnosing a recovered connection. Do not infer health of a proxy, gateway or training environment from SSH success alone. Traces omit secrets/commands and do not profile unrelated cloud HTTP operations. `check --targets a,b --report /tmp/diagnostic.json --json` preserves per-target partial checks and exports only ordinal target IDs, safe steps/timings/codes and trace, not endpoint/path/tool details. `error.failure_kind` classifies observed transport evidence without guessing network ownership.

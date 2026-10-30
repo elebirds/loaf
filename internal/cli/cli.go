@@ -21,6 +21,8 @@ import (
 )
 
 // Options are assembled by the executable, not looked up inside command handlers.
+// Interactive reports native terminal capability; --interactive independently
+// opts into Loaf forms and never changes SSH's batch/authentication policy.
 type Options struct {
     App                                        *client.App
     Language                                   string
@@ -114,9 +116,21 @@ func Execute(ctx context.Context, args []string, o Options) int {
     if err != nil {
         return p.finish(nil, err)
     }
-    if parsed.path == "cloud" && o.Interactive && !early.json && !early.help && len(model.Help.Command) == 0 {
-        // Resolve defaults through the declared grammar, not a second flag list.
-        if _, err := parser.Parse(append(append([]string{}, args...), "list")); err != nil {
+    ui := early.interactive && !early.help && !early.version && early.command != "help" && parsed.path != "version"
+    if ui && early.json {
+        return p.finish(nil, inputFailure("conflicting_arguments", "--interactive/--json", "ui_json_conflict", nil, parsed.node))
+    }
+    if ui && !o.Interactive {
+        return p.finish(nil, inputFailure("invalid_value", "--interactive", "ui_terminal_required", nil, parsed.node))
+    }
+    if ui && (parsed.path == "cloud" || parsed.path == "") {
+        // Root/cloud hubs still resolve all defaults and global options through
+        // Kong. Explicit help stays offline even when its resolved node is root.
+        defaults := "list"
+        if parsed.path == "" {
+            defaults = "help"
+        }
+        if _, err := parser.Parse(append(append([]string{}, args...), defaults)); err != nil {
             return p.finish(nil, parseFailure())
         }
         parsed.help = false
@@ -130,6 +144,19 @@ func Execute(ctx context.Context, args []string, o Options) int {
             return 1
         }
         return 0
+    }
+    if ui && uxBareEntry(parser, args, early, "machine") && parsed.path == "machine list" {
+        parsed.path = "machine"
+    }
+    // Explicit default-command flags retain finite query semantics, even when
+    // they spell a default value such as --limit 100 or --trace=false.
+    if ui && uxBareEntry(parser, args, early, "queue") && parsed.path == "queue list" {
+        parsed.path = "queue"
+    }
+    if ui {
+        if hub := uxIHubCommand(parser, args, early); hub != "" {
+            parsed.path = hub
+        }
     }
     p.command = parsed.path
     p.styled = o.TerminalOutput && o.Env["TERM"] != "dumb" && o.Env["NO_COLOR"] == ""
@@ -149,14 +176,27 @@ func Execute(ctx context.Context, args []string, o Options) int {
         return p.finish(nil, inputFailure("conflicting_arguments", "--target", "input_target_forbidden", nil, parsed.node))
     }
     if model.Trace {
-        if model.Logs.Follow || parsed.path == "exec" || parsed.path == "ssh" || parsed.path == "forward" || parsed.path == "cloud watch" || parsed.path == "notify serve" && !model.Notify.Serve.Once {
+        if parsed.path == "" || parsed.path == "cloud" || parsed.path == "machine" || parsed.path == "queue" || parsed.path == "notify" || parsed.path == "events" || model.Logs.Follow || parsed.path == "exec" || parsed.path == "ssh" || parsed.path == "forward" || parsed.path == "cloud watch" || parsed.path == "notify serve" && !model.Notify.Serve.Once {
             return p.finish(nil, fault.New("BAD_CONFIG", "trace_finite_only", nil))
         }
         o.Trace.Enable()
     }
-    input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: o.TerminalError && o.Env["TERM"] != "dumb", Compact: parsed.path == "cloud" || strings.HasPrefix(parsed.path, "cloud "), PageHelp: l.Text("cloud_ui_form_help"), ReadPassword: o.ReadPassword, ChoiceError: l.Text("cloud_choice_invalid"), SelectHelp: l.Text("cloud_select_help"), MultiHelp: l.Text("cloud_multi_help"), PlainMultiHelp: l.Text("cloud_multi_plain")})
-    call := invocation{app: o.App, options: o, grammar: model, output: p, input: input, policy: client.CallPolicy{Batch: p.json || !o.Interactive}}
-    result, err := call.dispatch(ctx, parsed.path)
+    helpPrefix := "ux_core_"
+    if parsed.path == "cloud" || strings.HasPrefix(parsed.path, "cloud ") {
+        helpPrefix = "cloud_"
+    }
+    pageHelp := "ux_core_form_help"
+    if helpPrefix == "cloud_" {
+        pageHelp = "cloud_ui_form_help"
+    }
+    input := interaction.New(interaction.Options{In: o.In, Err: o.Err, Interactive: o.Interactive && !p.json, Rich: ui && o.TerminalError && o.Env["TERM"] != "dumb" && o.Env["NO_COLOR"] == "", Compact: true, PageHelp: l.Text(pageHelp), ReadPassword: o.ReadPassword, ChoiceError: l.Text(helpPrefix + "choice_invalid"), SelectHelp: l.Text(helpPrefix + "select_help"), MultiHelp: l.Text(helpPrefix + "multi_help"), PlainMultiHelp: l.Text(helpPrefix + "multi_plain")})
+    call := invocation{ui: ui, app: o.App, options: o, grammar: model, output: p, input: input, policy: client.CallPolicy{Batch: p.json || !o.Interactive}}
+    var result any
+    if parsed.path == "status" && call.uxDStatusInteractive(parsed.statusOptions) {
+        result, err = call.uxDTasks(ctx)
+    } else {
+        result, err = call.dispatch(ctx, parsed.path)
+    }
     p.dark = input.Dark()
     if p.json && (parsed.path == "exec" || parsed.path == "cloud watch" || parsed.path == "logs" && model.Logs.Follow || parsed.path == "notify serve" && !model.Notify.Serve.Once) {
         return p.finishStream(result, err)
@@ -303,9 +343,12 @@ func (p *presenter) finish(data any, err error) int {
     if trace := p.trace.Snapshot(); trace != nil {
         printTrace(p.err, *trace, p.locale)
     }
-    if p.finishCloud(data, view) {
+    if handled, renderErr := p.finishCloud(data, view); handled {
         if p.writeErr != nil {
             return 1
+        }
+        if renderErr != nil && view == nil {
+            view = p.error(renderErr)
         }
         return exitCode(view)
     }
@@ -317,7 +360,13 @@ func (p *presenter) finish(data any, err error) int {
             printRunNext(p.out, run, p.locale, p.waited && err == nil)
         }
     }
-    p.printCloudActions(data)
+    if renderErr := p.printCloudActions(data); renderErr != nil {
+        if view == nil {
+            view = p.error(renderErr)
+        } else {
+            fmt.Fprintln(p.err, p.error(renderErr).Message)
+        }
+    }
     if view != nil {
         fmt.Fprintln(p.err, view.Message)
         if view.Location != nil {

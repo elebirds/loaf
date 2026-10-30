@@ -15,14 +15,18 @@ import (
 )
 
 func (c *invocation) cloud(ctx context.Context, path string) (data any, err error) {
-    defer func() { c.cloudNavigation(path, data, err) }()
+    defer func() {
+        if actionErr := c.cloudNavigation(path, data, err); actionErr != nil {
+            err = errors.Join(err, actionErr)
+        }
+    }()
     g, p, r := c.grammar.Cloud, c.output, c.app.Resources
     selectInput := client.CloudSelect{Account: g.Account, Product: g.Product}
     if g.Product != nil && !cloud.ValidProduct(*g.Product) {
         return nil, fault.New("BAD_CONFIG", "cloud_config", nil)
     }
     var approval client.ApproveCloud
-    if !c.policy.Batch {
+    if c.uxInteractive() {
         approval = c.approveCloud
     }
     switch path {
@@ -38,7 +42,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
     case "cloud profile remove":
         v := g.Profile.Remove
         if !v.Yes {
-            if c.policy.Batch {
+            if !c.uxInteractive() {
                 return nil, fault.Invalid("--yes", "missing_argument", "cloud_confirm_required")
             }
             accepted, e := c.input.Confirm(ctx, interaction.Confirmation{Title: p.locale.Text("cloud_profile_remove_confirm", map[string]any{"Target": v.Name}), Kind: interaction.ConfirmDefaultNo, AcceptLabel: p.locale.Text("yes"), RejectLabel: p.locale.Text("no")})
@@ -160,7 +164,7 @@ func (c *invocation) cloud(ctx context.Context, path string) (data any, err erro
             }
             v.Instance = id
         }
-        if v.Name == "" && v.Request == "" && !c.policy.Batch {
+        if v.Name == "" && v.Request == "" && c.uxInteractive() {
             name := &interaction.Field{Title: p.locale.Text("cloud_wizard_name"), Value: "gpu", Validate: func(s string) error {
                 if s == "" {
                     return errors.New(p.locale.Text("cloud_name_required"))
@@ -251,7 +255,7 @@ func (c *invocation) login(ctx context.Context) (any, error) {
     v, g, p := c.grammar.Cloud.Login, c.grammar.Cloud, c.output
     prompts := client.LoginPrompts{}
     plain := c.input.Plain()
-    if !c.policy.Batch {
+    if !c.policy.Batch && (c.uxInteractive() || v.Prompt || v.Verify) {
         prompts.Username = func(ctx context.Context) (string, error) {
             value, err := plain.Text(ctx, interaction.TextPrompt{Title: p.locale.Text("cloud_username_prompt"), MaxBytes: 4096})
             return value, loginInputError(err, "cloud_username_required")

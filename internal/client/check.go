@@ -144,13 +144,13 @@ func (c *Machines) Check(ctx context.Context, in CheckInput) (CheckOutcome, erro
                 }
                 row.ElapsedMillis = time.Since(started).Milliseconds()
                 if row.Error != nil {
-                    row.FailureKind = ssh.FailureKind(row.Error)
                     if request.Err() != nil {
-                        row.FailureKind = "observation_timeout"
-                        if ctx.Err() != nil {
-                            row.FailureKind = "canceled"
-                        }
+                        // Keep the original fault and verified report, while
+                        // making the observation deadline visible to all
+                        // consumers, including the ordinary CLI error adapter.
+                        row.Error = errors.Join(row.Error, request.Err())
                     }
+                    row.FailureKind = ssh.FailureKind(row.Error)
                     if row.FailureKind == "authentication" {
                         row.Steps["authentication"] = "failed"
                     }

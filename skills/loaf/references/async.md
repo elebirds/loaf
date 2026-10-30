@@ -20,6 +20,11 @@ Input is prepared independently before queued acceptance. Later edits and sync
 cannot change that copy/spec; external datasets and machine environment are not
 automatically frozen. `queue submit --dry-run` stays local.
 
+Use `queue list --json`, `notify deliveries --json` and `events list --json` for
+explicit queries, even if interactive hubs offer more actions. Keep the original
+Queue/Run IDs for follow-ups. Public queue details do not export the frozen
+private execution specification; do not substitute current config to recreate it.
+
 `queue pause` stops new dispatch, not execution. `queue cancel ID` applies only
 before dispatch; `stop RUN_ID` is separate. To delete safely canceled input,
 preview `queue clean ID --dry-run --json`; execute with `--yes` only when deletion

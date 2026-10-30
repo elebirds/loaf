@@ -139,8 +139,7 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
             }
         }
         if r.Preview != nil {
-            printPreview(out, *r.Preview, l)
-            return true, nil
+            return true, uxHPrintQueuePreview(out, *r.Preview, l)
         }
         if r.Request != nil {
             if err := printQueueRequest(out, *r.Request, l); err != nil {

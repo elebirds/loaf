@@ -135,18 +135,7 @@ func (c *Projects) Stop(ctx context.Context, in StopInput, emit ProgressFunc) (e
     if c.Runs == nil {
         return execution.View{}, fault.New("SSH_FAILED", "ssh_missing", nil)
     }
-    project, file, err := c.boundProject(ctx)
-    if err != nil {
-        return execution.View{}, err
-    }
-    layers := []config.StopSettings{c.Settings.Stop, file.Stop}
-    if in.Grace != nil {
-        if *in.Grace == "" {
-            return execution.View{}, fault.New("BAD_CONFIG", "invalid_stop_grace", nil)
-        }
-        layers = append(layers, config.StopSettings{Grace: *in.Grace})
-    }
-    grace, err := config.ResolveStopGrace(layers...)
+    project, grace, err := c.stopContext(ctx, in)
     if err != nil {
         return execution.View{}, err
     }

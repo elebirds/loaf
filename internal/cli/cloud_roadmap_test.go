@@ -34,7 +34,7 @@ func TestCloudWizardEntryAndBackNavigationKeepRoadmap(t *testing.T) {
     o.Interactive = true
     // Enter the compute page, return to the method page, then cancel.
     o.In = strings.NewReader("\n1\n\n\n\n2\n")
-    code, _, transcript := run(t, o, "--lang", "zh-Hans", "cloud", "acquire")
+    code, _, transcript := run(t, o, "-i", "--lang", "zh-Hans", "cloud", "acquire")
     if code == 0 || p.creates != 0 || strings.Count(transcript, "● 方式") != 2 || !strings.Contains(transcript, "✓ 方式 → ● 算力") || !strings.Contains(transcript, "○ 获取 → ○ 接入") {
         t.Fatal(code, transcript, p.creates)
     }

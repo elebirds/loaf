@@ -218,7 +218,7 @@ func TestRegionWizardSelectionReachesSearchWithoutGroupKeys(t *testing.T) {
         }
         o.Interactive = true
         o.In = strings.NewReader(strings.Join([]string{"1", "1", "", selectRegion, "", "", "3"}, "\n") + "\n")
-        code, _, text := run(t, o, "--lang", "zh-Hans", "cloud", "acquire")
+        code, _, text := run(t, o, "-i", "--lang", "zh-Hans", "cloud", "acquire")
         if code == 0 || p.creates != 0 || !reflect.DeepEqual(p.received, want) {
             t.Fatal(exact, code, p.received, text)
         }
@@ -257,7 +257,7 @@ func TestRegionWizardDefaultsCanBeKeptOverriddenOrCleared(t *testing.T) {
             }
             o.Interactive = true
             o.In = strings.NewReader(strings.Join([]string{"1", "1", "", tc.answer, "", "", "3"}, "\n") + "\n")
-            code, _, text := run(t, o, "--lang", "zh-Hans", "cloud", "acquire")
+            code, _, text := run(t, o, "-i", "--lang", "zh-Hans", "cloud", "acquire")
             if code == 0 || p.creates != 0 || !reflect.DeepEqual(p.received, tc.want) {
                 t.Fatal(code, p.received, tc.want, text)
             }

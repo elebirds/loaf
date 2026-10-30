@@ -36,14 +36,18 @@ Loaf 把机器接入、代码同步、后台执行和结果回收串成一个命
 cd examples/cpu
 loaf machine add lab --ssh lab-gpu
 loaf machine use lab
-loaf run
-loaf status
+loaf run --wait 10s
 loaf logs
 loaf pull
 ```
 
 任务完成后状态为 `succeeded`。`pull` 会打印下载目录；
 `loaf-results/<run-id>/outputs/result.txt` 中包含 `result=42`。
+
+在终端运行 `loaf -i`，可从项目概览运行程序、查看任务与日志、下载产物，
+或管理机器和 AutoDL 资源。队列与通知放在“更多”中。
+`loaf machine -i` 和 `loaf status -i` 可打开对应浏览器。
+不加 `-i` 时，即使有终端也只返回有限结果或缺参错误；裸 `loaf` 返回帮助。
 
 ### 运行自己的项目
 

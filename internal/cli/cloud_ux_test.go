@@ -128,7 +128,7 @@ func TestCloudUXHumanWizardSelectsActualHostAndNeverConfirmsImplicitly(t *testin
                 answers[13] = "1,2"
             }
             o.In = strings.NewReader(strings.Join(answers, "\n") + "\n")
-            code, out, stderr := run(t, o, "cloud", "acquire")
+            code, out, stderr := run(t, o, "-i", "cloud", "acquire")
             if accept {
                 if code != 0 || p.creates != 1 || p.picked != "wanted" {
                     t.Fatal(code, out, stderr, p.creates, p.picked)
@@ -155,7 +155,7 @@ func TestCloudUXOptionalProfileReplacementNeedsConfirmation(t *testing.T) {
             o.Interactive = true
             answers := []string{"", "1", "", "", "", "", "2", "", "", "", "", "", "", "2", "", "yes", answer}
             o.In = strings.NewReader(strings.Join(answers, "\n") + "\n")
-            code, out, diagnostic := run(t, o, "cloud", "acquire")
+            code, out, diagnostic := run(t, o, "-i", "cloud", "acquire")
             if code != 0 || p.creates != 1 {
                 t.Fatal(code, out, diagnostic)
             }
@@ -203,7 +203,7 @@ func TestCloudUXCloneWizardKeepsRemovedAccountsFrozenSource(t *testing.T) {
     }
     o.Interactive = true
     o.In = strings.NewReader(strings.Join([]string{"1", "1", "", "", "", "", "", "", "", "", "", "", "", "yes"}, "\n") + "\n")
-    code, out, diagnostic := run(t, o, "cloud", "acquire", "--clone-from", "source")
+    code, out, diagnostic := run(t, o, "-i", "cloud", "acquire", "--clone-from", "source")
     if code != 0 || p.clones != 1 || p.creates != 0 || p.plan.Clone == nil || p.plan.Clone.Instance != binding.Ref || p.plan.AutoDL.ExpandDataDiskGB != 150 {
         t.Fatal(code, out, diagnostic, p)
     }

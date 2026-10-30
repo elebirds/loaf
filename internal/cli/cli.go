@@ -55,13 +55,13 @@ type errorView struct {
     ActualVersion   string          `json:"actual_version,omitempty"`
 }
 type envelope struct {
-    Context       *cloudContext     `json:"context,omitempty"`
-    NextActions   []cloudNextAction `json:"next_actions,omitempty"`
-    SchemaVersion int               `json:"schema_version"`
-    OK            bool              `json:"ok"`
-    Data          any               `json:"data,omitempty"`
-    Error         *errorView        `json:"error,omitempty"`
-    Trace         *ssh.TraceReport  `json:"trace,omitempty"`
+    Context       *cloudContext    `json:"context,omitempty"`
+    NextActions   []nextAction     `json:"next_actions,omitempty"`
+    SchemaVersion int              `json:"schema_version"`
+    OK            bool             `json:"ok"`
+    Data          any              `json:"data,omitempty"`
+    Error         *errorView       `json:"error,omitempty"`
+    Trace         *ssh.TraceReport `json:"trace,omitempty"`
 }
 
 // Execute parses one invocation and returns its public operation exit code.
@@ -183,7 +183,7 @@ type presenter struct {
     dark          bool
     width         int
     cloudContext  *cloudContext
-    nextActions   []cloudNextAction
+    nextActions   []nextAction
     waited        bool
     command       string
     json          bool
@@ -303,6 +303,13 @@ func (p *presenter) finishStream(data any, err error) int {
 
 // finish presents one finite result; native streams have no result to repeat.
 func (p *presenter) finish(data any, err error) int {
+    if run, ok := data.(execution.View); ok && (p.command == "run" || p.command == "status") {
+        var actionErr error
+        p.nextActions, actionErr = runNextActions(run)
+        if err == nil {
+            err = actionErr
+        }
+    }
     view := p.error(err)
     if p.json {
         if err := json.NewEncoder(p.out).Encode(envelope{SchemaVersion: 1, OK: view == nil, Data: data, Error: view, Trace: p.trace.Snapshot(), Context: p.cloudContext, NextActions: p.nextActions}); err != nil {
@@ -326,11 +333,11 @@ func (p *presenter) finish(data any, err error) int {
         if renderErr := printResult(p.out, data, p.locale, view == nil); renderErr != nil && view == nil {
             view = p.error(renderErr)
         }
-        if run, ok := data.(execution.View); ok && p.command == "run" && run.ID != "" {
-            printRunNext(p.out, run, p.locale, p.waited && err == nil)
+        if p.command == "run" && p.waited && err == nil && len(p.nextActions) > 0 && p.nextActions[0].Kind == "status" {
+            fmt.Fprintln(p.out, p.locale.Text("run_wait_finished"))
         }
     }
-    if renderErr := p.printCloudActions(data); renderErr != nil {
+    if renderErr := p.printNextActions(data); renderErr != nil {
         if view == nil {
             view = p.error(renderErr)
         } else {

@@ -144,22 +144,22 @@ func logCursor(result client.LogsResult) string {
 
 // logRecoveryActions describes a new human-authorized read, never a retry loop or a
 // workload action. Only successfully consumed terminal output permits resume.
-func logRecoveryActions(result client.LogsResult, receipt logReceipt, cause error, terminal bool) []uxNextAction {
+func logRecoveryActions(result client.LogsResult, receipt logReceipt, cause error, terminal bool) []nextAction {
     if cause == nil || result.View.ID == "" || result.View.StateError != "" || receipt.ended || receipt.consumerFailed || !terminal || logCanceled(context.Background(), cause) {
         return nil
     }
     var f *fault.Error
     if errors.As(cause, &f) && f.Code == "LOG_CHANGED" {
-        return []uxNextAction{{Kind: "fresh_tail", Command: []string{"loaf", "logs", result.View.ID, "-f"}, RequiresConfirmation: true}}
+        return []nextAction{{Kind: "fresh_tail", Command: []string{"loaf", "logs", result.View.ID, "-f"}, RequiresConfirmation: true}}
     }
     token := logCursor(result)
     if token != "" && (ssh.IsTransientReadError(cause) || errors.As(cause, &f) && f.Code == "LOG_RECOVERY_EXHAUSTED") {
-        return []uxNextAction{{Kind: "resume", Command: []string{"loaf", "logs", result.View.ID, "-f", "--resume", token}, RequiresConfirmation: true}}
+        return []nextAction{{Kind: "resume", Command: []string{"loaf", "logs", result.View.ID, "-f", "--resume", token}, RequiresConfirmation: true}}
     }
     return nil
 }
 
-func (c *invocation) printLogRecovery(result client.LogsResult, receipt logReceipt, actions []uxNextAction, checkpoint bool) error {
+func (c *invocation) printLogRecovery(result client.LogsResult, receipt logReceipt, actions []nextAction, checkpoint bool) error {
     p := c.output
     if receipt.exhausted {
         if _, err := fmt.Fprintln(p.err, p.locale.Text("ux_e_exhausted")); err != nil {
@@ -182,7 +182,7 @@ func (c *invocation) printLogRecovery(result client.LogsResult, receipt logRecei
     return nil
 }
 
-func (c *invocation) printLogCommand(action uxNextAction) error {
+func (c *invocation) printLogCommand(action nextAction) error {
     p := c.output
     display, err := uxJCommandDisplay(action.Command)
     if err != nil {

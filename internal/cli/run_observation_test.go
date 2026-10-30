@@ -93,12 +93,16 @@ func TestAcceptedSubmissionSurvivesObservationFailure(t *testing.T) {
             }
             if jsonMode {
                 var response struct {
-                    OK    bool
-                    Data  execution.View
-                    Error errorView
+                    OK          bool
+                    Data        execution.View
+                    Error       errorView
+                    NextActions []nextAction `json:"next_actions"`
                 }
                 if err := json.Unmarshal([]byte(out), &response); err != nil || response.OK || stderr != "" || response.Data.Status != "unknown" || response.Data.Submission != "submitted" || response.Error.Code != "SSH_FAILED" || response.Error.Stage != "observe" || response.Error.Detail == "" || response.Error.Hint == "" {
                     t.Fatal(out, stderr, err)
+                }
+                if len(response.NextActions) != 1 || strings.Join(response.NextActions[0].Command, " ") != "loaf status "+remote.req.RunID {
+                    t.Fatal("observation failure must suggest querying the original Run ID", out)
                 }
             } else {
                 confirmed, stage := "submission confirmed", "Failed stage: experiment observation"

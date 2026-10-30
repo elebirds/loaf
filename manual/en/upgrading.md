@@ -48,3 +48,6 @@ Never hot-upgrade an active Supervisor. Historical formats and interfaces are
 not supported by this development build. A fresh local store does not establish
 that an older uncertain cloud allocation did not happen. Reconcile real paid
 operations before any new explicitly authorized acquisition.
+
+Before 1.0, the project will reassess its promise for accessing existing Runs across
+releases. The current development-only format boundary is not a permanent upgrade policy.

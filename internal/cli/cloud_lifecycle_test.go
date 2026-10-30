@@ -72,7 +72,7 @@ func TestCloudEquivalentArgvRoundTrips(t *testing.T) {
         code, out, stderr := run(t, o, args...)
         var first struct {
             Data        client.CloudPreview
-            NextActions []cloudNextAction `json:"next_actions"`
+            NextActions []nextAction `json:"next_actions"`
         }
         if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &first) != nil || len(first.NextActions) != 1 {
             t.Fatal(code, out, stderr)
@@ -139,7 +139,7 @@ func TestCloudCloneEquivalentCommandPreservesPendingInheritance(t *testing.T) {
     code, out, err := run(t, o, args...)
     var first struct {
         Data        client.CloudPreview
-        NextActions []cloudNextAction `json:"next_actions"`
+        NextActions []nextAction `json:"next_actions"`
     }
     if code != 0 || err != "" || json.Unmarshal([]byte(out), &first) != nil || len(first.NextActions) != 1 {
         t.Fatal(code, out, err)
@@ -190,7 +190,7 @@ func TestCloudEquivalentCommandClearsConflictingInheritedEnvironment(t *testing.
     code, out, err := run(t, o, args...)
     var first struct {
         Data        client.CloudPreview
-        NextActions []cloudNextAction `json:"next_actions"`
+        NextActions []nextAction `json:"next_actions"`
     }
     if code != 0 || err != "" || json.Unmarshal([]byte(out), &first) != nil || len(first.NextActions) != 1 {
         t.Fatal(code, out, err)

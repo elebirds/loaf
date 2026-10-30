@@ -72,7 +72,9 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
         if r.TimedOut {
             fmt.Fprintln(out, l.Text("wait_timed_out"))
         }
-        fmt.Fprintln(out, l.Text("batch_state_errors", map[string]any{"Count": r.StateErrors, "Total": r.Unexamined}))
+        if r.StateErrors > 0 || r.Unexamined > 0 {
+            fmt.Fprintln(out, l.Text("batch_state_errors", map[string]any{"Count": r.StateErrors, "Total": r.Unexamined}))
+        }
         fmt.Fprintln(out, l.Text("wait_summary", map[string]any{"Count": r.Completed, "Total": r.Selected, "Value": r.QueryErrors, "Matched": r.Examined, "Bytes": r.Interrupted}))
     case runList:
         if r.Source == "local" {
@@ -97,7 +99,9 @@ func printResult(out io.Writer, data any, l *i18n.Localizer, ok bool) error {
         if r.Truncated {
             fmt.Fprintln(out, l.Text("runs_truncated"))
         }
-        fmt.Fprintln(out, l.Text("batch_state_errors", map[string]any{"Count": r.StateErrors, "Total": max(0, r.Eligible-r.Examined)}))
+        if unexamined := max(0, r.Eligible-r.Examined); r.StateErrors > 0 || unexamined > 0 {
+            fmt.Fprintln(out, l.Text("batch_state_errors", map[string]any{"Count": r.StateErrors, "Total": unexamined}))
+        }
     case checkBatch:
         printCheckBatch(out, r, l)
     case checkResult:

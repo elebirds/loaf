@@ -85,30 +85,36 @@ func printRun(out io.Writer, v execution.View, l *i18n.Localizer) {
     }
 }
 
-func printRunNext(out io.Writer, v execution.View, l *i18n.Localizer, waited bool) {
-    if v.Abandonment != nil {
-        return
+// runNextActions gives humans and Agents the same explicit-ID continuation.
+// Availability is separate from execution status: a successful but reclaimed
+// task must not suggest pulling files that are no longer there.
+func runNextActions(v execution.View) ([]nextAction, error) {
+    if v.ID == "" || v.Abandonment != nil || v.CleanedAt != nil || v.CleanupPending {
+        return nil, nil
     }
+    kind, argv := "status", []string{"loaf", "status", v.ID}
     if v.Submission == "preparing" {
-        fmt.Fprintln(out, l.Text("run_next_inspect", map[string]any{"ID": v.ID}))
-        return
+        kind, argv = "inspect", []string{"loaf", "inspect", v.ID}
+    } else if v.Submission == "uncertain" || v.QueryError != "" || v.Status == "unknown" {
+        kind = "query"
+    } else if v.Status == "succeeded" {
+        kind, argv = "pull", []string{"loaf", "pull", v.ID}
+    } else if v.Status == "failed" || v.Status == "stopped" {
+        kind, argv = "logs", []string{"loaf", "logs", v.ID}
     }
-    if v.Submission == "uncertain" || v.QueryError != "" || v.Status == "unknown" {
-        fmt.Fprintln(out, l.Text("run_next_query", map[string]any{"ID": v.ID}))
-        return
+    next, err := uxJNextAction(kind, argv, false)
+    if err != nil {
+        return nil, err
     }
-    if v.Status == "succeeded" {
-        fmt.Fprintln(out, l.Text("run_next_pull", map[string]any{"ID": v.ID}))
-        return
+    actions := []nextAction{next}
+    if kind == "status" {
+        follow, err := uxJNextAction("follow", []string{"loaf", "logs", v.ID, "-f"}, false)
+        if err != nil {
+            return nil, err
+        }
+        actions = append(actions, follow)
     }
-    if v.Status == "failed" || v.Status == "stopped" {
-        fmt.Fprintln(out, l.Text("run_next_logs", map[string]any{"ID": v.ID}))
-        return
-    }
-    if waited {
-        fmt.Fprintln(out, l.Text("run_wait_finished"))
-    }
-    fmt.Fprintln(out, l.Text("run_next_running", map[string]any{"ID": v.ID}))
+    return actions, nil
 }
 
 // printRunRow keeps navigation compact without hiding errors or dated facts.

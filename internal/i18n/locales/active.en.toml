@@ -363,7 +363,7 @@ other = "local state save failed: {{.Code}}"
 other = "Run operations use their saved machine and location; --target cannot redirect them."
 
 [run_not_found]
-other = "No matching saved run exists in this project."
+other = "No matching saved run exists in this project. List saved tasks with loaf status --local; for another project, run the command from its directory."
 
 [run_ambiguous]
 other = "The latest run is ambiguous. Specify its run ID instead of selecting an older task."
@@ -1821,19 +1821,22 @@ other = "Account: {{.Account}}; product: {{.Product}}; target: {{.Target}}; inst
 other = "submission unconfirmed; query this ID"
 
 [run_next_inspect]
-other = "Saved preparation: loaf inspect {{.ID}}"
+other = "Saved preparation: {{.Value}}"
 
 [run_next_query]
-other = "Observe the same task: loaf status {{.ID}}. Do not submit a replacement."
+other = "Observe the same task: {{.Value}}. Do not submit a replacement."
 
 [run_next_pull]
-other = "Retrieve outputs: loaf pull {{.ID}}"
+other = "Retrieve outputs: {{.Value}}"
 
 [run_next_logs]
-other = "Inspect the experiment log: loaf logs {{.ID}}"
+other = "Inspect the experiment log: {{.Value}}"
 
-[run_next_running]
-other = "Status: loaf status {{.ID}}\nLive log: loaf logs {{.ID}} -f"
+[run_next_status]
+other = "Status: {{.Value}}"
+
+[run_next_follow]
+other = "Live log: {{.Value}}"
 
 [run_wait_finished]
 other = "The observation budget ended; the remote task continues independently."

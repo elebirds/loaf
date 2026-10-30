@@ -363,7 +363,7 @@ other = "本地状态保存失败：{{.Code}}"
 other = "任务操作使用提交时保存的机器和位置，不能通过 --target 改向。"
 
 [run_not_found]
-other = "当前项目中没有匹配的已保存任务。"
+other = "当前项目中没有匹配的已保存任务。用 loaf status --local 查看已保存任务；其他项目的任务请在其目录中操作。"
 
 [run_ambiguous]
 other = "无法唯一确定最近任务，请明确指定任务 ID，不会改选更旧任务。"
@@ -1821,19 +1821,22 @@ other = "账号：{{.Account}}；产品：{{.Product}}；机器别名：{{.Targe
 other = "提交未确认，请查询此 ID"
 
 [run_next_inspect]
-other = "查看已保存的准备记录：loaf inspect {{.ID}}"
+other = "查看已保存的准备记录：{{.Value}}"
 
 [run_next_query]
-other = "查询同一任务：loaf status {{.ID}}。不要另行提交替代任务。"
+other = "查询同一任务：{{.Value}}。不要另行提交替代任务。"
 
 [run_next_pull]
-other = "取回输出：loaf pull {{.ID}}"
+other = "取回输出：{{.Value}}"
 
 [run_next_logs]
-other = "查看实验日志：loaf logs {{.ID}}"
+other = "查看实验日志：{{.Value}}"
 
-[run_next_running]
-other = "查看状态：loaf status {{.ID}}\n持续日志：loaf logs {{.ID}} -f"
+[run_next_status]
+other = "查看状态：{{.Value}}"
+
+[run_next_follow]
+other = "持续日志：{{.Value}}"
 
 [run_wait_finished]
 other = "本次等待已结束，远端任务仍独立继续运行。"

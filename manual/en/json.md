@@ -163,6 +163,13 @@ historical rerun from public task details or invent `--dry-run` for a command
 that has no preview contract. Available suggestions depend on the operation and
 observed result; an absent action is not an instruction to guess one.
 
+`run` and single-run live `status` return these suggestions too: inspect saved
+preparation, query the same unconfirmed Run ID, follow a running task's log, or
+retrieve a successful task's outputs. Human output uses the same commands.
+Reclaimed or deletion-pending payloads do not suggest log/download operations.
+For example, a successful task can return
+`{"kind":"pull","command":["loaf","pull","r_ID"],"requires_confirmation":false}`.
+
 ## Follow cloud operations without parsing prose
 
 Cloud envelopes optionally add `context` with operation, account/product, target,

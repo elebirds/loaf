@@ -1,16 +1,22 @@
 package cli
 
 import (
+    "fmt"
     "strings"
     "unicode"
     "unicode/utf8"
 
+    "github.com/elebirds/loaf/internal/client"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/ssh"
     "mvdan.cc/sh/v3/syntax"
 )
 
-type uxNextAction = cloudNextAction
+type nextAction struct {
+    Kind                 string   `json:"kind"`
+    Command              []string `json:"command"`
+    RequiresConfirmation bool     `json:"requires_confirmation"`
+}
 
 // uxJCommandDisplay quotes public argv for a POSIX shell without expansion.
 // Unrepresentable/control bytes fail rather than appearing as terminal controls
@@ -84,24 +90,45 @@ func uxJReadCommand(argv []string) (parsedCommand, error) {
 // contract. Callers supply public inputs, never historical private execution
 // specs, secrets or guessed values. Parsing cannot establish those properties.
 // In particular, requiresConfirmation is evidence to display, not approval.
-func uxJNextAction(kind string, argv []string, requiresConfirmation bool) (uxNextAction, error) {
+func uxJNextAction(kind string, argv []string, requiresConfirmation bool) (nextAction, error) {
     if kind == "" || strings.ContainsFunc(kind, func(r rune) bool { return r != '_' && (r < 'a' || r > 'z') && (r < '0' || r > '9') }) {
-        return uxNextAction{}, uxJCommandError()
+        return nextAction{}, uxJCommandError()
     }
     parsed, err := uxJReadCommand(argv)
     if err != nil {
-        return uxNextAction{}, err
+        return nextAction{}, err
     }
     for _, group := range parsed.node.AllFlags(false) {
         for _, flag := range group {
             if flag.Set && (flag.Name == "yes" || flag.Name == "show-password") {
-                return uxNextAction{}, uxJCommandError()
+                return nextAction{}, uxJCommandError()
             }
         }
     }
-    return uxNextAction{Kind: kind, Command: append([]string(nil), argv...), RequiresConfirmation: requiresConfirmation}, nil
+    return nextAction{Kind: kind, Command: append([]string(nil), argv...), RequiresConfirmation: requiresConfirmation}, nil
 }
 
 func uxJCommandError() error {
     return fault.Invalid("command", "invalid_value", "invalid_flags")
+}
+
+func (p *presenter) printNextActions(data any) error {
+    binding, bound := data.(client.CloudBinding)
+    for _, a := range p.nextActions {
+        if bound && binding.Status == "ready" && a.Kind == "select_machine" {
+            continue
+        }
+        display, err := uxJCommandDisplay(a.Command)
+        if err != nil {
+            return err
+        }
+        message := "cloud_next_action"
+        if p.command == "run" || p.command == "status" {
+            message = "run_next_" + a.Kind
+        }
+        if _, err := fmt.Fprintln(p.out, p.locale.Text(message, map[string]any{"Value": display})); err != nil {
+            return err
+        }
+    }
+    return nil
 }

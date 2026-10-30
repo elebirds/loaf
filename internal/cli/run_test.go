@@ -1,20 +1,129 @@
 package cli
 
 import (
+    "bytes"
     "context"
     "encoding/json"
     "fmt"
     "os"
     "path/filepath"
+    "reflect"
     "strings"
     "testing"
+    "time"
 
     "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
+    "github.com/elebirds/loaf/internal/i18n"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
 )
+
+func TestRunNextActionsMatchAvailabilityAndSubmission(t *testing.T) {
+    now := time.Now()
+    const id = "r_000000000000000000000001"
+    for _, tc := range []struct {
+        name string
+        view execution.View
+        want [][]string
+    }{
+        {name: "running", view: execution.View{Status: "running"}, want: [][]string{{"loaf", "status", id}, {"loaf", "logs", id, "-f"}}},
+        {name: "succeeded", view: execution.View{Status: "succeeded"}, want: [][]string{{"loaf", "pull", id}}},
+        {name: "failed", view: execution.View{Status: "failed"}, want: [][]string{{"loaf", "logs", id}}},
+        {name: "preparing", view: execution.View{Submission: "preparing", Status: "unknown"}, want: [][]string{{"loaf", "inspect", id}}},
+        {name: "unconfirmed", view: execution.View{Submission: "uncertain", Status: "running"}, want: [][]string{{"loaf", "status", id}}},
+        {name: "query-failed", view: execution.View{Status: "unknown", QueryError: "SSH_FAILED"}, want: [][]string{{"loaf", "status", id}}},
+        {name: "cleaned-success", view: execution.View{Status: "succeeded", CleanedAt: &now}},
+        {name: "partial-deletion", view: execution.View{Status: "succeeded", CleanupPending: true}},
+        {name: "abandoned", view: execution.View{Abandonment: &task.RunAbandonment{RequestedAt: now}}},
+    } {
+        t.Run(tc.name, func(t *testing.T) {
+            tc.view.ID = id
+            actions, err := runNextActions(tc.view)
+            if err != nil || len(actions) != len(tc.want) {
+                t.Fatal(actions, err)
+            }
+            for i, action := range actions {
+                if !reflect.DeepEqual(action.Command, tc.want[i]) || action.RequiresConfirmation {
+                    t.Fatal(action, tc.want[i])
+                }
+            }
+            for _, lang := range []string{"en", "zh-Hans"} {
+                locale, err := i18n.New(lang, nil)
+                if err != nil {
+                    t.Fatal(err)
+                }
+                out, diagnostic := &bytes.Buffer{}, &bytes.Buffer{}
+                p := &presenter{command: "status", locale: locale, out: out, err: diagnostic}
+                if code := p.finish(tc.view, nil); code != 0 || diagnostic.Len() != 0 {
+                    t.Fatal(code, out, diagnostic)
+                }
+                for _, argv := range tc.want {
+                    display, _ := uxJCommandDisplay(argv)
+                    if strings.Count(out.String(), display) != 1 {
+                        t.Fatal("missing or repeated action", argv, out)
+                    }
+                }
+                if len(tc.want) == 0 && strings.Contains(out.String(), "loaf ") {
+                    t.Fatal("reclaimed payload suggested a data operation", out)
+                }
+            }
+        })
+    }
+}
+
+func TestRunAndSingleStatusJSONShareSuggestedArgv(t *testing.T) {
+    for _, lang := range []string{"en", "zh-Hans"} {
+        o, remote := runFixture(t)
+        for _, args := range [][]string{{"run", "--", "fixture-command"}, {"status"}} {
+            if args[0] == "status" {
+                args = append(args, remote.req.RunID)
+            }
+            code, out, diagnostic := run(t, o, append([]string{"--lang", lang, "--json"}, args...)...)
+            var result struct {
+                Data        execution.View `json:"data"`
+                NextActions []nextAction   `json:"next_actions"`
+            }
+            if err := json.Unmarshal([]byte(out), &result); err != nil || code != 0 || diagnostic != "" {
+                t.Fatal(code, out, diagnostic, err)
+            }
+            if len(result.NextActions) != 1 || !reflect.DeepEqual(result.NextActions[0].Command, []string{"loaf", "logs", result.Data.ID}) {
+                t.Fatal("failed task must suggest its own log, not a new submission", out)
+            }
+        }
+    }
+}
+
+func TestBatchWarningsOnlyReportActualGaps(t *testing.T) {
+    for _, lang := range []string{"en", "zh-Hans"} {
+        locale, _ := i18n.New(lang, nil)
+        for _, tc := range []struct {
+            data any
+            warn bool
+        }{
+            {data: runList{}},
+            {data: execution.WaitResult{}},
+            {data: runList{StateErrors: 1}, warn: true},
+            {data: runList{Eligible: 2, Examined: 1}, warn: true},
+            {data: execution.WaitResult{StateErrors: 1}, warn: true},
+            {data: execution.WaitResult{Unexamined: 1}, warn: true},
+        } {
+            out := &bytes.Buffer{}
+            if err := printResult(out, tc.data, locale, true); err != nil {
+                t.Fatal(err)
+            }
+            label := "Local save failures:"
+            if lang == "zh-Hans" {
+                label = "本地保存失败："
+            }
+            if strings.Contains(out.String(), label) != tc.warn {
+                t.Fatal(tc.data, out)
+            }
+        }
+    }
+}
 
 type runChecker struct{}
 

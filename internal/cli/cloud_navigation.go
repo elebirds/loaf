@@ -2,7 +2,6 @@ package cli
 
 import (
     "errors"
-    "fmt"
     "strings"
 
     "github.com/elebirds/loaf/internal/client"
@@ -24,11 +23,6 @@ type cloudContext struct {
 type inputIssue struct {
     Argument string `json:"argument"`
     Reason   string `json:"reason"`
-}
-type cloudNextAction struct {
-    Kind                 string   `json:"kind"`
-    Command              []string `json:"command"`
-    RequiresConfirmation bool     `json:"requires_confirmation"`
 }
 
 func (c *invocation) cloudNavigation(path string, data any, err error) error {
@@ -159,23 +153,6 @@ func (c *invocation) cloudNavigation(path string, data any, err error) error {
         action("choose_image", false, args...)
     }
     return constructionErr
-}
-
-func (p *presenter) printCloudActions(data any) error {
-    binding, bound := data.(client.CloudBinding)
-    for _, a := range p.nextActions {
-        if bound && binding.Status == "ready" && a.Kind == "select_machine" {
-            continue
-        }
-        display, err := uxJCommandDisplay(a.Command)
-        if err != nil {
-            return err
-        }
-        if _, err := fmt.Fprintln(p.out, p.locale.Text("cloud_next_action", map[string]any{"Value": display})); err != nil {
-            return err
-        }
-    }
-    return nil
 }
 
 type cloudProfilesResult struct {

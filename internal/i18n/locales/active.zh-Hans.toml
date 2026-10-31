@@ -782,7 +782,7 @@ other = "授权时间范围内未获得符合条件的实例。"
 other = "实例已存在，但尚未确认 SSH 可连接，平台可能已开始计费。"
 
 [cloud_connect_hint]
-other = "请用 cloud credentials 查看连接地址，通过原生 SSH 确认主机信任，再用同一个 --instance 或 --request 重试 cloud bind；不要重新租卡。"
+other = "请修复报告的 SSH 连接问题，再用同一个 --instance 或 --request 重试 cloud bind；不要重新租卡。"
 
 [cloud_confirm_required]
 other = "此操作需要明确授权：直接调用须传入 --yes，或使用 --interactive 核对并确认。"
@@ -3121,7 +3121,7 @@ other = "{{.Value}}（全部）"
 other = "{{.Value}}（指定：{{.Region}}）"
 
 [cloud_connect_trust_hint]
-other = "通过原生 SSH 核验主机指纹，再检查同一实例，不会重新租卡。"
+other = "Provider 的新主机密钥会自动接受。请检查显式 SSH 主机密钥设置及 known_hosts 访问权限，再重试同一实例；不要重新租卡。"
 
 [cloud_connect_changed_hint]
 other = "主机密钥已变化。请独立核验后再处理信任记录，原实例会保留。"
@@ -3145,7 +3145,7 @@ other = "查看连接信息（密码隐藏）"
 other = "保留实例并退出"
 
 [cloud_failure_host_trust]
-other = "需要核验主机指纹。"
+other = "SSH 主机密钥策略拒绝了连接。"
 
 [cloud_failure_authentication]
 other = "需要处理 SSH 认证。"

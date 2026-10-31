@@ -56,6 +56,11 @@ func TestCommandScopedCloudConnections(t *testing.T) {
             }
             wait(t, 5*time.Second, userAlive)
             before := strings.Count(command(t, "docker", "logs", f.id), "Accepted ")
+            // The provider connection must trust a new key itself, without
+            // borrowing the already authenticated user-owned master.
+            if err := os.WriteFile(f.known, nil, 0600); err != nil {
+                t.Fatal(err)
+            }
             resolved := f.target
             if password {
                 data, err := os.ReadFile(f.config)
@@ -127,6 +132,9 @@ func TestCommandScopedCloudConnections(t *testing.T) {
             if err != nil || submitted.Submission != "submitted" {
                 t.Fatal(submitted, err)
             }
+            if known, err := os.ReadFile(f.known); err != nil || len(known) == 0 {
+                t.Fatal("private provider connection did not record its first host key", err)
+            }
             wait(t, 5*time.Second, func() bool {
                 observed, err := service.Observe(ctx, submitted.Ref, 0, 100, true)
                 return err == nil && observed.Log != nil && strings.Contains(observed.Log.Text, "scoped-ready")
@@ -179,23 +187,31 @@ func TestCommandScopedCloudConnections(t *testing.T) {
             if accepted-before != 1 || !userAlive() {
                 t.Fatal("pull reauthenticated or closed user's master", accepted-before)
             }
-            // Even a usable password and a live unrelated master cannot bypass
-            // unknown-host rejection on a fresh private connection.
+            // A changed key remains rejected on a fresh private connection,
+            // regardless of a usable password or live unrelated master.
             known, err := os.ReadFile(f.known)
             if err != nil {
                 t.Fatal(err)
             }
             t.Cleanup(func() { _ = os.WriteFile(f.known, known, 0600) })
-            if err := os.WriteFile(f.known, nil, 0600); err != nil {
+            wrongKey, err := os.ReadFile(f.key + ".pub")
+            if err != nil {
+                t.Fatal(err)
+            }
+            changedKey := "[127.0.0.1]:" + f.port + " " + strings.TrimSpace(string(wrongKey)) + "\n"
+            if err := os.WriteFile(f.known, []byte(changedKey), 0600); err != nil {
                 t.Fatal(err)
             }
             scope = openScope()
             _, err = client.Execute(ctx, target, "true", nil, true)
             var rejected *fault.Error
-            if !errors.As(err, &rejected) || rejected.Code != "SSH_FAILED" || fault.Stage(err) != "ssh_connect" || !strings.Contains(rejected.Params["Detail"].(string), "Host key verification failed") {
-                t.Fatal("private connection bypassed host trust", err)
+            if !errors.As(err, &rejected) || rejected.Code != "SSH_FAILED" || fault.Stage(err) != "ssh_connect" || !strings.Contains(rejected.Params["Detail"].(string), "REMOTE HOST IDENTIFICATION HAS CHANGED") {
+                t.Fatal("private connection accepted a changed host key", err)
             }
             scope.Close()
+            if retained, err := os.ReadFile(f.known); err != nil || string(retained) != changedKey {
+                t.Fatal("changed key was overwritten", err)
+            }
             if !userAlive() {
                 t.Fatal("failed private connection closed user's master")
             }

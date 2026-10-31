@@ -34,8 +34,9 @@ separately. `ABANDON_UNCONFIRMED` (exit 3) retains confirmed no-start evidence;
 retry only the same authorized ID to finish or confirm deletion. `state_error`
 does not erase confirmed remote facts. `inspect ID --json` exposes saved
 `abandonment` metadata without inventing a training terminal status. Shared
-source cache and local downloads remain; an incomplete cache still needs an
-explicit successful sync before new work can use it.
+source cache and local downloads remain. The next authorized new `run` performs
+its own source sync before launch; a partial cache does not require a separate
+manual `sync` first.
 
 ## Delete authorized terminal payloads
 
@@ -48,4 +49,8 @@ Cleanup requires explicit IDs and authority to remove their remote working files
 
 Local downloads, other tasks, source caches and shared environments remain. Small terminal/ID records are retained to prevent duplicate execution. `status` preserves the original result with cleanup metadata; `RUN_CLEANED` from `logs`, `pull` or `stop` is expected, not a reason to select an older run or repeat training. For a partial or unconfirmed cleanup, inspect per-ID results and retry only those same explicitly authorized IDs. Do not stop active tasks implicitly to make them eligible.
 
-Choose data, dependencies, smoke tests and scientific acceptance for the actual experiment. Loaf does not assess metrics, automatically repair environments or schedule workloads. Neither a request to run an experiment nor permission to edit code authorizes paid acquisition or whole-instance shutdown.
+Choose data, dependencies and scientific acceptance for the actual experiment.
+Loaf does not assess metrics, automatically repair environments or choose training
+retries; its optional FIFO queue dispatches only explicitly submitted work.
+Neither a request to run an experiment nor permission to edit code authorizes paid
+acquisition or whole-instance shutdown.

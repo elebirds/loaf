@@ -62,9 +62,15 @@ func arguments(target config.Target, command string, noninteractive bool) []stri
 func options(target config.Target, noninteractive bool) []string {
     args := []string{"-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1", "-T"}
     if noninteractive {
-        args = append(args, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes")
+        args = append(args, "-o", "BatchMode=yes")
     }
-    return append(args, target.Args...)
+    args = append(args, target.Args...)
+    if noninteractive {
+        // OpenSSH uses the first value. Keep a prepared provider policy (or an
+        // explicit validated target policy) ahead of the static batch default.
+        args = append(args, "-o", "StrictHostKeyChecking=yes")
+    }
+    return args
 }
 
 // Tool is an observed executable and its original version output.

@@ -43,8 +43,10 @@ Connection failures include a stable `error.stage`, such as `cloud_connection`, 
 
 Choose the next step from the available connection evidence:
 
-- Unknown host key: verify the fingerprint with the machine administrator, then
-  make the trust decision through native `loaf ssh --target lab`.
+- Unknown host key: provider-backed connections accept new keys in the original
+  call. If rejected, check explicit host-key settings and `known_hosts` access.
+  Static targets retain their configured policy; use native `loaf ssh --target lab`
+  when a first-use decision is needed.
 - Changed host key: investigate the change first; do not delete `known_hosts`
   entries or accept the replacement automatically.
 - Authentication or configuration problem: inspect `loaf machine show lab` and

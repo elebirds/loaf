@@ -189,10 +189,10 @@ func TestRsyncUserOptionsPrecedeOptionTerminator(t *testing.T) {
             target := config.Target{Destination: tc.destination, Args: []string{"-l", "explicit"}}
             r := Rsync{Client: &Client{Binary: "ssh"}}
             shell, host := r.remoteShell(target, true)
-            argv := append([]string{"ssh"}, options(target, true)...)
             if tc.user != "" {
-                argv = append(argv, "-l", tc.user)
+                target.Args = append(target.Args, "-l", tc.user)
             }
+            argv := append([]string{"ssh"}, options(target, true)...)
             argv = append(argv, "--")
             for i := range argv {
                 argv[i] = quoteRsync(argv[i])

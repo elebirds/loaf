@@ -8,7 +8,7 @@ Use `exec` for an authorized foreground machine operation, not as a faster submi
 
 `EXEC_UNCONFIRMED` (exit 3) means execution may have happened. Do not automatically replay a mutating command after cancellation or connection loss. A confirmed nonzero remote exit is `EXEC_FAILED` (exit 1), not a transport failure. Choose `run --wait` when even a short experiment needs synchronized sources and a recoverable result.
 
-`ssh` opens a native human terminal. `forward <remote-port> --local-port <local-port>` keeps a dedicated loopback SSH tunnel in the foreground; it does not start or check an application. Neither accepts JSON. Closing the forward removes that tunnel, not the remote service or another SSH master.
+`ssh` opens a native terminal when terminal work is requested; it is not a prerequisite for [provider host trust](recovery.md#first-ssh-trust). `forward <remote-port> --local-port <local-port>` keeps a dedicated loopback SSH tunnel in the foreground; it does not start or check an application. Neither accepts JSON. Closing the forward removes that tunnel, not the remote service or another SSH master.
 
 For explicitly requested continuous logs, `logs <run-id> -f --reconnect --json` allows one cursor-safe transient reconnection. Save `data.run.log.cursor` after consuming a chunk, or `data.log.cursor` from a finite query. Use `logs <run-id> -f --resume <cursor> --json` to continue manually; do not combine resume with tail. A changed/replaced log returns `LOG_CHANGED`; obtaining a fresh tail is an explicit reset, not automatic gap recovery. Default following remains single-connection. Cancellation or a failed output consumer never restarts a stream.
 

@@ -1,20 +1,20 @@
 ---
 name: loaf
-description: Use Loaf to run recoverable experiments on existing SSH machines, inspect results and retrieve outputs. Also handle explicitly authorized AutoDL operations, optional FIFO queues, notifications, completed-task cleanup and failed-preparation abandonment. No implicit rentals or queue enablement.
+description: Use Loaf's CLI to run projects or foreground commands on authorized SSH machines, inspect status and logs, and retrieve outputs. Also handle explicitly authorized AutoDL, FIFO queue, notification and cleanup operations. Prefer existing targets; no implicit rentals or service enablement.
 ---
 
 # Run an experiment and keep its identity
 
-Work in the intended project directory. Use an authorized existing machine;
-changing the project selection requires the user's intent.
+Work in the intended project directory. With a known authorized machine, submit
+directly without changing the project's default selection:
 
 ```bash
-loaf machine list --json
-loaf machine use lab --json
-loaf run --wait 10s --json -- python3 train.py
+loaf run --target lab --wait 10s --json -- python3 train.py
 ```
 
-Select a machine only when necessary. Register an existing connection with
+Use `machine list --json` only when the target is unknown; use `machine use NAME`
+when the user wants to change the project default, not for every submission.
+Register an existing connection with
 `loaf machine add lab --ssh lab-gpu --json`; this saves local settings and does
 not connect. `run` already checks prerequisites, deploys the matching helper,
 synchronizes working source, and prepares an independent working copy.
@@ -66,6 +66,18 @@ When an input error includes `issues`, correct the listed local omissions
 together; keep the primary code and argument for control flow. The list is not
 evidence that SSH or platform validation ran.
 
+## First SSH trust
+
+Trust the configured provider to resolve the authorized instance's endpoint.
+Provider-backed SSH uses `accept-new`: the original command, including JSON,
+accepts and records a new host key without another SSH call or fingerprint prompt.
+Do not add a separate trust handshake or approval step.
+
+Existing keys must still match, and explicit per-target SSH trust settings take
+precedence. A changed key requires investigation, not automatic removal or disabled
+checking. Static SSH targets keep their existing configuration; when an authorized
+native session presents a first-use prompt, answer `yes` for the intended server.
+
 ## Preserve argument boundaries
 
 Put CLI options before `--`. Arguments after `run --` and `exec --` are literal
@@ -84,10 +96,12 @@ writes. It exposes environment names, not values. `help --json` returns argument
 and flag metadata in addition to human help; retain explicit false/zero/empty
 values when valid instead of dropping them during argument construction.
 
-If `next_actions` is present, preserve its `command` argv array, explicit IDs and
-confirmation requirement. Do not split display text on spaces, insert `--yes`,
-or infer authority from `requires_confirmation: false`. Put Loaf output options
-before `--`. A historical Run/queue detail does not export its private command,
+If `next_actions` is present, use its `command` argv array without splitting display
+text on spaces or changing identities. The suggestion and
+`requires_confirmation: false` do not grant authority. Add `--yes` only when the
+user has already authorized that operation and scope and the command supports it;
+otherwise obtain the missing decision. Put Loaf output options before `--`.
+A historical Run/queue detail does not export its private command,
 setup or environment; a new submission needs explicitly supplied inputs or the
 intended current project configuration, not a reconstructed “run again” action.
 
@@ -109,5 +123,7 @@ submitting local project code. It has no sync, setup, run ID, or durability.
   durable resource/Run facts, exact destinations and delivery evidence.
 
 Do not read credentials or internal state files to replace public commands.
-Never bypass host-key verification, replay an unconfirmed mutation, rent a
-replacement automatically, or infer deletion authority from experiment completion.
+Do not automatically repeat a possibly accepted mutation or rent a replacement.
+Observe/reconcile the original identity first. Explicit retries of the same
+authorized `clean`/`abandon` IDs follow their recovery contracts, not a new task.
+Experiment completion does not grant deletion authority.

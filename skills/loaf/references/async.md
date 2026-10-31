@@ -33,27 +33,46 @@ shared datasets and local downloads. Do not broaden ordinary `clean` eligibility
 
 ## Delivery is separate from computation
 
+Timely notifications need a running local Bridge. Reuse an existing one; if the
+user authorized starting one, keep it in a separate long-lived session:
+
+```bash
+loaf notify serve --json
+```
+
+In the project session, submit to a pre-authorized exact destination:
+
 ```bash
 loaf run --notify research --json -- python3 train.py
-loaf notify serve --once --json
 loaf notify deliveries --json
 loaf events list --source project --json
 loaf events list --source resources --json
 ```
 
-Use a pre-authorized exact destination; do not guess a recent Agent session.
+Submission registers the notification but does not start a Bridge. Do not install
+a service implicitly or assume delivery will continue after its session closes.
+If timely delivery is requested but no Bridge can remain running, report the
+missing session/authority instead of promising notifications. Ordinary Run needs
+no Bridge; finite waiting/queries remain available. Do not guess a recent Agent session.
 Resource events do not require a Job: `cloud acquire --notify research` can
 report acquisition/readiness/attention without training. Acquisition remains an
 explicit foreground operation and never follows from receiving a notification.
 
 Event sources are local inbox, resources, remote project and remote queue.
 Keep each source cursor with its database incarnation; row limits are 1–1000.
-Continuous `notify serve --json` is NDJSON, while `--once` returns one result.
+Continuous `notify serve --json` is NDJSON. `notify serve --once --json` processes
+one bounded collection/dispatch/lookup round and returns one result; it neither
+waits for a long task to finish nor guarantees the backlog is fully drained.
 Subscriptions retain `last_synced_at` and `source_error`/`source_error_at`
 independently; compare times before treating a retained error as current.
 Source-query failure is separate from delivery or Agent-processing evidence.
 Ctrl-C stops the Bridge, not remote work. Remote facts can be collected after
 local disconnection while their disk remains intact.
+
+`events list` returns a page; it does not collect that page into the local Inbox.
+The Bridge collects subscribed facts. After a source disk is lost, only already
+collected/exported facts and downloaded files remain; a subscription or delivery
+receipt is not a backup of logs or outputs.
 
 Inspect application delivery state and SDK receipt independently. Transport
 `written`, destination `accepted` and Agent `processed` are different evidence.
@@ -79,7 +98,7 @@ loaf notify bind here --current --json
 
 This uses the exact `CODEX_THREAD_ID` and verifies the existing local desktop
 owner before saving. It does not create/resume a replacement or start inference.
-Then use `--notify here`; run the Bridge separately. If binding fails, preserve
+Then use `--notify here` with the Bridge described above. If binding fails, preserve
 the error rather than guessing a recent thread, starting a daemon, or silently
 changing modes. Another chat already using the name requires a different name
 or authorized explicit `--replace`; frozen subscriptions are not redirected.
@@ -129,7 +148,7 @@ When that exact session is open and permitted:
 ```bash
 loaf notify destination add claude-research --kind claude-channel --endpoint /absolute/private/loaf-channels/research.sock --session research_1
 loaf run --notify claude-research --json -- python3 train.py
-loaf notify serve --once --json
+loaf notify deliveries --json
 ```
 
 After reading a Channel message, call its `ack_event` tool with that message's
@@ -139,10 +158,11 @@ until ACK; do not resend an unconfirmed turn. The helper offers no approval rela
 
 ## Current development recovery and lifecycle
 
-One queue notification intent atomically owns queue and project bindings; each
-has its own cursor. Use the typed automatic registration, not two independent
-Subscribe calls. Preparation errors retain original identities/stage; cancel that
-request to establish no-start, never replay an uncertain launch.
+Use `queue submit --notify NAME` for queued notifications. It registers both queue
+and Run facts; no second manual Run subscription is needed. Preparation errors
+retain the original Queue/Run IDs and stage. When abandoning that queued input,
+cancel its original request to establish no-start; query an uncertain dispatch
+instead of launching it again.
 
 Inspect `notify delivery show ID --json`; `reconcile` is read-only and currently
 only supported by Claude Channel. `resolve ID --as confirmed|abandoned` records

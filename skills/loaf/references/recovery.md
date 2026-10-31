@@ -1,9 +1,5 @@
 # Saved bindings, versions, and recovery
 
-## State namespace
-
-This development build uses fresh local schema 3 in `$XDG_STATE_HOME/loaf/state-v3/state.db` (with the standard home fallback). It does not migrate historical state or support old formats/interfaces. Rebind destinations; old files and credentials are not deleted. Do not hot-upgrade active Supervisors. Use fresh owned project directories for new work. Reconcile older uncertain paid requests before acquiring real resources; an empty new store is not proof of no prior allocation.
-
 ## Find saved tasks
 
 Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigation. Names/tags are local, immutable and not identities; keep the run ID. `status --name` matches exactly, repeated `--tag` requires all tags, and filters run before bounded remote observation.
@@ -32,6 +28,19 @@ For bounded history inspection, use `status --status failed --limit 50 --json`; 
 
 Use explicit argv after `run --` for changing experiment parameters. Optional project `run.command` and `run.setup` are Shell commands; setup runs before each task and its failure prevents training. Setup's `cd`, exports and activation do not persist into the separate training process. Use an explicit interpreter or `uv run`.
 
+## First SSH trust
+
+Provider-backed commands apply the [first-use policy](../SKILL.md#first-ssh-trust)
+inside their original SSH connection, including JSON and batch calls. Do not open
+another terminal, request an extra approval or retry a purchase to record a new
+key. Explicit per-target host-key settings still take precedence.
+
+A changed known key requires investigation; never remove the old entry or disable
+verification automatically. For static SSH targets, retain the user's configured
+trust policy; an authorized native first-use prompt may be answered `yes`.
+Connection recovery still observes the same Run/request/instance. See the
+[OpenSSH host-key policy](https://man.openbsd.org/ssh_config#StrictHostKeyChecking).
+
 ## Stop one task
 
 When stopping is authorized, use the saved run ID:
@@ -45,3 +54,17 @@ Loaf requests process-group cleanup and waits for a confirmed result. Do not loo
 `STOP_UNCONFIRMED` (operation exit 3) means query the same ID with `status`; do not report the task as stopped. Canceling the client does not withdraw an accepted stop request. Repeating stop does not reset or replace its first grace policy.
 
 Runner operations automatically deploy the helper matching the local CLI. `VERSION_MISMATCH` on a saved task requires its matching CLI; do not bypass the check, edit records, or replace a running supervisor to upgrade it.
+
+## Development state changes
+
+Ordinary work reuses the intended local project and compatible remote root; do
+not create a new project directory for each experiment. This development build
+uses local schema 3 in `state-v3/state.db` under the platform state directory and
+does not import old stores. Rebind destinations only after such a state change;
+old files and credentials are not deleted.
+
+An incompatible schema-2 remote root needs its matching older CLI or a new owned
+remote project directory for this build, not a relocated local repository. Do not
+migrate records or hot-upgrade active Supervisors. Reconcile older uncertain paid
+requests before another authorized acquisition; an empty new local store is not
+proof of no prior allocation.

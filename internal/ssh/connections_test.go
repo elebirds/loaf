@@ -100,10 +100,13 @@ func TestCommandConnectionsResolveAndAuthenticateOnceConcurrently(t *testing.T) 
         t.Fatal(err)
     }
     args := strings.Join(arguments(session.target, "fixed-probe", session.batch), " ")
-    for _, required := range []string{"ProxyCommand=false", "ProxyJump=none", "BatchMode=yes", "StrictHostKeyChecking=yes"} {
+    for _, required := range []string{"ProxyCommand=false", "ProxyJump=none", "BatchMode=yes"} {
         if !strings.Contains(args, required) {
             t.Fatal(args)
         }
+    }
+    if policy := firstHostKeyPolicy(arguments(session.target, "fixed-probe", session.batch)); policy != "accept-new" {
+        t.Fatal("provider host trust lost in mux arguments", policy)
     }
     socket := privateSocket(session)
     info, err := os.Stat(filepath.Dir(socket))

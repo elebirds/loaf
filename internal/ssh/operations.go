@@ -94,9 +94,8 @@ func (c *Client) Interactive(ctx context.Context, target config.Target, stdin io
     target = session.target
     args := []string{"-o", "ForkAfterAuthentication=no", "-o", "RemoteCommand=none", "-o", "SessionType=default", "-t"}
     if cloudTarget {
-        // The explicit human terminal is the one place native SSH may ask for
-        // first-host trust. It also owns its native password/key prompts.
-        args = append(args, "-o", "StrictHostKeyChecking=ask")
+        // The prepared provider session owns host trust; this native terminal
+        // still owns password and key prompts rather than askpass.
         session.env = append(withoutEnv(session.env, "SSH_ASKPASS_REQUIRE"), "SSH_ASKPASS_REQUIRE=never")
     }
     // Unlike options, interactive login intentionally allows OpenSSH prompts and PTY.

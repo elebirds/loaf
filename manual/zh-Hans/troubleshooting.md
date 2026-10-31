@@ -39,7 +39,8 @@ Windows 的 `masters_established` 始终为零，这是独立连接策略的正�
 
 根据已有连接证据选择下一步：
 
-- 未知主机密钥：先向机器管理员核实指纹，再通过原生 `loaf ssh --target lab` 明确信任。
+- 未知主机密钥：Provider 连接在原调用中自动接受新密钥；若被拒绝，检查显式主机密钥设置
+  及 `known_hosts` 访问权限。静态目标保留原有策略，需要首次确认时使用原生 `loaf ssh --target lab`。
 - 主机密钥变化：先核实变更原因，不自动删除 `known_hosts` 记录或接受替换密钥。
 - 认证或配置问题：用 `loaf machine show lab` 核对目标，再检查对应 SSH 用户、密钥／agent
   或配置，不公开原始 SSH 诊断。

@@ -109,7 +109,11 @@ func (c *Client) prepareDirect(ctx context.Context, target config.Target, batch 
     if target.Cloud.Settings.Credential.Env != "" {
         session.env = withoutEnv(session.env, target.Cloud.Settings.Credential.Env)
     }
-    session.target.Args = append([]string{"-o", "StrictHostKeyChecking=yes", "-o", "ControlMaster=no", "-o", "ControlPath=none", "-o", "ControlPersist=no"}, session.target.Args...)
+    session.target.Args = append([]string{"-o", "ControlMaster=no", "-o", "ControlPath=none", "-o", "ControlPersist=no"}, session.target.Args...)
+    // Provider resolution already fixes the instance. Trust a new endpoint key
+    // on this connection; OpenSSH still rejects changed keys. An explicit
+    // per-target policy comes first and therefore overrides this default.
+    session.target.Args = append(session.target.Args, "-o", "StrictHostKeyChecking=accept-new")
     if password == "" {
         return session, nil
     }

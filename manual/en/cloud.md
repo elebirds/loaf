@@ -152,19 +152,19 @@ loaf machine use gpu-a
 loaf run -- python3 train.py
 ```
 
-`credentials` shows the current SSH endpoint, redacting its password. Only explicit `--show-password` reveals it. Establish first-host trust with native SSH; noninteractive commands never approve a new or changed host key. Cloud connections prefer keys and can use a fetched password through native OpenSSH askpass. Passwords stay in memory behind a temporary private local socket, not in configuration, subprocess arguments or environment variables. The short-lived launcher contains no password.
+`credentials` shows the current SSH endpoint, redacting its password. Only explicit `--show-password` reveals it. Provider-backed connections default to OpenSSH `accept-new`: the original command, including JSON, accepts and records a new host key without a separate SSH session or prompt. Changed known keys are rejected; explicit per-target host-key settings take precedence. Cloud connections prefer keys and can use a fetched password through native OpenSSH askpass. Passwords stay in memory behind a temporary private local socket, not in configuration, subprocess arguments or environment variables. The short-lived launcher contains no password.
 
-Cloud runner operations share one private, command-scoped OpenSSH master per bound instance and connection configuration. Connection details are resolved once while that master is healthy; its authenticated connection carries probes, runner requests, and native rsync. Loaf never borrows a pre-existing master or writes SSH configuration. Normal exit and cancellation close only this command's masters; a parent-lifetime pipe also prevents an orphaned persistent connection if the CLI is killed. Static SSH targets and foreground `exec`, `ssh`, and `forward` retain their original connection behavior.
+Cloud runner operations share one private, command-scoped OpenSSH master per bound instance and connection configuration. Connection details are resolved once while that master is healthy; its authenticated connection carries probes, runner requests, and native rsync. Loaf never borrows a pre-existing master or writes SSH configuration. Normal exit and cancellation close only this command's masters; a parent-lifetime pipe also prevents an orphaned persistent connection if the CLI is killed. This private-master policy does not change connection ownership for static targets or foreground `exec`, `ssh`, and `forward`.
 
 `bind` checks that the account can inspect this instance, saves the binding, then verifies authenticated SSH. `ready` means platform running + SSH authenticated + target saved, not Python/CUDA ready. `acquire/bind --ready-timeout` defaults to 5m, capped at 10m; 0s makes one bounded check. A created but unreachable instance may already be billing: keep its ID and fix its connection, rather than renting another. Retry a saved acquisition with `loaf cloud bind --request <request-id>`; it never creates a replacement. An explicit `--replace` can rebind an alias; older runs still refresh their original instance's endpoint.
 
 
 Connection readiness runs only fixed `/bin/true` probes, at most ten seconds each. Transient connection and platform-read failures retry every five seconds. Trust, authentication and configuration failures immediately give a safe classification and action. Probe counts are separate from allocation attempts; ordinary foreground `exec` is never replayed.
 
-Establish first-host trust through native SSH, then retry `cloud bind` for the
-same instance or saved request. A changed host key requires manual investigation;
-Loaf never removes the old key automatically. Rebinding the same frozen identity
-is idempotent; a different resource still needs explicit `--replace`.
+After fixing a connection failure, retry `cloud bind` for the same instance or
+saved request. First-use trust needs no separate step. A changed host key requires
+manual investigation; Loaf never removes the old key automatically. Rebinding the
+same frozen identity is idempotent; a different resource still needs explicit `--replace`.
 
 ### Choose conditions in configuration or directly
 

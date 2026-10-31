@@ -46,6 +46,9 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             cloning := strings.HasPrefix(scenario.name, "clone-")
             password := product == "pro" || cloning
             f := newSSHFixture(t, password)
+            if err := os.WriteFile(f.known, nil, 0600); err != nil {
+                t.Fatal(err)
+            }
             if password {
                 // Prevent native SSH from choosing the fixture key: this case must
                 // actually authenticate through the packaged askpass entry point.
@@ -252,6 +255,9 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             if created != 1 || cloning && cloned != 1 {
                 t.Fatal(created)
             }
+            if known, err := os.ReadFile(f.known); err != nil || len(known) == 0 {
+                t.Fatal("JSON acquisition did not establish first-use provider trust", err)
+            }
             // Resource acquisition is an event source before any project Run or
             // queue request exists. Its confirmed created/ready facts are distinct.
             var resourceFacts struct {
@@ -332,18 +338,26 @@ func TestCloudAcquireToDurableRunAndPull(t *testing.T) {
             if err != nil || bytes.Contains(data, []byte("loaf-fixture-password")) || bytes.Contains(data, []byte("mock-platform-token")) || bytes.Contains(data, []byte("fixture-login-password")) {
                 t.Fatal("secret persisted", err)
             }
-            // Unknown host keys must fail closed even with a fetched password.
+            // A changed key still fails, even with provider credentials.
             known, err := os.ReadFile(f.known)
             if err != nil {
                 t.Fatal(err)
             }
-            if err := os.WriteFile(f.known, nil, 0600); err != nil {
+            wrongKey, err := os.ReadFile(f.key + ".pub")
+            if err != nil {
+                t.Fatal(err)
+            }
+            changedKey := []byte("[127.0.0.1]:" + f.port + " " + strings.TrimSpace(string(wrongKey)) + "\n")
+            if err := os.WriteFile(f.known, changedKey, 0600); err != nil {
                 t.Fatal(err)
             }
             t.Cleanup(func() { _ = os.WriteFile(f.known, known, 0600) })
             original := records[0].Connection
             if _, err := f.client.Execute(context.Background(), original, "true", nil, true); err == nil {
-                t.Fatal("password bypassed host trust")
+                t.Fatal("provider connection accepted a changed host key")
+            }
+            if retained, err := os.ReadFile(f.known); err != nil || !bytes.Equal(retained, changedKey) {
+                t.Fatal("changed key was overwritten", err)
             }
             if created != 1 {
                 t.Fatal("connection failure rented a replacement")

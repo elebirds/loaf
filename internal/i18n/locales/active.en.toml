@@ -782,7 +782,7 @@ other = "No eligible resource was acquired within the authorized window."
 other = "The instance exists but SSH readiness is not confirmed. It may already be billing."
 
 [cloud_connect_hint]
-other = "Use cloud credentials to inspect the endpoint, establish host trust with native SSH, then retry cloud bind with the same --instance or --request. Do not rent a replacement."
+other = "Resolve the reported SSH failure, then retry cloud bind with the same --instance or --request. Do not rent a replacement."
 
 [cloud_confirm_required]
 other = "This operation needs explicit approval: pass --yes for a direct call, or use --interactive to review and confirm."
@@ -3121,7 +3121,7 @@ other = "{{.Value}} (all)"
 other = "{{.Value}} (exact: {{.Region}})"
 
 [cloud_connect_trust_hint]
-other = "Confirm the host fingerprint with native SSH, then check the same instance again. No replacement will be rented."
+other = "New provider host keys are accepted automatically. Check explicit SSH host-key settings and known_hosts access, then retry the same instance. Do not rent a replacement."
 
 [cloud_connect_changed_hint]
 other = "The host key changed. Verify it independently before modifying any trust record; the existing instance is retained."
@@ -3145,7 +3145,7 @@ other = "View connection information (password hidden)"
 other = "Keep the instance and exit"
 
 [cloud_failure_host_trust]
-other = "Host fingerprint verification is required."
+other = "SSH host-key policy rejected this connection."
 
 [cloud_failure_authentication]
 other = "SSH authentication needs attention."

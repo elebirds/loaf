@@ -91,7 +91,52 @@ func TestCloudSessionRefreshesAndStripsPlatformTokens(t *testing.T) {
         }
     }
     args := strings.Join(arguments(session.target, "true", session.batch), " ")
-    if !strings.Contains(args, "StrictHostKeyChecking=yes") || strings.Contains(args, "BatchMode=yes") || !strings.Contains(args, "ControlPath=none") {
+    if !strings.Contains(args, "StrictHostKeyChecking=accept-new") || strings.Contains(args, "BatchMode=yes") || !strings.Contains(args, "ControlPath=none") {
         t.Fatal(args)
     }
+}
+
+func TestProviderHostTrustWorksWithoutPromptsAndPreservesExplicitPolicy(t *testing.T) {
+    for _, batch := range []bool{false, true} {
+        for _, password := range []string{"", "fixture-secret"} {
+            for _, explicit := range []bool{false, true} {
+                target := config.Target{Cloud: &cloud.Binding{
+                    Ref:      cloud.Ref{Provider: "autodl", Product: "pro", Account: "fixture", ID: "fixed-instance"},
+                    Settings: cloud.Account{Provider: "autodl", DefaultProduct: "pro", Credential: cloud.CredentialRef{Mode: "developer", Env: "FIXTURE_TOKEN"}},
+                }}
+                client := &Client{Resolve: func(context.Context, config.Target) (config.Target, string, error) {
+                    resolved := config.Target{Destination: "root@fixture", Args: []string{"-p", "2222"}}
+                    if explicit {
+                        resolved.Args = append(resolved.Args, "-o", "StrictHostKeyChecking=yes")
+                    }
+                    return resolved, password, nil
+                }}
+                session, err := client.prepareDirect(context.Background(), target, batch)
+                if err != nil {
+                    t.Fatal(err)
+                }
+                args := arguments(session.target, "true", session.batch)
+                session.close()
+                want := "accept-new"
+                if explicit {
+                    want = "yes"
+                }
+                if got := firstHostKeyPolicy(args); got != want {
+                    t.Fatalf("batch=%v password=%v explicit=%v: got %q, want %q: %v", batch, password != "", explicit, got, want, args)
+                }
+            }
+        }
+    }
+    if got := firstHostKeyPolicy(options(config.Target{Destination: "fixture"}, true)); got != "yes" {
+        t.Fatal("static batch trust changed", got)
+    }
+}
+
+func firstHostKeyPolicy(args []string) string {
+    for _, arg := range args {
+        if value, ok := strings.CutPrefix(arg, "StrictHostKeyChecking="); ok {
+            return value
+        }
+    }
+    return ""
 }

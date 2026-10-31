@@ -5,6 +5,11 @@ description: Use Loaf's CLI to run projects or foreground commands on authorized
 
 # Run an experiment and keep its identity
 
+If Loaf is missing, follow the [installation guide](../../manual/en/installation.md)
+when installation is authorized. The installers select the newest public release
+(including RCs), overwrite their installed package and configure user PATH;
+they do not retain older executables or migrate task state.
+
 Work in the intended project directory. With a known authorized machine, submit
 directly without changing the project's default selection:
 

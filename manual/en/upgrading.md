@@ -2,6 +2,15 @@
 
 [Home](../../README.md) · [Installation](installation.md) · [简体中文](../zh-Hans/upgrading.md)
 
+## Update with the installer
+
+Re-run the [installation command](installation.md#one-command-install-or-update)
+to replace the installed package with the newest public release, including RCs.
+The installer keeps no older binaries and does not modify configuration,
+credentials, task databases or remote processes. This does not migrate
+unsupported development histories; the formal compatibility boundary below
+still applies.
+
 ## Compatibility starts with the first formal 1.0 release
 
 The compatibility baseline is **`v1.0.0`**, not the development releases leading

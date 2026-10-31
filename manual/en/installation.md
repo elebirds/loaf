@@ -2,15 +2,56 @@
 
 [Home](../../README.md) · [Command reference](commands.md) · [简体中文](../zh-Hans/installation.md)
 
+## One-command install or update
+
+On macOS, Linux or WSL:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/elebirds/loaf/main/install.sh | sh
+```
+
+On native Windows, run in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/elebirds/loaf/main/install.ps1 | iex
+```
+
+The installer selects the newest public GitHub Release, **including RCs**,
+verifies its download checksum and installs the complete package. Run the same
+command to update: it replaces the files in its installation directory without
+keeping old executables. It does not change Loaf configuration, credentials,
+task data or remote processes. No administrator privileges or Go compiler are
+needed. Native Windows remains a preview target.
+
+The default package directories are `~/.local/share/loaf/cli` on Unix and
+`%LOCALAPPDATA%\Loaf\bin` on Windows. They contain `loaf`/`loaf.exe`, manuals,
+examples, Skill and licenses. The installer adds that directory to user PATH
+without duplicate entries. On Unix, open a new terminal or run the activation
+command it prints; PowerShell also updates PATH in the current session.
+
+Set `LOAF_INSTALL_DIR` to an absolute package directory to change the location,
+`LOAF_VERSION` to an exact release tag to pin a version, or
+`LOAF_NO_MODIFY_PATH=1` to leave shell startup files / user PATH unchanged.
+These are optional; the default installs the newest release directly.
+The Unix script configures Bash, Zsh, Fish or the POSIX login profile selected
+by the user's shell. You can review either script in the repository before
+running it.
+
+OpenSSH and rsync are still needed for remote workflows. The installer does not
+install system dependencies. On Windows, follow the [MSYS2 setup](#native-windows)
+below.
+
+## Manual installation
+
 Download the archive for your platform and its checksums file from [Releases](https://github.com/elebirds/loaf/releases). Filenames use `darwin` for macOS, `linux` for Linux, `arm64` for Apple Silicon/ARM64, and `amd64` for Intel/AMD x86-64. Extract the archive into a new directory.
 
 Use the manuals inside that archive for its available commands. The repository's
 `main` branch can contain features newer than the latest published download;
 `VERSION` records a target, not proof of a published release. To try `main`, use
 the source build below. Formal `1.x` updates preserve access to supported earlier
-formal `1.x` work. Development, `0.x` and RC state is not imported; before replacing
-a development CLI used by existing work, keep its matching binary and follow
-[the upgrade steps](upgrading.md).
+formal `1.x` work. Development, `0.x` and RC state is not imported. The installer
+does not retain older binaries; see [upgrading](upgrading.md) for the limits of
+managing work created by those versions.
 
 Archives contain one executable, both READMEs, the Skill, examples, `BUILD.json`, and third-party license texts. From an extracted archive directory:
 

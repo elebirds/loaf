@@ -38,6 +38,22 @@ and come back to the same task ID for its status, logs, and outputs.
 x64 is a preview target. Have a Linux machine ready that you can reach with SSH;
 Loaf uses your existing SSH configuration.
 
+Install or update to the newest release, including RCs:
+
+```sh
+# macOS / Linux / WSL
+curl -fsSL https://raw.githubusercontent.com/elebirds/loaf/main/install.sh | sh
+```
+
+```powershell
+# Native Windows (preview)
+irm https://raw.githubusercontent.com/elebirds/loaf/main/install.ps1 | iex
+```
+
+The installer verifies the download, replaces its installed package and adds it
+to user PATH. It keeps no old executable copies. On Unix, open a new terminal or
+use its printed activation command. SSH and rsync remain required.
+
 The archive and source tree both include a small CPU example. From either one,
 replace `lab-gpu` with your SSH Host alias and run:
 

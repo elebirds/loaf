@@ -2,12 +2,46 @@
 
 [首页](../../README.zh-Hans.md) · [命令参考](commands.md) · [English](../en/installation.md)
 
+## 一条命令安装或更新
+
+macOS、Linux 或 WSL：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/elebirds/loaf/main/install.sh | sh
+```
+
+原生 Windows，在 PowerShell 中执行：
+
+```powershell
+irm https://raw.githubusercontent.com/elebirds/loaf/main/install.ps1 | iex
+```
+
+安装器默认选择最新公开的 GitHub Release，**包括 RC**；验证下载校验和后安装完整包。
+更新时再次执行同一命令，直接覆盖安装目录中的文件，不保留旧二进制。
+Loaf 配置、凭据、任务数据和远端进程不变。不需要管理员权限或 Go 编译器。
+原生 Windows 仍为预览目标。
+
+Unix 默认安装目录为 `~/.local/share/loaf/cli`，Windows 为
+`%LOCALAPPDATA%\Loaf\bin`。目录内包含 `loaf`／`loaf.exe`、手册、示例、Skill 和许可证。
+安装器自动将该目录加入用户 PATH，重复执行不重复添加。
+Unix 下重开终端，或执行安装器打印的激活命令；PowerShell 同时更新当前会话的 PATH。
+
+可选环境变量：`LOAF_INSTALL_DIR` 指定绝对安装目录，`LOAF_VERSION` 指定准确发行标签，
+`LOAF_NO_MODIFY_PATH=1` 跳过 Shell 启动文件／用户 PATH 修改。
+默认使用时不需要设置这些变量，直接安装最新发布即可。
+Unix 脚本按用户 Shell 配置 Bash、Zsh、Fish 或 POSIX 登录 profile；也可先在仓库中阅读脚本再执行。
+
+远端工作流仍需要 OpenSSH 和 rsync，安装器不自动安装系统依赖；
+Windows 继续按下文配置 [MSYS2](#原生-windows)。
+
+## 手动安装
+
 从 [Releases](https://github.com/elebirds/loaf/releases) 下载匹配平台的压缩包及校验文件。文件名中，`darwin` 表示 macOS，`linux` 表示 Linux，`arm64` 对应 Apple Silicon/ARM64，`amd64` 对应 Intel/AMD x86-64。将压缩包解压到新目录。
 
 可用命令以压缩包内的手册为准。仓库 `main` 分支可能包含公开下载版尚未提供的功能；
 `VERSION` 记录目标版本，不表示该版本已经发布。试用 `main` 请按下文从源码构建。
-正式 `1.x` 更新继续访问受支持的旧正式 `1.x` 工作。开发版、`0.x` 与 RC 状态不导入；
-替换仍用于管理已有工作的开发版前，请先保留匹配的旧二进制并阅读[升级步骤](upgrading.md)。
+正式 `1.x` 更新继续访问受支持的旧正式 `1.x` 工作。开发版、`0.x` 与 RC 状态不导入，
+安装器也不保留旧二进制；这些版本所建任务的管理限制见[升级说明](upgrading.md)。
 
 压缩包包含一个可执行文件、双语 README、Skill、示例、`BUILD.json` 及第三方许可证原文。解压后，在该目录执行：
 

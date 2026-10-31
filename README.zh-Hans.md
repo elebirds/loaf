@@ -30,6 +30,21 @@ Loaf 把机器接入、代码同步、后台执行和结果回收串成一个命
 原生 Windows x64 目前为预览目标。准备一台可通过 SSH 访问的 Linux 机器，
 Loaf 沿用你已有的 SSH 配置。
 
+一条命令安装或更新到最新发布，包括 RC：
+
+```sh
+# macOS / Linux / WSL
+curl -fsSL https://raw.githubusercontent.com/elebirds/loaf/main/install.sh | sh
+```
+
+```powershell
+# 原生 Windows（预览）
+irm https://raw.githubusercontent.com/elebirds/loaf/main/install.ps1 | iex
+```
+
+安装器验证下载后直接覆盖安装包，并加入用户 PATH，不保留旧二进制。
+Unix 下重开终端或执行打印的激活命令即可使用。SSH 和 rsync 仍需准备。
+
 发行包和源码都包含一个小型 CPU 示例。在其中任一目录下，
 将 `lab-gpu` 换成你的 SSH Host 别名，然后执行：
 

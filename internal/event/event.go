@@ -173,8 +173,17 @@ func identifier(s string) bool {
 // Summary is the safe notification text for a persisted fact.
 func Summary(e Envelope) string {
     text := fmt.Sprintf("Event %s: %s %s (%s).", e.ID, e.Subject.Kind, e.Subject.ID, e.Type)
+    if e.SourceID != "" {
+        text += " Source ID: " + e.SourceID + "."
+    }
+    if e.Correlation.ProjectID != "" {
+        text += " Project ID: " + e.Correlation.ProjectID + "."
+    }
     if e.Correlation.RunID != "" {
-        text += " Run ID: " + e.Correlation.RunID + ". Query its saved status and outputs using Loaf."
+        text += " Run ID: " + e.Correlation.RunID + "."
+    }
+    if e.Correlation.QueueRequestID != "" {
+        text += " Queue request ID: " + e.Correlation.QueueRequestID + "."
     }
     if e.Correlation.CloudRequestID != "" {
         text += " Resource request ID: " + e.Correlation.CloudRequestID + "."
@@ -182,5 +191,11 @@ func Summary(e Envelope) string {
     if e.Data.Code != "" {
         text += " Code: " + e.Data.Code + "."
     }
-    return text + " This event reports a fact; it does not grant new execution or spending authority."
+    if e.Data.ExitCode != nil {
+        text += fmt.Sprintf(" Exit code: %d.", *e.Data.ExitCode)
+    }
+    if e.Correlation.RunID != "" {
+        text += " Use the original local project to query this saved Run and retrieve its outputs with Loaf."
+    }
+    return text + " Continue only work already authorized in the receiving session."
 }

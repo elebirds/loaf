@@ -346,7 +346,7 @@ type destinationCommand struct {
 
 type destinationAddCommand struct {
     Name              string `arg:"" help:"name_arg" value-type:"name"`
-    Kind              string `required:"" enum:"codex,codex-desktop,claude-channel,claude-resume,webhook" help:"flag_destination_kind"`
+    Kind              string `required:"" enum:"codex,codex-desktop,claude-channel,webhook" help:"flag_destination_kind"`
     Session           string `help:"flag_destination_session"`
     Endpoint          string `help:"flag_destination_endpoint" ux-group:"advanced"`
     CWD               string `name:"cwd" help:"flag_destination_cwd" value-type:"path" ux-group:"advanced"`

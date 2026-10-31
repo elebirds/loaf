@@ -157,6 +157,12 @@ loaf run -- python3 train.py
 
 `bind` 先检查账号能读取该实例，再保存绑定并验证 SSH 认证。`ready` 仅表示平台运行、SSH 认证成功且机器已保存，不表示 Python/CUDA 环境已就绪。`acquire/bind --ready-timeout` 默认 5m，最大 10m，0s 表示仅做一次有界检查。实例已创建但连不上时可能已经计费，请保留 ID 并修复连接，不要重新租卡。可用 `loaf cloud bind --request <请求ID>` 恢复同一租用结果，不会创建替代实例。显式 `--replace` 可重绑别名，但历史任务仍刷新其原实例的连接信息。
 
+`ready` 不会激活镜像中的 Python 环境。若已确认命令因非登录 Supervisor 找不到
+`python3` 而失败，应在原目标上使用该镜像的实际解释器；例如已确认路径存在时使用
+`loaf run --target gpu-a -- /root/miniconda3/bin/python3 train.py`。
+登录 Shell 的 PATH 可能不同，解释器路径也因镜像而异；Run 提交结果未确认时，
+仍应查询原 ID，不据此重新提交。
+
 
 接入每次仅执行固定 `/bin/true` 认证探测，最多 10 秒，暂态连接失败或暂态平台信息读取失败间隔 5 秒重试。主机信任、认证和配置错误立即返回明确分类及动作；探测次数与付费申请次数分开。普通前台 `exec` 不会自动重放。
 

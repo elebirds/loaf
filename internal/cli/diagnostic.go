@@ -75,6 +75,9 @@ func diagnoseParse(ctx *kong.Context) error {
             if flag.Required && !flag.Set {
                 return inputFailure("missing_argument", "--"+flag.Name, "input_missing_argument", nil, node)
             }
+            if flag.Set && flag.Enum != "" && flag.Target.Kind() == reflect.String && !flag.EnumMap()[flag.Target.String()] {
+                return inputFailure("invalid_value", "--"+flag.Name, "input_invalid_choice", map[string]any{"Value": strings.Join(flag.EnumSlice(), ", ")}, node)
+            }
         }
     }
     return inputFailure("invalid_value", "", "invalid_flags", nil, node)

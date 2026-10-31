@@ -42,7 +42,7 @@ func (r *cleanupRemote) Clean(_ context.Context, _ config.Target, _ string, req 
         return nil, errors.New("confirmation lost after deletion")
     }
     now := time.Now().UTC()
-    return &wire.CleanupReceipt{FormatVersion: 1, Version: wire.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, Summary: r.summary, CleanedAt: &now}, nil
+    return &wire.CleanupReceipt{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, Summary: r.summary, CleanedAt: &now}, nil
 }
 
 func cleanupFixture(t *testing.T) (CleanupService, task.RunRef, *cleanupRemote, *local.Store) {

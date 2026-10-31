@@ -185,7 +185,7 @@ func (s AbandonService) Abandon(ctx context.Context, preview AbandonResult, batc
 }
 
 func validAbandon(ref task.RunRef, r *wire.AbandonReceipt) bool {
-    return r.Valid() && r.Version == wire.Version && r.Root == ref.RemoteDir && r.ProjectID == ref.ProjectID && r.RunID == ref.ID
+    return r.Valid() && r.Version == ref.Version && r.Root == ref.RemoteDir && r.ProjectID == ref.ProjectID && r.RunID == ref.ID
 }
 
 func definiteAbandonRefusal(code string) bool {

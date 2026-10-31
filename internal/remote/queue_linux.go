@@ -66,7 +66,7 @@ func queueControlAt(ctx context.Context, req wire.Request, root string, identity
     if req.FormatVersion != wire.FormatVersion {
         return result, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return result, errors.New("VERSION_MISMATCH")
     }
     if req.Queue == nil {
@@ -233,7 +233,7 @@ func queueControlAt(ctx context.Context, req wire.Request, root string, identity
 }
 
 func validateQueueExecution(q queue.Request, e queue.Execution) error {
-    if e.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, e.Version) {
         return errors.New("VERSION_MISMATCH")
     }
     if !identifier.MatchString(q.ProjectID) || !identifier.MatchString(q.RunID) || !identifier.MatchString(q.ID) || !filepath.IsAbs(e.Root) || filepath.Clean(e.Root) != e.Root || e.Root == "/" {
@@ -260,7 +260,7 @@ func QueueEvents(ctx context.Context, req wire.Request) (event.Page, error) {
     if req.FormatVersion != wire.FormatVersion {
         return event.Page{}, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return event.Page{}, errors.New("VERSION_MISMATCH")
     }
     if req.Events == nil {

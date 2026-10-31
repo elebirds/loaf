@@ -125,6 +125,10 @@ func (p *presenter) printNextActions(data any) error {
         message := "cloud_next_action"
         if p.command == "run" || p.command == "status" {
             message = "run_next_" + a.Kind
+        } else if strings.HasPrefix(p.command, "notify ") {
+            message = "notify_next_" + a.Kind
+        } else if strings.HasPrefix(p.command, "queue ") {
+            message = "queue_next_" + a.Kind
         }
         if _, err := fmt.Fprintln(p.out, p.locale.Text(message, map[string]any{"Value": display})); err != nil {
             return err

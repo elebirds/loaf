@@ -34,10 +34,20 @@ or owning state. Command details live in the public guide and nearby tests.
   never reclaim shared cache, downloads or adjacent directories.
 - Keep no-start, deletion completion and training status separate. Lost confirmation
   or partial deletion returns exit 3; explicit same-ID retries recover the operation.
-- Local state is `state-v3/state.db` (schema 3); project remote state remains
-  `.loaf-control-v2/state.sqlite3` (schema 3). Keep that namespace fixed so an older
-  handler cannot bypass no-start through another database. Do not migrate old stores
-  or hot-replace active Supervisors during current development.
+- Formal `1.x` local state is `stable-v1/state.db`; development and prereleases
+  use `state-v4/state.db`. Local/project schemas are 4 and the machine queue schema
+  is 2, with a separate formal/development series marker. Reject unsupported series
+  and unknown formats before writes; do not import `v0.x`, development or RC work.
+- Compatibility begins at formal `v1.0.0`: newer formal `1.x` clients manage older
+  formal `1.x` work through supported formats. Keep origin software versions,
+  Run/Queue identity, saved bindings, cursors and receipts unchanged. Exact packaged
+  helper verification is separate from compatible control peers.
+- Project remote state remains `.loaf-control-v2/state.sqlite3`. Keep that namespace
+  fixed so another handler cannot bypass no-start through another database. The
+  machine/user queue likewise retains its single `queue-v1` ledger; refuse a
+  development ledger instead of creating parallel capacity accounting. Do not
+  hot-replace active Supervisors or restart an old compatible Coordinator merely
+  because its controlling CLI was updated.
 - Use private SQLite files, WAL/FULL and short explicit transactions. Transactions
   never span network calls, file copying or runtime; OS locks own those lifetimes.
 

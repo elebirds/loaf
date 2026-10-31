@@ -4,7 +4,6 @@ import (
     "context"
     "errors"
     "io"
-    "os"
     "os/exec"
     "strconv"
     "strings"
@@ -18,9 +17,6 @@ type ExecInput struct {
     Args  []string
     CWD   string
     Batch bool
-    // TrustOnly is a native, human-owned host-key handshake, not a shell.
-    // It disables authentication and only permits the fixed no-op command.
-    TrustOnly bool
 }
 
 // ExecResult reports only results confirmed by OpenSSH's exit status.
@@ -33,9 +29,6 @@ type ExecResult struct {
 // SSH uses 255 for transport errors, so that value cannot confirm a command result.
 func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, stdin io.Reader, stdout, stderr io.Writer) (ExecResult, error) {
     result := ExecResult{Status: "not_started"}
-    if in.TrustOnly && (len(in.Args) != 1 || in.Args[0] != "/bin/true" || in.CWD != "" || in.Batch) {
-        return result, fault.New("BAD_CONFIG", "exec_command", nil)
-    }
     session, err := c.prepareDirect(ctx, target, in.Batch)
     if err != nil {
         return result, err
@@ -47,13 +40,6 @@ func (c *Client) Exec(ctx context.Context, target config.Target, in ExecInput, s
         return result, err
     }
     args := []string{"-o", "ForkAfterAuthentication=no", "-o", "RemoteCommand=none", "-o", "SessionType=default"}
-    if in.TrustOnly {
-        args = append(args, "-o", "StrictHostKeyChecking=ask", "-o", "BatchMode=no", "-o", "PreferredAuthentications=none", "-o", "PasswordAuthentication=no", "-o", "KbdInteractiveAuthentication=no", "-o", "PubkeyAuthentication=no", "-o", "GSSAPIAuthentication=no", "-o", "HostbasedAuthentication=no")
-        if session.env == nil {
-            session.env = os.Environ()
-        }
-        session.env = append(withoutEnv(session.env, "SSH_ASKPASS_REQUIRE"), "SSH_ASKPASS_REQUIRE=never")
-    }
     args = append(args, arguments(target, command, in.Batch)...)
     cmd := foregroundProcess(ctx, c.Binary, args...)
     cmd.Env = session.env

@@ -59,7 +59,7 @@ func (s OutputBrowser) List(ctx context.Context, ref task.RunRef, depth, limit i
     if err != nil {
         return result, err
     }
-    result.OutputInventory, err = s.Remote.Inventory(query, ref.Connection, runner, wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Outputs: paths, Depth: depth, Limit: limit}, batch)
+    result.OutputInventory, err = s.Remote.Inventory(query, ref.Connection, runner, wire.Request{FormatVersion: wire.FormatVersion, Version: ref.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Outputs: paths, Depth: depth, Limit: limit}, batch)
     if err == nil {
         inventory := result.OutputInventory
         if len(inventory.Entries) > limit || inventory.Examined != len(inventory.Entries) || inventory.RootsTotal != len(paths) || inventory.RootsExamined > len(paths) || inventory.Depth != depth || inventory.Limit != limit {

@@ -8,7 +8,7 @@ import (
 
 func TestWindowsUnixAdaptersAreExplicitlyUnsupported(t *testing.T) {
     client := Client{}
-    for _, kind := range []string{"codex", "codex-desktop", "claude-channel", "claude-resume"} {
+    for _, kind := range []string{"codex", "codex-desktop", "claude-channel"} {
         destination := Destination{Kind: kind, Endpoint: "/private/endpoint", SessionID: "exact_session"}
         capability, err := client.Probe(context.Background(), destination)
         if !errors.Is(err, ErrUnsupported) || capability.Available || capability.ReasonCode != "DESTINATION_UNSUPPORTED" {

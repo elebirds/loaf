@@ -26,7 +26,7 @@ func TestCloudRequestsRetainsReadableRecoveryIDs(t *testing.T) {
         t.Fatal(err)
     }
     sqlStore := receipts.Store{Path: filepath.Join(store.Dir, "state.db")}
-    if err := sqlStore.Save(ctx, "c_000000000000000000000000", now.Add(-time.Hour).Format(time.RFC3339Nano), []byte(`{"format_version":999}`)); err != nil {
+    if err := sqlStore.SaveEvent(ctx, "c_000000000000000000000000", now.Add(-time.Hour).Format(time.RFC3339Nano), []byte(`{"format_version":999}`), "", nil); err != nil {
         t.Fatal(err)
     }
     resources := Resources{Cloud: &cloud.Service{Receipts: store}}

@@ -129,10 +129,6 @@ func Follow(ctx context.Context, req wire.Request, out io.Writer) error {
     }
 }
 
-func readLog(dir string, tail int, offset *int64) (wire.LogChunk, error) {
-    return readLogFile(dir, tail, offset, nil, nil)
-}
-
 func readLogRequest(req wire.Request, token string) (wire.LogChunk, error) {
     var expected *wire.LogCursor
     var offset *int64
@@ -143,7 +139,7 @@ func readLogRequest(req wire.Request, token string) (wire.LogChunk, error) {
         }
         expected, offset = &c, &c.Offset
     }
-    return readLogFile(filepath.Join(req.Root, "runs", req.RunID), req.Tail, offset, &req, expected)
+    return readLogFile(filepath.Join(req.Root, "runs", req.RunID), req.Tail, offset, req, expected)
 }
 
 // The boundary digest is required for log continuity, including a truncate and
@@ -162,16 +158,13 @@ func logBoundary(f *os.File, offset int64) (string, error) {
     return hex.EncodeToString(sum[:]), nil
 }
 
-func readLogFile(dir string, tail int, offset *int64, req *wire.Request, expected *wire.LogCursor) (result wire.LogChunk, err error) {
+func readLogFile(dir string, tail int, offset *int64, req wire.Request, expected *wire.LogCursor) (result wire.LogChunk, err error) {
     f, err := os.OpenFile(filepath.Join(dir, "output.log"), os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
     if errors.Is(err, os.ErrNotExist) {
         if expected != nil && expected.FileID != "" {
             return result, errors.New("LOG_CHANGED")
         }
-        err = nil
-        if req != nil {
-            result.Cursor, err = wire.EncodeLogCursor(wire.LogCursor{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID})
-        }
+        result.Cursor, err = wire.EncodeLogCursor(wire.LogCursor{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID})
         return result, err
     }
     if err != nil {
@@ -182,34 +175,31 @@ func readLogFile(dir string, tail int, offset *int64, req *wire.Request, expecte
     if err != nil || !info.Mode().IsRegular() {
         return result, errors.New("LOG_READ_FAILED")
     }
-    fileID := ""
-    if req != nil {
-        identity, ok := info.Sys().(*syscall.Stat_t)
-        if !ok {
-            return result, errors.New("LOG_READ_FAILED")
-        }
-        fileID = fmt.Sprintf("%d:%d", identity.Dev, identity.Ino)
-        if expected != nil && expected.FileID != "" {
-            if expected.FileID != fileID {
-                return result, errors.New("LOG_CHANGED")
-            }
-            boundary, err := logBoundary(f, expected.Offset)
-            if err != nil || boundary != expected.Boundary {
-                return result, errors.New("LOG_CHANGED")
-            }
-        }
-        defer func() {
-            if err != nil {
-                return
-            }
-            boundary, boundaryErr := logBoundary(f, result.Offset)
-            if boundaryErr != nil {
-                err = boundaryErr
-                return
-            }
-            result.Cursor, err = wire.EncodeLogCursor(wire.LogCursor{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, FileID: fileID, Offset: result.Offset, Boundary: boundary})
-        }()
+    identity, ok := info.Sys().(*syscall.Stat_t)
+    if !ok {
+        return result, errors.New("LOG_READ_FAILED")
     }
+    fileID := fmt.Sprintf("%d:%d", identity.Dev, identity.Ino)
+    if expected != nil && expected.FileID != "" {
+        if expected.FileID != fileID {
+            return result, errors.New("LOG_CHANGED")
+        }
+        boundary, err := logBoundary(f, expected.Offset)
+        if err != nil || boundary != expected.Boundary {
+            return result, errors.New("LOG_CHANGED")
+        }
+    }
+    defer func() {
+        if err != nil {
+            return
+        }
+        boundary, boundaryErr := logBoundary(f, result.Offset)
+        if boundaryErr != nil {
+            err = boundaryErr
+            return
+        }
+        result.Cursor, err = wire.EncodeLogCursor(wire.LogCursor{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, FileID: fileID, Offset: result.Offset, Boundary: boundary})
+    }()
     size := info.Size()
     start := int64(0)
     if offset != nil {

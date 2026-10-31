@@ -12,6 +12,7 @@ import (
     "github.com/elebirds/loaf/internal/privatefs"
     execution "github.com/elebirds/loaf/internal/run"
     "github.com/elebirds/loaf/internal/ssh"
+    "github.com/elebirds/loaf/internal/wire"
 )
 
 func TestWSLMountedProjectWithLinuxPrivateState(t *testing.T) {
@@ -69,7 +70,7 @@ func TestWSLMountedProjectWithLinuxPrivateState(t *testing.T) {
         t.Fatal("mounted output mismatch", err)
     }
     invoke("clean", id, "--yes")
-    if err := privatefs.Check(filepath.Join(state, "state", "loaf", "state-v3", "state.db"), false); err != nil {
+    if err := privatefs.Check(filepath.Join(state, "state", "loaf", wire.StateNamespace(wire.Version), "state.db"), false); err != nil {
         t.Fatal("state is not private in Linux", err)
     }
     for _, name := range []string{"config", "state"} {

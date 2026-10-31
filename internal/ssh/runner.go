@@ -37,7 +37,7 @@ func (c *Client) DeployRunner(ctx context.Context, target config.Target, version
         if !strings.HasPrefix(remotePath, "/") || strings.ContainsAny(remotePath, "\x00\r\n") {
             return "", errors.New("BAD_RUNNER_PATH")
         }
-        _, err = c.Control(ctx, target, remotePath, request, noninteractive)
+        err = c.verifyPackagedRunner(ctx, target, remotePath, request, noninteractive)
         if err == nil {
             return remotePath, nil
         }
@@ -47,9 +47,19 @@ func (c *Client) DeployRunner(ctx context.Context, target config.Target, version
     }
     remotePath, err = c.uploadRunner(ctx, target, version, binary, noninteractive, replace)
     if err == nil {
-        _, err = c.Control(ctx, target, remotePath, request, noninteractive)
+        err = c.verifyPackagedRunner(ctx, target, remotePath, request, noninteractive)
     }
     return remotePath, err
+}
+
+// Compatible historical peers may serve control requests, but deployment must
+// still verify the exact packaged identity at its versioned executable path.
+func (c *Client) verifyPackagedRunner(ctx context.Context, target config.Target, runner string, request wire.Request, batch bool) error {
+    response, err := c.ControlResponse(ctx, target, runner, request, batch)
+    if err == nil && response.Version != request.Version {
+        return &RemoteError{Code: "VERSION_MISMATCH"}
+    }
+    return err
 }
 
 func (c *Client) uploadRunner(ctx context.Context, target config.Target, version string, binary []byte, noninteractive, replace bool) (result string, err error) {
@@ -90,7 +100,7 @@ func (c *Client) ControlResponse(ctx context.Context, target config.Target, runn
     finish := c.Trace.stage(stage)
     defer func() { finish(err) }()
     defer func() { err = fault.At(err, stage) }()
-    if request.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, request.Version) {
         return response, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     data, err := json.Marshal(request)
@@ -113,7 +123,7 @@ func (c *Client) ControlResponse(ctx context.Context, target config.Target, runn
     if response.FormatVersion != wire.FormatVersion {
         return wire.Response{}, &RemoteError{Code: "BAD_FORMAT"}
     }
-    if response.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, response.Version) {
         return wire.Response{}, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     if !response.OK {

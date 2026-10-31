@@ -36,6 +36,12 @@ A task result has `run_id`, `version`, `target`, `remote_dir`, `status`,
 observation time, and cleanup metadata. Software `version` is separate from the
 JSON `schema_version` and remote record format.
 
+For saved work, `version` retains its origin software identity, not the current
+CLI identity. From formal `v1.0.0`, new formal `1.x` clients accept supported
+earlier formal `1.x` formats without requiring equal software version strings.
+Development, `0.x` and RC history is not imported. Format validation and frozen
+identity checks still apply; see [upgrading](upgrading.md).
+
 - `status`: `starting`, `running`, `succeeded`, `failed`, `stopped`, or `unknown`.
 - `submission`: `preparing`, `uncertain`, or `submitted` when available. Confirmed
   acceptance survives a later observation failure.
@@ -73,7 +79,7 @@ per card. CLI memory floors use GiB; platform disk-expansion flags use GB.
 | `events list` | Source-bound `events`, `source_id`, `next_cursor` and `has_more`; events retain original source identity |
 | `notify destination list`, `notify subscriptions`, `notify deliveries` | Safe destination, subscription or delivery rows; delivery dispatch and SDK evidence remain separate |
 | `notify bind NAME --current` | Safe `destination` metadata and a `verified_at` timestamp after read-only current-thread verification and persistence |
-| `notify serve --once` | Received/attempted/accepted/unconfirmed/pending counts |
+| `notify serve --once` | Received/attempted/accepted/unconfirmed/pending/rejected counts |
 | `queue submit` | Queue `request`, optional Run observation or offline `preview`; admission does not imply execution acceptance |
 | Other queue queries/control | Request(s), shared capacity `status`, or confirmed `cleaned` IDs |
 | `queue clean` | Explicit `dry_run`, `request_ids` and queue `result` |
@@ -138,7 +144,9 @@ Input diagnostics add optional `error.reason`, `error.argument`, and
 omitted. Reasons identify unknown command/option, missing argument, invalid type
 or value, out-of-range, conflicts, invalid configuration, and replaced commands.
 No raw argv dump, source excerpt or secret value is included.
-`expected_version`/`actual_version` accompany task version mismatches.
+`expected_version`/`actual_version` accompany task version mismatches. They name
+the compared software identities; unequal strings alone are not an error for
+compatible formal `1.x` work.
 
 When present, `error.issues[]` collects independently known local semantic
 problems as `argument`/`reason` pairs. Correct all listed issues before retrying;
@@ -169,6 +177,15 @@ retrieve a successful task's outputs. Human output uses the same commands.
 Reclaimed or deletion-pending payloads do not suggest log/download operations.
 For example, a successful task can return
 `{"kind":"pull","command":["loaf","pull","r_ID"],"requires_confirmation":false}`.
+
+Successful notification binding, destination registration and subscription can
+suggest `start_bridge` and `deliveries`. `start_bridge` requires confirmation;
+neither suggestion starts a Bridge or proves that one is online.
+
+Queue submission can suggest `show_request` with the original saved request ID.
+Inspect it before ordinary Run waiting: queue admission does not confirm Run
+acceptance. Local previews and failed local identity saves do not suggest this
+saved-request query.
 
 ## Follow cloud operations without parsing prose
 

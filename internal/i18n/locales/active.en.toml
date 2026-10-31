@@ -399,19 +399,19 @@ other = "stopped"
 other = "unknown"
 
 [run_phase_copying]
-other = "copying source"
+other = "source copy stage"
 
 [run_phase_prepared]
 other = "source prepared"
 
 [run_phase_starting]
-other = "starting supervisor"
+other = "supervisor startup stage"
 
 [run_phase_setup]
-other = "running setup"
+other = "setup stage"
 
 [run_phase_command]
-other = "running command"
+other = "command stage"
 
 [run_reason_EXEC_FAILED]
 other = "command could not start"
@@ -1326,6 +1326,9 @@ other = "stop request"
 [operation_stage_clean]
 other = "run cleanup"
 
+[operation_stage_queue]
+other = "queue operation"
+
 [run_metadata_invalid]
 other = "Use a printable name of at most 128 characters and at most 16 nonempty tags of 64 characters each."
 
@@ -1750,6 +1753,9 @@ other = "Missing required argument or value: {{.Argument}}."
 [input_invalid_type]
 other = "{{.Argument}} requires a value of type {{.Value}}."
 
+[input_invalid_choice]
+other = "{{.Argument}} must be one of: {{.Value}}."
+
 [input_extra_arguments]
 other = "Unexpected positional arguments; check this command’s usage."
 
@@ -1915,13 +1921,19 @@ other = "Use --current to bind the calling Codex desktop chat."
 other = "Run loaf notify bind NAME --current from the Codex desktop chat you want to notify."
 
 [notify_current_unavailable]
-other = "The current Codex desktop chat could not be verified. Keep that chat open and check its private desktop IPC connection."
+other = "The current Codex desktop chat could not be verified. Keep this chat open. If the tool sandbox blocks local desktop IPC, approve that access, then retry the binding in this chat."
 
 [notify_current_exists]
 other = "Destination {{.Value}} targets another session. Choose another name or explicitly use --replace; existing subscriptions retain their frozen destination."
 
 [notify_current_bound]
 other = "Bound {{.Value}} to the verified current Codex desktop chat {{.ID}}. Use --notify {{.Value}} on later operations."
+
+[notify_next_start_bridge]
+other = "Reuse a running Bridge, or start one in a separate local terminal: {{.Value}}"
+
+[notify_next_deliveries]
+other = "Check delivery evidence: {{.Value}}"
 
 [notify_destination_short]
 other = "Manage private bindings to exact destinations."
@@ -1960,7 +1972,7 @@ other = "Continue from this source-bound event cursor."
 other = "Maximum rows, from 1 to 1000."
 
 [flag_destination_kind]
-other = "Integration: codex, codex-desktop, claude-channel, claude-resume, or webhook."
+other = "Integration: codex, codex-desktop, claude-channel, or webhook."
 
 [flag_destination_session]
 other = "Exact Agent session ID, or the unique label from notify channel --session; never selects the latest session."
@@ -2094,8 +2106,8 @@ other = "dispatch unconfirmed"
 [queue_state_dispatch_unconfirmed]
 other = "dispatch unconfirmed"
 
-[queue_next]
-other = "Inspect this request with loaf queue show {{.ID}}."
+[queue_next_show_request]
+other = "Queue admission does not confirm Run acceptance. Inspect this request first: {{.Value}}"
 
 [queue_active]
 other = "dispatch enabled"
@@ -2174,6 +2186,9 @@ other = "GPU utilization"
 
 [queue_operation_failed]
 other = "The queue operation could not be completed ({{.Code}}). Inspect the saved request before retrying."
+
+[queue_not_enabled]
+other = "The queue is not enabled for this machine and remote user. If FIFO dispatch is wanted, explicitly run loaf queue enable --slots N with the permitted concurrency. Direct loaf run does not require a queue."
 
 [delivery_dispatch_pending]
 other = "pending delivery"

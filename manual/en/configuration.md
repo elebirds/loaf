@@ -26,13 +26,35 @@ Target selection follows `--target`, the current project's `loaf machine use` se
 `--target` selects a machine for one call. Save a project default with
 `machine use`; neither a one-off target nor a GPU review changes project TOML.
 
-User configuration lives in `~/.config/loaf/config.toml`. Project identities, personal selections, run locators, labels, observations, cleanup summaries and cloud receipts share `~/.local/state/loaf/state-v3/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the configuration/state bases. Credentials stay in the selected keyring or the separate private `credentials/` directory.
+User configuration lives in `~/.config/loaf/config.toml`. Project identities,
+personal selections, run locators, labels, observations, cleanup summaries,
+cloud receipts and notifications share one local database. Formal `1.x` builds
+use `~/.local/state/loaf/stable-v1/state.db`; this development generation uses
+`~/.local/state/loaf/state-v4/state.db`. `XDG_CONFIG_HOME` and `XDG_STATE_HOME`
+override the configuration/state bases. Credentials stay in the selected
+keyring or the separate private `credentials/` directory.
 
-Native Windows defaults to `%APPDATA%\loaf\config.toml` and `%LOCALAPPDATA%\loaf\state-v3\state.db`. XDG overrides take precedence and append `loaf` to the base. Configuration, state, credentials and locks use private Windows ACLs; existing unsafe permissions are rejected. Keep WSL state and credentials in its own Linux home, separate from Windows. `LOAF_MSYS2_ROOT` selects the paired native transport installation; see [installation](installation.md).
+Native Windows defaults to `%APPDATA%\loaf\config.toml` and a database under
+`%LOCALAPPDATA%\loaf`, using the same `stable-v1` or `state-v4` subdirectory.
+XDG overrides take precedence and append `loaf` to the base. Configuration,
+state, credentials and locks use private Windows ACLs; existing unsafe
+permissions are rejected. Keep WSL state and credentials in its own Linux
+home, separate from Windows. `LOAF_MSYS2_ROOT` selects the paired native
+transport installation; see [installation](installation.md).
 
-See [upgrading](upgrading.md) for the v0.6 state boundary and matching old CLIs.
+Formal compatibility begins with `v1.0.0`; development, `0.x` and RC history is
+not imported. See [upgrading](upgrading.md) before changing series.
 
-Each new remote project keeps its schema-3 control database in `<remote-project>/.loaf-control-v2/state.sqlite3`; sources, per-run working copies, logs and outputs remain ordinary files. The existing namespace is retained so older handlers reject the new schema rather than bypassing preparation-abandonment receipts. Both databases use private permissions, WAL, FULL synchronization and bounded lock waits. Unknown schemas fail explicitly. Software, CLI schema, wire record and database schema versions are independent.
+Each new remote project keeps its schema-4 control database in
+`<remote-project>/.loaf-control-v2/state.sqlite3`; sources, per-run working
+copies, logs and outputs remain ordinary files. The existing namespace is
+retained so older handlers reject the new schema rather than bypassing
+preparation-abandonment receipts. The machine queue uses schema 2 in the SSH
+user's `~/.local/share/loaf/queue-v1/state.sqlite3`; its directory name is not a
+schema number. Stores record the stable/development series and reject a foreign
+series without conversion. SQLite files use private permissions, WAL, FULL
+synchronization and bounded lock waits. Software, JSON, wire and database
+versions remain independent.
 
 To set personal sync defaults, add a `[sync]` table to the existing user configuration, keeping its `format_version` and machine entries:
 

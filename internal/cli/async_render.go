@@ -146,9 +146,6 @@ func printAsync(out io.Writer, data any, l *i18n.Localizer) (bool, error) {
             if err := printQueueRequest(out, *r.Request, l); err != nil {
                 return true, err
             }
-            if _, err := fmt.Fprintln(out, l.Text("queue_next", map[string]any{"ID": r.Request.ID})); err != nil {
-                return true, err
-            }
         }
         if r.Run != nil {
             printRun(out, *r.Run, l)

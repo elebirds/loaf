@@ -39,7 +39,7 @@ func (d Destination) Validate() error {
         if !validID(d.SessionID) || !absoluteDestinationPath(d.Endpoint) || d.CWD != "" {
             return ErrDestination
         }
-    case "codex", "claude-channel", "claude-resume":
+    case "codex", "claude-channel":
         if !validID(d.SessionID) {
             return ErrDestination
         }

@@ -114,7 +114,7 @@ loaf cloud login --prompt autodl-main --credential-store keyring   # Default
 loaf cloud login --prompt autodl-main --credential-store file      # Unencrypted private files
 ```
 
-`keyring` uses macOS Keychain or Linux Secret Service (requires a working user session). `file` needs no vault service: entries are stored under `$XDG_STATE_HOME/loaf/credentials/`, defaulting to `~/.local/state/loaf/credentials/`, with directory mode `0700` and file mode `0600`. File storage protects against other OS users, not software running as you. Keyring failures never silently fall back to files. The CLI supports macOS/Linux; Windows users currently need WSL.
+`keyring` uses macOS Keychain or Linux Secret Service (requires a working user session). `file` needs no vault service: entries are stored under `$XDG_STATE_HOME/loaf/credentials/`, defaulting to `~/.local/state/loaf/credentials/`, with directory mode `0700` and file mode `0600`. File storage protects against other OS users, not software running as you. Keyring failures never silently fall back to files. See [installation](installation.md) for native Windows requirements; native Windows keyring acceptance is still pending.
 
 Set a default for **new logins** in the user configuration, not project `loaf.toml`:
 
@@ -157,6 +157,13 @@ loaf run -- python3 train.py
 Cloud runner operations share one private, command-scoped OpenSSH master per bound instance and connection configuration. Connection details are resolved once while that master is healthy; its authenticated connection carries probes, runner requests, and native rsync. Loaf never borrows a pre-existing master or writes SSH configuration. Normal exit and cancellation close only this command's masters; a parent-lifetime pipe also prevents an orphaned persistent connection if the CLI is killed. This private-master policy does not change connection ownership for static targets or foreground `exec`, `ssh`, and `forward`.
 
 `bind` checks that the account can inspect this instance, saves the binding, then verifies authenticated SSH. `ready` means platform running + SSH authenticated + target saved, not Python/CUDA ready. `acquire/bind --ready-timeout` defaults to 5m, capped at 10m; 0s makes one bounded check. A created but unreachable instance may already be billing: keep its ID and fix its connection, rather than renting another. Retry a saved acquisition with `loaf cloud bind --request <request-id>`; it never creates a replacement. An explicit `--replace` can rebind an alias; older runs still refresh their original instance's endpoint.
+
+`ready` does not activate the image's Python environment. If a confirmed command
+failure shows that the non-login Supervisor cannot find `python3`, use that
+image's actual interpreter on the same target, for example
+`loaf run --target gpu-a -- /root/miniconda3/bin/python3 train.py` when that path
+has been verified. Login-shell PATH can differ and interpreter paths vary by
+image. An unconfirmed Run still needs observation of its original ID.
 
 
 Connection readiness runs only fixed `/bin/true` probes, at most ten seconds each. Transient connection and platform-read failures retry every five seconds. Trust, authentication and configuration failures immediately give a safe classification and action. Probe counts are separate from allocation attempts; ordinary foreground `exec` is never replayed.

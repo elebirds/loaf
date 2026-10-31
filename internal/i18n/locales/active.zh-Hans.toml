@@ -399,19 +399,19 @@ other = "已停止"
 other = "未知"
 
 [run_phase_copying]
-other = "复制源码"
+other = "源码复制阶段"
 
 [run_phase_prepared]
 other = "源码已准备"
 
 [run_phase_starting]
-other = "启动监督进程"
+other = "监督进程启动阶段"
 
 [run_phase_setup]
-other = "准备环境"
+other = "环境准备阶段"
 
 [run_phase_command]
-other = "执行命令"
+other = "命令阶段"
 
 [run_reason_EXEC_FAILED]
 other = "命令无法启动"
@@ -1326,6 +1326,9 @@ other = "请求停止"
 [operation_stage_clean]
 other = "清理任务数据"
 
+[operation_stage_queue]
+other = "队列操作"
+
 [run_metadata_invalid]
 other = "名称须为不超过 128 字符的可打印文本；标签最多 16 个，每个非空且不超过 64 字符。"
 
@@ -1750,6 +1753,9 @@ other = "缺少必需参数或选项值：{{.Argument}}。"
 [input_invalid_type]
 other = "{{.Argument}} 需要 {{.Value}} 类型的值。"
 
+[input_invalid_choice]
+other = "{{.Argument}} 必须是以下值之一：{{.Value}}。"
+
 [input_extra_arguments]
 other = "出现多余的位置参数，请检查此命令的用法。"
 
@@ -1915,13 +1921,19 @@ other = "使用 --current 绑定调用此命令的 Codex 桌面会话。"
 other = "请在希望接收通知的 Codex 桌面会话中执行 loaf notify bind NAME --current。"
 
 [notify_current_unavailable]
-other = "无法验证当前 Codex 桌面会话。请保持该会话开启，并检查其私有桌面 IPC 连接。"
+other = "无法验证当前 Codex 桌面会话。请保持此会话开启。若工具沙箱限制本机桌面 IPC，请批准访问后，在原会话重试绑定。"
 
 [notify_current_exists]
 other = "目的地 {{.Value}} 已绑定其他会话。请选择其他名称，或显式使用 --replace；已有订阅仍保留原冻结目的地。"
 
 [notify_current_bound]
 other = "已将 {{.Value}} 绑定到验证过的当前 Codex 桌面会话 {{.ID}}。后续操作使用 --notify {{.Value}}。"
+
+[notify_next_start_bridge]
+other = "复用已运行的 Bridge，或在单独的本地终端启动：{{.Value}}"
+
+[notify_next_deliveries]
+other = "查看投递证据：{{.Value}}"
 
 [notify_destination_short]
 other = "管理指向明确目的地的私有绑定。"
@@ -1960,7 +1972,7 @@ other = "从绑定此来源的事件游标继续。"
 other = "最多读取条数，范围为 1 至 1000。"
 
 [flag_destination_kind]
-other = "接入类型：codex、codex-desktop、claude-channel、claude-resume 或 webhook。"
+other = "接入类型：codex、codex-desktop、claude-channel 或 webhook。"
 
 [flag_destination_session]
 other = "明确 Agent 会话 ID，或 notify channel --session 的唯一标签；不会选择最近会话。"
@@ -2094,8 +2106,8 @@ other = "派发未确认"
 [queue_state_dispatch_unconfirmed]
 other = "派发未确认"
 
-[queue_next]
-other = "使用 loaf queue show {{.ID}} 查看此请求。"
+[queue_next_show_request]
+other = "队列接纳不等于 Run 已被接管。请先检查此请求：{{.Value}}"
 
 [queue_active]
 other = "允许派发"
@@ -2174,6 +2186,9 @@ other = "GPU 利用率"
 
 [queue_operation_failed]
 other = "队列操作未能完成（{{.Code}}）。重试前请检查已保存的请求。"
+
+[queue_not_enabled]
+other = "此机器和远端用户尚未启用队列。需要 FIFO 调度时，请以已获准的并发数显式执行 loaf queue enable --slots N。直接使用 loaf run 不需要队列。"
 
 [delivery_dispatch_pending]
 other = "等待投递"

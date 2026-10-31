@@ -29,7 +29,7 @@ func (r *abandonRemote) Abandon(_ context.Context, _ config.Target, _ string, re
             copy := *r.proof
             return &copy, nil
         }
-        return &wire.AbandonReceipt{FormatVersion: 1, Version: wire.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID}, nil
+        return &wire.AbandonReceipt{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID}, nil
     }
     r.mutations++
     if r.before != nil {
@@ -40,7 +40,7 @@ func (r *abandonRemote) Abandon(_ context.Context, _ config.Target, _ string, re
     }
     if r.proof == nil {
         now := time.Now().UTC()
-        r.proof = &wire.AbandonReceipt{FormatVersion: 1, Version: wire.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, NoStartAt: &now}
+        r.proof = &wire.AbandonReceipt{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, NoStartAt: &now}
     }
     if r.lost {
         r.lost = false

@@ -261,7 +261,7 @@ func definiteRejection(code string) bool {
 }
 
 func matching(ref task.RunRef, r *wire.RunRecord) bool {
-    if r == nil || r.FormatVersion != wire.FormatVersion || r.Request.Version != wire.Version || r.Request.RunID != ref.ID || r.Request.ProjectID != ref.ProjectID || r.Request.Root != ref.RemoteDir {
+    if r == nil || r.FormatVersion != wire.FormatVersion || r.Request.Version != ref.Version || r.Request.RunID != ref.ID || r.Request.ProjectID != ref.ProjectID || r.Request.Root != ref.RemoteDir {
         return false
     }
     return ref.QueueRequestID == "" || ref.QueueRequestID == r.Request.QueueRequestID || r.Request.QueueRequestID == "" && r.SupervisorPID == 0 && !wire.Terminal(r.Status) && (r.Phase == "copying" || r.Phase == "prepared")
@@ -305,7 +305,7 @@ func (s Service) describe(ref task.RunRef) (task.RunRef, error) {
 }
 
 func request(ref task.RunRef, wait time.Duration, tail int) wire.Request {
-    return wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, WaitMillis: int64((wait + time.Millisecond - 1) / time.Millisecond), Tail: tail}
+    return wire.Request{FormatVersion: wire.FormatVersion, Version: ref.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, WaitMillis: int64((wait + time.Millisecond - 1) / time.Millisecond), Tail: tail}
 }
 
 // Observe queries a bound locator without reading today's target configuration.
@@ -346,7 +346,7 @@ func (s Service) Observe(ctx context.Context, ref task.RunRef, wait time.Duratio
         queryErr = remoteFault(err)
         return result, queryErr
     }
-    if observed.Record != nil && observed.Record.Request.Version != wire.Version {
+    if observed.Record != nil && !wire.CompatibleVersion(wire.Version, observed.Record.Request.Version) {
         queryErr = versionMismatch(observed.Record.Request.Version)
         result.QueryError = errorCode(queryErr)
         return result, queryErr
@@ -448,7 +448,7 @@ func (s Service) follow(ctx context.Context, ref task.RunRef, wait time.Duration
             budgetTimer = time.AfterFunc(max(0, time.Until(recoveryDeadline)), cancelAttempt)
         }
         err = s.Remote.Follow(attemptCtx, ref.Connection, ref.Runner, req, batch, func(event wire.LogEvent) error {
-            if event.Record != nil && event.Record.Request.Version != wire.Version {
+            if event.Record != nil && !wire.CompatibleVersion(wire.Version, event.Record.Request.Version) {
                 return versionMismatch(event.Record.Request.Version)
             }
             if !matching(ref, event.Record) {

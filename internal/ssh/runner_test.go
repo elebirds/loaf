@@ -100,3 +100,25 @@ func TestControlRejectsDifferentClientVersionBeforeSSH(t *testing.T) {
         t.Fatal(err)
     }
 }
+
+func TestCompatibleControlPeerIsNotThePackagedArtifact(t *testing.T) {
+    original := wire.Version
+    defer func() { wire.Version = original }()
+    wire.Version = "v1.1.0"
+    response, err := json.Marshal(wire.Response{FormatVersion: wire.FormatVersion, Version: "v1.0.0", OK: true})
+    if err != nil {
+        t.Fatal(err)
+    }
+    fake := filepath.Join(t.TempDir(), "ssh")
+    if err := os.WriteFile(fake, []byte(fmt.Sprintf("#!/bin/sh\ncat >/dev/null\nprintf '%%s' %s\n", Quote(string(response)))), 0700); err != nil {
+        t.Fatal(err)
+    }
+    client := &Client{Binary: fake}
+    request := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "version"}
+    if response, err := client.ControlResponse(context.Background(), config.Target{Destination: "fixture"}, "/runner", request, true); err != nil || response.Version != "v1.0.0" {
+        t.Fatal("compatible peer cannot serve control requests", response, err)
+    }
+    if err := client.verifyPackagedRunner(context.Background(), config.Target{Destination: "fixture"}, "/runner", request, true); err == nil || err.Error() != "VERSION_MISMATCH" {
+        t.Fatal("wrong packaged identity accepted", err)
+    }
+}

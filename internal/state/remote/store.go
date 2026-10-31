@@ -21,7 +21,7 @@ import (
 )
 
 const Namespace = ".loaf-control-v2"
-const SchemaVersion = 3
+const SchemaVersion = 4
 const applicationID = 0x4c4f4152
 
 // Path returns the database path without touching the filesystem.
@@ -32,7 +32,7 @@ func Path(root string) string { return filepath.Join(root, Namespace, "state.sql
 type Store struct{ db *sql.DB }
 
 const schema = `
-CREATE TABLE ownership (singleton INTEGER PRIMARY KEY CHECK(singleton=1), project_id TEXT NOT NULL);
+CREATE TABLE ownership (singleton INTEGER PRIMARY KEY CHECK(singleton=1), project_id TEXT NOT NULL, compatibility_series TEXT NOT NULL);
 CREATE TABLE sync_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), complete INTEGER NOT NULL CHECK(complete IN (0,1)));
 CREATE TABLE run_claims (run_id TEXT PRIMARY KEY, version TEXT NOT NULL, claimed_at TEXT NOT NULL);
 CREATE TABLE runs (
@@ -57,7 +57,7 @@ CREATE TABLE abandon_receipts (
 );
 ` + eventlog.Schema + `
 PRAGMA application_id=1280262482;
-PRAGMA user_version=3;`
+PRAGMA user_version=4;`
 
 // Initialize claims an empty project directory. Existing projects are verified,
 // never imported or converted from another format.
@@ -103,7 +103,7 @@ func Initialize(root, project string) error {
     if _, err := tx.Exec(schema); err != nil {
         return errors.New("WRITE_FAILED")
     }
-    if _, err := tx.Exec("INSERT INTO ownership VALUES (1, ?)", project); err != nil {
+    if _, err := tx.Exec("INSERT INTO ownership VALUES (1, ?, ?)", project, wire.StateSeries(wire.Version)); err != nil {
         return errors.New("WRITE_FAILED")
     }
     if err := tx.Commit(); err != nil {
@@ -153,6 +153,12 @@ func open(root string, writable, fresh bool) (*Store, error) {
     }
     if (!fresh && (version != SchemaVersion || app != applicationID)) || (fresh && (version != 0 || app != 0)) {
         return fail("BAD_FORMAT")
+    }
+    if !fresh {
+        var series string
+        if db.QueryRow("SELECT compatibility_series FROM ownership WHERE singleton=1").Scan(&series) != nil || series != wire.StateSeries(wire.Version) {
+            return fail("BAD_FORMAT")
+        }
     }
     if writable {
         var journal string
@@ -227,7 +233,7 @@ func (s *Store) Run(id string) (*wire.RunRecord, error) {
     if err != nil || r.FormatVersion != wire.FormatVersion || json.Unmarshal([]byte(request), &r.Request) != nil {
         return nil, errors.New("BAD_FORMAT")
     }
-    if r.Request.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, r.Request.Version) {
         return nil, errors.New("VERSION_MISMATCH")
     }
     if r.Request.RunID != id {
@@ -388,7 +394,7 @@ func (s *Store) Cleanup(id string) (*wire.CleanupReceipt, error) {
     if _, err := fmt.Sscan(inode, &r.Inode); err != nil || r.Inode == 0 {
         return nil, errors.New("BAD_FORMAT")
     }
-    if r.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, r.Version) {
         return nil, errors.New("VERSION_MISMATCH")
     }
     if cleaned.Valid {

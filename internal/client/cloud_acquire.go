@@ -47,21 +47,6 @@ func (c *Resources) searchProvider(ctx context.Context, in CloudSearchInput) (cl
     return provider, plan, cloud.Failure(err)
 }
 
-// CloudSearchPlan resolves browsing preferences locally, without credentials or
-// provider access. It shares the same precedence as Search and Watch.
-func (c *Resources) CloudSearchPlan(ctx context.Context, in CloudSearchInput) (cloud.Plan, error) {
-    plan, err := c.resourcePlan(ctx, in.Plan)
-    if err != nil {
-        return plan, err
-    }
-    _, account, err := c.selectAccount(in.Select)
-    if err != nil {
-        return plan, err
-    }
-    plan.Product = selectedProduct(in.Select, account, plan.Product)
-    return plan, nil
-}
-
 func (c *Resources) acquisitionPlan(ctx context.Context, in CloudAcquireInput) (string, cloud.Account, cloud.Plan, error) {
     plan, err := c.resourcePlan(ctx, in.Plan)
     if err != nil {

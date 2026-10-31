@@ -6,7 +6,8 @@
 
 可用命令以压缩包内的手册为准。仓库 `main` 分支可能包含公开下载版尚未提供的功能；
 `VERSION` 记录目标版本，不表示该版本已经发布。试用 `main` 请按下文从源码构建。
-替换仍用于管理已有任务的 CLI 前，请先按[升级步骤](upgrading.md)保留匹配的旧二进制。
+正式 `1.x` 更新继续访问受支持的旧正式 `1.x` 工作。开发版、`0.x` 与 RC 状态不导入；
+替换仍用于管理已有工作的开发版前，请先保留匹配的旧二进制并阅读[升级步骤](upgrading.md)。
 
 压缩包包含一个可执行文件、双语 README、Skill、示例、`BUILD.json` 及第三方许可证原文。解压后，在该目录执行：
 
@@ -18,7 +19,11 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 
 按需将该目录加入 PATH。使用压缩包只需要本地 OpenSSH 和 rsync，不需要 Go。远端需要 Linux、rsync；实验的 Python 环境应单独准备。
 
-客户端构建目标为 macOS/Linux amd64、arm64，以及原生 Windows x64。WSL2 Ubuntu x64 使用 Linux amd64 包。远端 Runner 保持 Linux amd64/arm64；原生 Windows ARM64、Windows 远端执行和 UNC 网络共享不在本版范围。Windows 10 的运行验收仍待完成，交叉构建不等于运行验证。
+压缩包构建目标为 macOS/Linux amd64、arm64，以及原生 Windows x64。
+WSL2 Ubuntu x64 使用 Linux amd64 包，远端 Runner 保持 Linux amd64/arm64。
+原生 Windows x64 目前为预览目标：完整发行包的 SSH／同步／Run／Pull 流程仍需完成
+实际验收，才列入 v1.0 稳定支持；Windows 10 的运行验收也待完成。
+原生 Windows ARM64、Windows 远端执行和 UNC 网络共享不在本版范围；交叉构建不等于运行验证。
 
 `BUILD.json` 保存源码提交、工作树修改状态、Go 版本、目标平台和依赖声明清单；`loaf version --json` 提供对应的构建标识，缺少来源信息时如实显示未知，不伪装成干净构建。将 `archive` 设为压缩包的准确文件名、`version` 设为文件名中的软件版本，再在包含压缩包和校验文件的目录中执行：
 
@@ -28,6 +33,13 @@ grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
 ```
 
 公开发布的压缩包附带 GitHub 构建来源证明，可用 `gh attestation verify "$archive" --repo elebirds/loaf` 检查，详见 [GitHub 验证说明](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli)。本地构建包含元数据和下载校验和，不含 GitHub 签名的来源证明。
+
+### 正式版与开发版状态
+
+正式 `1.x` 构建在平台的 Loaf 状态目录下使用 `stable-v1/state.db`，开发版与 RC 使用
+`state-v4/state.db`；配置和凭据另行保存。两者都不导入旧存储。正式 `1.x` 更新继续
+使用同一个稳定状态目录，不因软件版本或 schema 变化另开空库。
+远端项目和队列的边界见[升级说明](upgrading.md)。
 
 ### 原生 Windows
 

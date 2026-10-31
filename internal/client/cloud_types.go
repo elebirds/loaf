@@ -105,8 +105,6 @@ type CloudReceipts struct {
 
 // CloudBinding reports binding and readiness independently of allocation.
 type CloudBinding struct {
-    remoteBase      string
-    principal       cloud.Binding       // Ephemeral recovery identity; never serialized.
     Target          string              `json:"target"`
     Instance        cloud.Ref           `json:"instance"`
     Status          string              `json:"status"`

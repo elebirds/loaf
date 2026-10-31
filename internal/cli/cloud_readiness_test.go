@@ -76,11 +76,12 @@ func TestCloudDirectBindingRecoveryKeepsNewAliasAndOriginalIdentity(t *testing.T
     o.Operations = ops
     settings, _ := o.Config.Load()
     app := client.New(o.Dependencies, settings)
-    binding, err := app.Resources.CloudBind(context.Background(), client.CloudBindInput{Name: "new-alias", Instance: "original-instance", ReadyTimeout: 0})
+    input := client.CloudBindInput{Name: "new-alias", Instance: "original-instance", ReadyTimeout: 0}
+    binding, err := app.Resources.CloudBind(context.Background(), input)
     if err == nil || binding.Status != "bound" {
         t.Fatal(binding, err)
     }
-    binding, err = app.Resources.RetryCloudBinding(context.Background(), binding, client.CloudBindInput{ReadyTimeout: 0})
+    binding, err = app.Resources.CloudBind(context.Background(), input)
     if err != nil || binding.Status != "ready" || p.observed.ID != "original-instance" || p.creates != 0 {
         t.Fatal(binding, err, p.observed)
     }
@@ -92,9 +93,14 @@ func TestCloudDirectBindingRecoveryKeepsNewAliasAndOriginalIdentity(t *testing.T
     if err := o.Config.Add(context.Background(), "new-alias", target, true); err != nil {
         t.Fatal(err)
     }
+    current, err = o.Config.Load()
+    if err != nil {
+        t.Fatal(err)
+    }
+    app = client.New(o.Dependencies, current)
     calls := ops.calls
-    if _, err = app.Resources.RetryCloudBinding(context.Background(), binding, client.CloudBindInput{ReadyTimeout: 0}); err == nil || calls != ops.calls {
-        t.Fatal("alias change redirected recovery", err)
+    if _, err = app.Resources.CloudBind(context.Background(), input); err == nil || calls != ops.calls || p.observed.ID != "original-instance" || p.creates != 0 {
+        t.Fatal("alias change redirected recovery", err, p.observed, p.creates)
     }
 }
 
@@ -107,12 +113,13 @@ func TestCloudRecoveryBeforeAliasSavedUsesFrozenResource(t *testing.T) {
     if err == nil || binding.Status != "not_bound" {
         t.Fatal(binding, err)
     }
-    credentials, err := app.Resources.CloudBindingCredentials(context.Background(), binding)
+    selection := client.CloudSelect{Account: &binding.Instance.Account, Product: &binding.Instance.Product}
+    credentials, err := app.Resources.CloudCredentials(context.Background(), client.CloudInstanceInput{Select: selection, ID: binding.Instance.ID})
     if err != nil || credentials.Instance.ID != "original" || credentials.Password != nil {
         t.Fatal(credentials.Instance, err)
     }
     p.getError = nil
-    binding, err = app.Resources.RetryCloudBinding(context.Background(), binding, client.CloudBindInput{ReadyTimeout: 0})
+    binding, err = app.Resources.CloudBind(context.Background(), client.CloudBindInput{Select: selection, Name: binding.Target, Instance: binding.Instance.ID, ReadyTimeout: 0})
     if err != nil || binding.Status != "ready" || p.observed.ID != "original" || p.creates != 0 {
         t.Fatal(binding, err)
     }

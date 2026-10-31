@@ -34,8 +34,9 @@ and come back to the same task ID for its status, logs, and outputs.
 
 ## Get started
 
-[Install Loaf](manual/en/installation.md) on macOS, Linux, native Windows x64, or WSL2. Have a Linux machine
-ready that you can reach with SSH; Loaf uses your existing SSH configuration.
+[Install Loaf](manual/en/installation.md) on macOS, Linux, or WSL2; native Windows
+x64 is a preview target. Have a Linux machine ready that you can reach with SSH;
+Loaf uses your existing SSH configuration.
 
 The archive and source tree both include a small CPU example. From either one,
 replace `lab-gpu` with your SSH Host alias and run:
@@ -89,6 +90,13 @@ loaf run --wait 10s --json -- python3 train.py
 Save `data.run_id` for follow-up calls. Agents can discover parameters with
 `loaf help run --json`; the [JSON reference](manual/en/json.md) explains result
 fields, streaming events, and recovery.
+
+## Compatibility
+
+Compatibility begins with formal `v1.0.0`: new formal `1.x` clients manage
+supported earlier formal `1.x` work. Development, `0.x` and RC state is not
+imported or migrated. Read [upgrading](manual/en/upgrading.md) before replacing
+a development CLI used by active work.
 
 ## Documentation
 

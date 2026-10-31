@@ -39,7 +39,7 @@ func receive(in io.Reader, out, diagnostic io.Writer, args []string) error {
     if len(args) < 7 {
         return errors.New("BAD_RECEIVER")
     }
-    if args[0] != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, args[0]) {
         return errors.New("VERSION_MISMATCH")
     }
     runID := ""
@@ -84,7 +84,7 @@ func receive(in io.Reader, out, diagnostic io.Writer, args []string) error {
         }
         if runID != "" {
             root := filepath.Dir(cache)
-            req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "launch", Root: root, ProjectID: args[2], RunID: runID}
+            req := wire.Request{FormatVersion: wire.FormatVersion, Version: args[0], Action: "launch", Root: root, ProjectID: args[2], RunID: runID}
             dir, err := runPath(req)
             if err != nil {
                 return err

@@ -175,3 +175,36 @@ func TestStopFallbackRetainsQueryAndStateFailures(t *testing.T) {
         t.Fatal("stop fallback lost an independent failure", got, err, remote)
     }
 }
+
+func TestFormalUpgradeStopConfirmsUncertainRunWithoutRebinding(t *testing.T) {
+    originalVersion := wire.Version
+    defer func() { wire.Version = originalVersion }()
+    wire.Version = "v1.0.0"
+    service, input, _, original := executionFixture(t)
+    original.lost, original.unknown = true, true
+    pending, _ := service.Submit(context.Background(), input, nil)
+    if pending.Submission != "uncertain" {
+        t.Fatal(pending)
+    }
+    ref := pending.Ref
+    wire.Version = "v1.1.0"
+    verifications := 0
+    service.Runner = func(context.Context, config.Target, string, bool) (string, error) {
+        verifications++
+        return "/current/compatible/helper", nil
+    }
+    req := request(ref, 0, 0)
+    remote := &stopRemote{
+        accepted: &wire.RunRecord{FormatVersion: 1, Request: req, Status: "running", SupervisorPID: 123},
+        final:    &wire.RunRecord{FormatVersion: 1, Request: req, Status: "stopped", Phase: "command"},
+    }
+    service.Remote = remote
+    stopped, err := service.Stop(context.Background(), ref, nil, true)
+    if err != nil || stopped.StateError != "" || stopped.Status != "stopped" || stopped.Submission != "submitted" || stopped.Version != "v1.0.0" || verifications != 1 {
+        t.Fatal(stopped, err, verifications)
+    }
+    saved, err := service.Index.Run(ref.ProjectID, ref.ID)
+    if err != nil || saved.Runner != ref.Runner || saved.Version != ref.Version || saved.Submission != "submitted" || remote.runner != "/current/compatible/helper" {
+        t.Fatal("stop rebound the original Run", saved, err, remote.runner)
+    }
+}

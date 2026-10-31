@@ -92,10 +92,13 @@ complexity only when a concrete requirement justifies it.
 - Preserve verified facts when local persistence fails. State transitions and their
   events share the owning short transaction, not a network or process lifetime.
   Keep secrets/private execution values out of public output, events and source sync.
-- Unknown formats fail without overwriting data. Current development does not
-  migrate old stores or hot-upgrade active Supervisors; reassess the compatibility
-  promise before 1.0. Do not add permanent adapters just to preserve an unreleased
-  experiment, or discard the binary/data needed to manage running tasks.
+- Compatibility starts with formal `v1.0.0`: a new formal `1.x` CLI must manage
+  earlier formal `1.x` work through supported formats. Software identity records
+  origin; it is not the protocol or schema. Preserve frozen bindings and active
+  Supervisors. Development, `0.x` and RC state is not imported or migrated; keep
+  the binary/data needed to manage that work. Unknown formats fail without
+  overwriting data. Do not add permanent adapters for unreleased experiments or
+  hot-upgrade active Supervisors.
 
 ## Work on the relevant path
 

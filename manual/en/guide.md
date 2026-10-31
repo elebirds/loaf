@@ -105,7 +105,13 @@ Direct `status` queries list the latest submitted or submission-uncertain runs i
 
 If preparation fails after saving a run ID locally, the error result retains that ID and its original binding. A saved `submission: "preparing"` record can be read with `inspect <run-id>` or `status <run-id> --local`; it stays out of history lists and latest-run selection. A live `status <run-id>` queries the same binding without starting or resuming execution. Preparation is not confirmed submission.
 
-Runner operations require the same software version as the local CLI. Loaf automatically deploys and verifies its bundled runner, repairing a missing or mismatched executable. It does not download an arbitrary release or hot-replace a running supervisor. Tasks created by another version return `VERSION_MISMATCH`; retain their matching CLI alongside an upgrade and invoke it explicitly for those tasks. Unknown record formats are rejected without rewriting them.
+Loaf automatically deploys and verifies its bundled control helper when needed,
+repairing a missing or mismatched executable without hot-replacing a running
+Supervisor. From formal `v1.0.0`, new formal `1.x` clients manage earlier formal
+`1.x` tasks through supported formats; the task keeps its origin software
+version. Development and RC work remains tied to its matching build, and its
+history is not imported into formal state. Keep the original CLI for that work;
+unknown formats are rejected without rewriting them. See [upgrading](upgrading.md).
 
 ### Preview submission entirely offline
 
@@ -132,9 +138,21 @@ loaf inspect <run-id> --json
 
 Names and tags are saved locally at submission and remain immutable. Names need not be unique; the run ID remains the identity used for task operations. Name/tag filters match exact values before the bounded queries; repeated tags require all values. They do not change the command, remote environment, paths or latest-run selection.
 
-`status --local`, including an explicit ID, and `inspect <run-id>` read saved facts without SSH, cloud lookup, credential access or helper deployment. They also work with removed aliases and older software versions recorded in the current SQLite format; pre-v0.5 JSON history is not imported. JSON marks `source: "local"`; execution status is `unknown` unless a retained cleanup receipt already supplies a terminal result. Local mode rejects live `--status` filters and nonzero `--wait`.
+`status --local`, including an explicit ID, and `inspect <run-id>` read saved
+facts without SSH, cloud lookup, credential access or helper deployment. They
+also work with removed aliases and origin software versions already recorded
+in the selected supported store, even when live control is incompatible; they
+do not import other state stores. JSON marks `source: "local"`; execution status
+is `unknown` unless a retained cleanup receipt already supplies a terminal
+result. Local mode rejects live `--status` filters and nonzero `--wait`.
 
-`inspect` includes the saved `version`, current `client_version`, `compatible`, frozen machine/instance identity, submission confirmation, locations and output paths. It excludes SSH arguments, credential references and private execution environments. A saved-task version error also returns `error.expected_version` and `error.actual_version`. Keep old executables under versioned names, such as `loaf-v0.4.0-rc.1`, rather than overwriting the only CLI able to control an active task. These commands do not download a CLI or migrate a task.
+`inspect` includes the saved `version`, current `client_version`, `compatible`,
+frozen machine/instance identity, submission confirmation, locations and output
+paths. It excludes SSH arguments, credential references and private execution
+environments. Compatible formal `1.x` versions may differ. A saved-task version
+error also returns `error.expected_version` and `error.actual_version`; keep the
+matching original binary for incompatible development work. These commands do
+not download a CLI or migrate a task.
 
 ### Filter task history
 
@@ -172,7 +190,13 @@ loaf logs <run-id> -f --resume "$cursor" --json
 
 Finite log queries return `data.log.cursor`; stream chunks return `data.run.log.cursor`. Save the cursor only after consuming its chunk. `--resume` requires `--follow`, cannot be combined with an explicit `--tail`, and continues at that confirmed source-byte position. It also permits one transient reconnection, as does `--reconnect`. Default `logs -f` retains its single-connection behavior.
 
-A cursor is bound to the software version, task, location and log file, with a boundary-integrity guard. Replacement, truncation or rewriting at the saved boundary returns `LOG_CHANGED`, never a silent restart from the tail. Read a fresh tail explicitly to obtain a new cursor when that happens. Output-consumer errors, cancellation, authentication/trust failures and an already-delivered end event do not trigger a restart. Accepted tasks continue independently.
+A cursor is bound to the task's origin software identity, task, location and
+log file, with a boundary-integrity guard. A compatible formal `1.x` CLI can
+continue it without rewriting that identity. Replacement, truncation or rewriting
+at the saved boundary returns `LOG_CHANGED`, never a silent restart from the
+tail. Read a fresh tail explicitly to obtain a new cursor when that happens.
+Output-consumer errors, cancellation, authentication/trust failures and an
+already-delivered end event do not trigger a restart. Accepted tasks continue independently.
 
 An explicit fresh tail resets continuity; it cannot fill an entire disconnected
 gap. A stream that closes without an `end` event does not prove that training

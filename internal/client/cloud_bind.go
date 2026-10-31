@@ -106,7 +106,7 @@ func (c *Resources) CloudBind(ctx context.Context, in CloudBindInput) (CloudBind
 }
 
 func (c *Resources) bindCloud(ctx context.Context, name string, b cloud.Binding, remote string, replace bool, ready time.Duration, clone *cloud.CloneSource, progress ...func(cloud.Event) error) (CloudBinding, error) {
-    result := CloudBinding{Target: name, Instance: b.Ref, Status: "not_bound", principal: b, remoteBase: remote}
+    result := CloudBinding{Target: name, Instance: b.Ref, Status: "not_bound"}
     if !config.ValidCloudBinding(b) {
         return result, fault.New("BAD_CONFIG", "cloud_config", nil)
     }

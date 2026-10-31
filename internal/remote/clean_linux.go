@@ -103,7 +103,7 @@ func Clean(ctx context.Context, req wire.Request, dryRun bool) (*wire.CleanupRec
     if req.FormatVersion != wire.FormatVersion {
         return nil, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return nil, errors.New("VERSION_MISMATCH")
     }
     req.Action = "status" // ownership checks must not create runs/.
@@ -206,7 +206,7 @@ func Clean(ctx context.Context, req wire.Request, dryRun bool) (*wire.CleanupRec
         if record.ChildPID > 0 && groupAlive(record.ChildPID) {
             return nil, errors.New("CLEAN_NOT_TERMINAL")
         }
-        receipt = &wire.CleanupReceipt{FormatVersion: 1, Version: wire.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, Summary: summary, Device: uint64(stat.Dev), Inode: stat.Ino}
+        receipt = &wire.CleanupReceipt{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID, Summary: summary, Device: uint64(stat.Dev), Inode: stat.Ino}
     }
     if dryRun || receipt.CleanedAt != nil {
         return receipt, nil
@@ -303,7 +303,7 @@ func cleanupRecord(req wire.Request, dir string) (*wire.RunRecord, error) {
     if err != nil {
         return nil, err
     }
-    if record.Request.FormatVersion != wire.FormatVersion || record.Request.Root != req.Root || record.Request.RunID != req.RunID || record.Request.ProjectID != req.ProjectID {
+    if record.Request.FormatVersion != wire.FormatVersion || record.Request.Version != req.Version || record.Request.Root != req.Root || record.Request.RunID != req.RunID || record.Request.ProjectID != req.ProjectID {
         return nil, errors.New("BAD_FORMAT")
     }
     var stat unix.Stat_t

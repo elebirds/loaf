@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "os"
+    "path/filepath"
     "testing"
     "time"
 
@@ -17,9 +18,20 @@ func TestNativeCloudTrustTerminalChild(t *testing.T) {
     if file == "" {
         t.Skip("isolated native trust child")
     }
+    contents, err := os.ReadFile(file)
+    if err != nil {
+        t.Fatal(err)
+    }
+    // Exercise ordinary foreground Exec with an explicit native trust policy.
+    // The fixture alone disables authentication so acceptance is not readiness.
+    native := filepath.Join(t.TempDir(), "config")
+    if err := os.WriteFile(native, append([]byte("Host *\n    PreferredAuthentications none\n"), contents...), 0600); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("SSH_ASKPASS_REQUIRE", "never")
     ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
     defer cancel()
-    _, err := (&Client{Binary: "ssh"}).Exec(ctx, config.Target{Destination: "fixture", Args: []string{"-F", file}}, ExecInput{Args: []string{"/bin/true"}, TrustOnly: true}, os.Stdin, os.Stdout, os.Stderr)
+    _, err = (&Client{Binary: "ssh"}).Exec(ctx, config.Target{Destination: "fixture", Args: []string{"-F", native, "-o", "StrictHostKeyChecking=ask"}}, ExecInput{Args: []string{"/bin/true"}}, os.Stdin, os.Stdout, os.Stderr)
     if FailureKind(err) != "authentication" {
         t.Fatal(FailureKind(err), err)
     }

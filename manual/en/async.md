@@ -18,6 +18,51 @@ adapters return `DESTINATION_UNSUPPORTED` there. Their examples below apply to
 verified Unix/WSL environments; WSL does not imply access to a Windows desktop
 session.
 
+## Let the original Codex session continue after a Run
+
+In the intended session, first agree on the follow-up: for example, submit this
+project, then query the same Run, download its outputs and explain the result.
+Keep the local project directory and returned Run ID in that session's work
+context. A completion event supplies facts, not a new task or permission.
+
+For a public App Server that the user already runs, bind its exact loaded thread
+and private Unix WebSocket endpoint. `--cwd` verifies the original workspace;
+it does not move or resume the thread:
+
+```bash
+loaf notify destination add research --kind codex --session THREAD_ID --endpoint /absolute/private/app-server.sock --cwd /absolute/project
+```
+
+Keep one Bridge running in a separate local terminal, or explicitly install an
+existing [user-service template](../../examples/notify-services/README.md):
+
+```bash
+loaf notify serve --json
+```
+
+From the original project, submit to an authorized machine:
+
+```bash
+loaf run --target lab --notify research --json -- python3 train.py
+```
+
+Destination binding and subscription results include `next_actions` for starting
+a Bridge and querying deliveries. They do not start it or prove that one is
+running. Reuse an existing Bridge instead of starting another owner.
+
+After the terminal fact arrives, the Agent uses the original project and exact
+Run ID with `status` and `pull`, reads the returned download location and
+continues the work already authorized in that session. The summary includes
+source/project and related operation identities so it need not guess from the
+current Target. Codex queues standalone tool output when a regular turn is
+active; Loaf does not steer or interrupt it. `run.accepted`, `queue.enqueued` and
+`queue.dispatched` remain queryable facts without ordinary progress notifications.
+
+The workflow is complete when that original Agent has handled the result.
+The Codex adapter still reports `accepted` with its turn identity, not an
+automatic `processed` acknowledgment. A missing response does not authorize a
+second turn; inspect the delivery before an explicit recovery decision.
+
 ## Send notifications back to the current Codex desktop chat
 
 Ask the Agent in the intended Codex desktop chat to run once:
@@ -72,17 +117,8 @@ subscribes to acquisition, readiness and conditions requiring attention. An
 inventory match is not an acquisition; an instance being created does not prove
 SSH readiness. A notification does not authorize another purchase or a new task.
 
-For a manually configured public Codex App Server, address one exact session:
-
-```bash
-loaf notify destination add assistant --kind codex --session THREAD_ID --endpoint ENDPOINT
-```
-
 This version implements four adapters: `codex`, `codex-desktop`,
 `claude-channel` and `webhook`.
-`claude-resume` is reserved but unsupported: Loaf rejects its registration with
-`DESTINATION_INVALID`, and the SDK returns `ErrUnsupported`. There is no
-headless/resume adapter or automatic fallback in this release.
 
 Use an endpoint supported by the selected adapter. A saved binding does not
 prove reachability or processing capability. Loaf does not choose the latest
@@ -209,8 +245,11 @@ FIFO is the only implemented policy. Direct Runs and external SSH programs
 bypass these cooperative limits.
 
 A request ID tracks admission; its Run ID tracks execution. Queued acceptance
-does not prove a workload started. Find the Run with `queue show`, then use its
-explicit ID with `status`, `logs`, `stop` and `pull`. Uncertain dispatch is
+does not prove a workload started. Submission returns a `show_request`
+next-action argv for `queue show REQUEST_ID`. Inspect that request before using
+ordinary `wait`, which does not select a Run still awaiting dispatch.
+Find the Run with `queue show`, then use its explicit ID with `status`, `logs`,
+`stop` and `pull`. Uncertain dispatch is
 reconciled against the original Run, not replaced by a second execution.
 
 Queue details expose identity and state, not the private frozen command or
@@ -252,13 +291,17 @@ same-disk queue/event state; deliver or export required facts beforehand.
 
 ## Keep facts and files before destroying a remote disk
 
+Formal 1.x releases use local `stable-v1/state.db`; development and RC builds
+use separate `state-v4/state.db`. Both use the current schema-4 format. Formal
+releases do not import pre-1.0 state; see [Upgrading](upgrading.md).
+
 | Data | Saved location | After the remote disk is destroyed |
 | --- | --- | --- |
 | Run facts | Project `.loaf-control-v2/state.sqlite3` | Only previously collected or explicitly exported facts remain locally. |
 | Queue requests and facts | SSH user's `~/.local/share/loaf/queue-v1/state.sqlite3` | The same-disk queue cannot be recovered from a subscription alone. |
 | Work copy, logs and output files | Project `runs/RUN_ID/` | Only files already downloaded or otherwise saved remain. |
-| Cloud operation receipts and resource facts | Local `state-v3/state.db` | Retained locally, independently of the instance disk. |
-| Received Inbox, deliveries and source cursors | Local `state-v3/state.db` | Retained locally until explicit eligible pruning; delivery evidence does not back up output files. |
+| Cloud operation receipts and resource facts | Local state database | Retained locally, independently of the instance disk. |
+| Received Inbox, deliveries and source cursors | Local state database | Retained locally until explicit eligible pruning; delivery evidence does not back up output files. |
 
 Before destroying a disk through the provider, finish or explicitly stop the
 affected work and download the outputs you need:

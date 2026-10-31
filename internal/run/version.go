@@ -16,7 +16,7 @@ func versionMismatch(actual string) *fault.Error {
 }
 
 func currentVersion(ref task.RunRef) error {
-    if ref.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, ref.Version) {
         return versionMismatch(ref.Version)
     }
     return nil

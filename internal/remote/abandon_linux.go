@@ -20,7 +20,7 @@ func Abandon(ctx context.Context, req wire.Request, dry bool) (*wire.AbandonRece
     if req.FormatVersion != wire.FormatVersion {
         return nil, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return nil, errors.New("VERSION_MISMATCH")
     }
     if ctx.Err() != nil {
@@ -35,7 +35,7 @@ func Abandon(ctx context.Context, req wire.Request, dry bool) (*wire.AbandonRece
     if err := abandonQueueGuard(req.RunID); err != nil {
         return nil, err
     }
-    receipt := &wire.AbandonReceipt{FormatVersion: 1, Version: wire.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID}
+    receipt := &wire.AbandonReceipt{FormatVersion: 1, Version: req.Version, Root: req.Root, ProjectID: req.ProjectID, RunID: req.RunID}
     if _, err := os.Lstat(remotestate.Path(req.Root)); errors.Is(err, os.ErrNotExist) {
         entries, readErr := os.ReadDir(req.Root)
         if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
@@ -269,7 +269,7 @@ func abandonRecord(state *remotestate.Store, req wire.Request, payload bool) err
         }
         return nil
     }
-    if record.Request.FormatVersion != wire.FormatVersion || record.Request.Root != req.Root || record.Request.ProjectID != req.ProjectID || record.Request.RunID != req.RunID {
+    if record.Request.FormatVersion != wire.FormatVersion || record.Request.Version != req.Version || record.Request.Root != req.Root || record.Request.ProjectID != req.ProjectID || record.Request.RunID != req.RunID {
         return errors.New("BAD_FORMAT")
     }
     if record.Request.QueueRequestID != "" {

@@ -16,11 +16,6 @@ type Store struct {
     Path string
 }
 
-// Save commits the complete request before a provider mutation may proceed.
-func (s Store) Save(ctx context.Context, id, created string, data []byte) error {
-    return s.SaveEvent(ctx, id, created, data, "", nil)
-}
-
 // SaveEvent atomically saves the request and its public confirmed transition.
 func (s Store) SaveEvent(ctx context.Context, id, created string, data []byte, key string, fact *event.Envelope) error {
 

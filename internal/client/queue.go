@@ -91,7 +91,7 @@ func queueHostBinding(machine config.Target) string {
 }
 
 func (q *Queues) call(ctx context.Context, ref task.RunRef, command queue.Command, batch bool) (queue.Result, error) {
-    if ref.Version != "" && ref.Version != wire.Version {
+    if ref.Version != "" && !wire.CompatibleVersion(wire.Version, ref.Version) {
         return queue.Result{}, queueFailure("VERSION_MISMATCH", nil)
     }
     command.HostBinding = queueHostBinding(ref.Connection)
@@ -133,7 +133,11 @@ func (q *Queues) call(ctx context.Context, ref task.RunRef, command queue.Comman
 }
 
 func queueFailure(code string, cause error) error {
-    f := fault.Wrap(code, "queue_operation_failed", cause)
+    message := "queue_operation_failed"
+    if code == "QUEUE_NOT_ENABLED" {
+        message = "queue_not_enabled"
+    }
+    f := fault.Wrap(code, message, cause)
     f.Params = map[string]any{"Code": code}
     return fault.At(f, "queue")
 }
@@ -339,7 +343,7 @@ func (q *Queues) byID(ctx context.Context, in QueueIDInput, action string) (queu
     if err != nil {
         return queue.Result{}, err
     }
-    if binding.Run.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, binding.Run.Version) {
         return queue.Result{}, queueFailure("VERSION_MISMATCH", nil)
     }
     if err = q.services(); err != nil {
@@ -352,12 +356,13 @@ func (q *Queues) byID(ctx context.Context, in QueueIDInput, action string) (queu
     if report.RemoteDir != binding.Run.RemoteDir {
         return queue.Result{}, queueFailure("QUEUE_IDENTITY_MISMATCH", nil)
     }
-    binding.Run.Runner = runner
+    control := binding.Run
+    control.Runner = runner
     command := queue.Command{Action: action, ID: binding.Request.ID, TargetID: binding.Request.TargetID}
     if action == "cancel" {
         command.Request = &binding.Request
     }
-    result, err := q.call(ctx, binding.Run, command, in.Policy.Batch)
+    result, err := q.call(ctx, control, command, in.Policy.Batch)
     if result.Request != nil && (result.Request.State == "submitted" || result.Request.State == "completed") {
         if result.Request.AttemptedAt == nil {
             return result, queueFailure("QUEUE_RESPONSE_MISMATCH", err)
@@ -430,7 +435,7 @@ func (q *Queues) Clean(ctx context.Context, in QueueCleanInput) (queue.Result, e
         }
         for i := range bindings {
             b := &bindings[i]
-            if b.Run.Version != wire.Version {
+            if !wire.CompatibleVersion(wire.Version, b.Run.Version) {
                 return result, queueFailure("VERSION_MISMATCH", nil)
             }
             report, runner, err := q.prepareConnection(ctx, b.Run.Connection, b.Run.RemoteDir, in.Policy.Batch)

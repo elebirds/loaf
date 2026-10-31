@@ -58,7 +58,7 @@ func (c *Client) Inventory(ctx context.Context, target config.Target, runner str
     if response.FormatVersion != wire.FormatVersion {
         return result, pullFailure("BAD_FORMAT", nil, "")
     }
-    if response.Version != wire.Version || req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, response.Version) || !wire.CompatibleVersion(wire.Version, req.Version) {
         return result, pullFailure("VERSION_MISMATCH", nil, "")
     }
     if response.Inventory != nil {

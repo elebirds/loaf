@@ -15,7 +15,7 @@ import (
 // A transport failure is not proof that deletion failed or completed.
 func (c *Client) Clean(ctx context.Context, target config.Target, runner string, req wire.Request, batch bool) (receipt *wire.CleanupReceipt, err error) {
     defer func() { err = fault.At(err, "clean") }()
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return nil, cleanVersionError(req.Version)
     }
     req.Action = "clean"
@@ -34,7 +34,7 @@ func (c *Client) Clean(ctx context.Context, target config.Target, runner string,
     if response.FormatVersion != wire.FormatVersion {
         return nil, errors.New("BAD_FORMAT")
     }
-    if response.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, response.Version) {
         return nil, cleanVersionError(response.Version)
     }
     if !response.OK {

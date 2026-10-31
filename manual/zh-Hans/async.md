@@ -15,6 +15,41 @@
 `codex`、`codex-desktop`、`claude-channel` 适配器在该平台返回 `DESTINATION_UNSUPPORTED`；
 下面的相关示例适用于已验证的 Unix／WSL 环境，WSL 不代表能够访问 Windows 桌面会话。
 
+## 让原 Codex 会话在 Run 结束后继续
+
+先在目标会话中约定后续工作，例如提交本项目，结束后查询同一 Run、下载输出并解释结果。
+在原会话的工作记录中保留本地项目目录和返回的 Run ID。完成事件提供事实，不是新任务或新权限。
+
+对于用户已经运行的公开 App Server，登记精确的已加载线程和私有 Unix WebSocket 端点。
+`--cwd` 只核对原工作区，不移动或恢复线程：
+
+```bash
+loaf notify destination add research --kind codex --session THREAD_ID --endpoint /absolute/private/app-server.sock --cwd /absolute/project
+```
+
+在单独的本地终端保留一个 Bridge，或显式安装已有的[用户服务模板](../../examples/notify-services/README.md)：
+
+```bash
+loaf notify serve --json
+```
+
+在原项目中向已授权的机器提交：
+
+```bash
+loaf run --target lab --notify research --json -- python3 train.py
+```
+
+目的地绑定和订阅结果通过 `next_actions` 给出启动 Bridge、查询投递的命令，
+不会自动启动，也不表示已经有 Bridge 在线。已有 Bridge 时直接复用，不另起一个 owner。
+
+终态事实到达后，Agent 在原项目中用准确 Run ID 执行 `status`、`pull`，读取返回下载位置中的输出，
+继续原先授权的工作。摘要包含来源、项目及相关操作身份，不必根据当前 Target 猜测。
+若普通回合正在进行，Codex 会将独立工具输出排队；Loaf 不 steer 或打断它。
+`run.accepted`、`queue.enqueued`、`queue.dispatched` 仍可查询，不发送普通进度通知。
+
+原 Agent 实际处理结果后，这条工作流才完成。Codex 适配器仍记录带 turn 身份的 `accepted`，
+不虚报自动 `processed` 回执。没有看到回应不代表可以再发一个回合；先查看投递，再明确决定恢复操作。
+
 ## 将通知送回当前 Codex 桌面会话
 
 在希望接收通知的 Codex 桌面会话中，让 Agent 执行一次：
@@ -61,16 +96,7 @@ loaf notify serve
 连接就绪及需要处理的情况。库存匹配不是已经获取实例，实例已创建也不一定可以 SSH 连接。
 通知不会扩大为再次购买资源或提交新任务的授权。
 
-手工接入公开 Codex App Server 时，可登记明确会话：
-
-```bash
-loaf notify destination add assistant --kind codex --session THREAD_ID --endpoint ENDPOINT
-```
-
 本版实际实现四种适配器：`codex`、`codex-desktop`、`claude-channel` 和 `webhook`。
-`claude-resume` 是保留模式，当前不支持：Loaf 会以 `DESTINATION_INVALID`
-拒绝登记，SDK 返回 `ErrUnsupported`。本版没有 headless/resume 适配器，
-也不会自动回退到此模式。
 
 使用所选适配器支持的接入端。保存绑定不等于证明可连接或可处理。
 Loaf 不猜测最近会话、不静默新建替代会话，也不绕过原工作区和审批要求。
@@ -182,6 +208,8 @@ FIFO 按确认入队的顺序排列，不使用客户端时钟；本版只实现
 直接 Run 和外部 SSH 程序不受此协作式队列额度强制隔离。
 
 请求 ID 跟踪入队派发，Run ID 跟踪执行。确认入队不等于程序已启动。
+提交结果通过 `show_request` 下一步 argv 给出 `queue show REQUEST_ID`。
+请先检查请求；普通 `wait` 不会选择尚待派发的 Run。
 使用 `queue show` 找到关联 Run，再用明确 Run ID 调用 `status`、`logs`、`stop` 和 `pull`。
 派发未确认时核对原 Run，不创建第二个替代执行。
 
@@ -217,13 +245,16 @@ loaf queue clean QUEUE_REQUEST_ID --yes --json
 
 ## 销毁远端磁盘前，分别保留事实与文件
 
+正式 1.x 使用本地 `stable-v1/state.db`，开发版及 RC 使用独立的 `state-v4/state.db`，
+两者采用当前 schema 4 格式。正式版不导入 1.0 之前的状态，见[升级说明](upgrading.md)。
+
 | 数据 | 保存位置 | 远端磁盘销毁后 |
 | --- | --- | --- |
 | Run 事实 | 项目 `.loaf-control-v2/state.sqlite3` | 本地只保留此前已采集或明确导出的事实。 |
 | 队列请求及事实 | SSH 用户的 `~/.local/share/loaf/queue-v1/state.sqlite3` | 仅有订阅不能恢复同盘队列。 |
 | 工作副本、日志和输出文件 | 项目 `runs/RUN_ID/` | 只保留已下载或另行保存的文件。 |
-| 云操作收据与资源事实 | 本地 `state-v3/state.db` | 不依赖实例磁盘，继续在本地保留。 |
-| 已接收 Inbox、投递及来源游标 | 本地 `state-v3/state.db` | 保留至显式清理符合条件的数据；投递证据不是输出文件备份。 |
+| 云操作收据与资源事实 | 本地状态数据库 | 不依赖实例磁盘，继续在本地保留。 |
+| 已接收 Inbox、投递及来源游标 | 本地状态数据库 | 保留至显式清理符合条件的数据；投递证据不是输出文件备份。 |
 
 通过云平台销毁磁盘前，先完成或明确停止受影响的工作，再下载需要的输出：
 

@@ -5,6 +5,7 @@ import (
     "errors"
     "time"
 
+    "github.com/elebirds/loaf/internal/config"
     "github.com/elebirds/loaf/internal/fault"
     "github.com/elebirds/loaf/internal/task"
     "github.com/elebirds/loaf/internal/wire"
@@ -21,7 +22,6 @@ func (s Service) Stop(ctx context.Context, ref task.RunRef, grace *time.Duration
     if prepareErr != nil {
         return result, prepareErr
     }
-    ref = prepared
     req := request(ref, 0, 0)
     req.Action = "stop"
     if grace != nil {
@@ -32,7 +32,7 @@ func (s Service) Stop(ctx context.Context, ref task.RunRef, grace *time.Duration
         req.GraceMillis = &millis
     }
     submitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-    record, err := s.Remote.Control(submitCtx, ref.Connection, ref.Runner, req, batch)
+    record, err := s.Remote.Control(submitCtx, ref.Connection, prepared.Runner, req, batch)
     cancel()
     if record != nil && matching(ref, record) {
         result = view(ref, record)
@@ -67,7 +67,9 @@ func (s Service) Stop(ctx context.Context, ref task.RunRef, grace *time.Duration
     }
     budget = min(budget+5*time.Second, 5*time.Minute)
     observer := s
-    observer.Runner = nil // This request already verified the same helper.
+    // Reuse the verified control helper without making it the saved Run's
+    // execution binding when an uncertain submission becomes confirmed.
+    observer.Runner = func(context.Context, config.Target, string, bool) (string, error) { return prepared.Runner, nil }
     observed, observeErr := observer.Observe(ctx, ref, budget, 0, batch)
     observed.Log = nil
     if observed.StopGraceMillis == nil {

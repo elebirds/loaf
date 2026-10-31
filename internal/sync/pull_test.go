@@ -105,11 +105,43 @@ func TestRecoveredPullDoesNotClaimALastAttemptChangeCount(t *testing.T) {
     }
 }
 
+func TestPullFormalUpgradeKeepsOriginalBinding(t *testing.T) {
+    originalVersion := wire.Version
+    wire.Version = "v1.1.0"
+    defer func() { wire.Version = originalVersion }()
+    remote := &outputRemote{selection: wire.OutputSelection{Available: []string{"outputs"}}}
+    downloader := &outputDownloader{}
+    ref := task.RunRef{ID: "old-run", ProjectID: "old-project", RemoteDir: "/original/project", Connection: config.Target{Destination: "original-host"}, Runner: "/v1.0.0/helper", Version: "v1.0.0", Outputs: []string{"outputs"}}
+    helpers := 0
+    svc := PullService{Remote: remote, Receive: downloader, Runner: func(_ context.Context, target config.Target, arch string, batch bool) (string, error) {
+        helpers++
+        if target.Destination != ref.Connection.Destination || arch != "aarch64" || !batch {
+            t.Fatal(target, arch, batch)
+        }
+        return "/v1.1.0/helper", nil
+    }}
+    result, err := svc.Pull(context.Background(), ref, canonicalTemp(t), ref.Outputs, config.PullPolicy{}, true)
+    if err != nil || helpers != 1 || downloader.calls != 1 || result.RunID != ref.ID || !reflect.DeepEqual(result.DownloadedPaths, ref.Outputs) {
+        t.Fatal(result, err, helpers, downloader)
+    }
+    if remote.req.Version != ref.Version || remote.req.Root != ref.RemoteDir || remote.req.ProjectID != ref.ProjectID || remote.req.RunID != ref.ID || remote.target.Destination != ref.Connection.Destination {
+        t.Fatal("pull replaced the original Run identity", remote.req, remote.target)
+    }
+    if downloader.input.Root != ref.RemoteDir || downloader.input.ProjectID != ref.ProjectID || downloader.input.RunID != ref.ID || ref.Runner != "/v1.0.0/helper" || ref.Version != "v1.0.0" {
+        t.Fatal("download changed the original binding", downloader.input, ref)
+    }
+}
+
 func TestPullRejectsAnotherVersionBeforeConnecting(t *testing.T) {
-    result, err := (PullService{}).Pull(context.Background(), task.RunRef{ID: "run", Version: "another-version"}, t.TempDir(), []string{"outputs"}, config.PullPolicy{}, true)
-    var f *fault.Error
-    if !errors.As(err, &f) || f.Code != "VERSION_MISMATCH" || result.RunID != "run" || result.ChangedFiles != nil {
-        t.Fatal(result, err)
+    originalVersion := wire.Version
+    wire.Version = "v1.1.0"
+    defer func() { wire.Version = originalVersion }()
+    for _, version := range []string{"another-version", "v0.6.0", "v1.0.0-rc.1", "v1.1.0-dev.test", "v2.0.0"} {
+        result, err := (PullService{}).Pull(context.Background(), task.RunRef{ID: "run", Version: version}, t.TempDir(), []string{"outputs"}, config.PullPolicy{}, true)
+        var f *fault.Error
+        if !errors.As(err, &f) || f.Code != "VERSION_MISMATCH" || result.RunID != "run" || result.ChangedFiles != nil {
+            t.Fatal(version, result, err)
+        }
     }
 }
 

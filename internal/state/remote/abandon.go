@@ -23,7 +23,7 @@ func (s *Store) HasClaim(id string) (bool, error) {
     if err != nil {
         return false, errors.New("BAD_FORMAT")
     }
-    if version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, version) {
         return false, errors.New("VERSION_MISMATCH")
     }
     return true, nil
@@ -59,7 +59,7 @@ func (s *Store) Abandonment(id string) (*wire.AbandonReceipt, error) {
     if _, err := fmt.Sscan(inode, &r.Inode); err != nil || !r.Valid() {
         return nil, errors.New("BAD_FORMAT")
     }
-    if r.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, r.Version) {
         return nil, errors.New("VERSION_MISMATCH")
     }
     return r, nil
@@ -68,7 +68,7 @@ func (s *Store) Abandonment(id string) (*wire.AbandonReceipt, error) {
 // SaveAbandonment atomically fences the ID, discards private preparation data,
 // and records one public fact. Callers hold project and run lifecycle locks.
 func (s *Store) SaveAbandonment(r *wire.AbandonReceipt) error {
-    if !r.Valid() || r.NoStartAt == nil || r.Version != wire.Version {
+    if !r.Valid() || r.NoStartAt == nil || !wire.CompatibleVersion(wire.Version, r.Version) {
         return errors.New("BAD_FORMAT")
     }
     tx, err := s.db.Begin()

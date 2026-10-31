@@ -41,11 +41,11 @@ func TestBoundedLogTailsAndFinalStream(t *testing.T) {
     }
     huge := strings.Repeat("x", logLimit*2)
     writeSource(t, dir, "output.log", huge)
-    chunk, err := readLog(dir, 100, nil)
+    chunk, err := readLogFile(dir, 100, nil, req, nil)
     if err != nil || len(chunk.Text) > logLimit || !chunk.Truncated || chunk.Offset != int64(len(huge)) {
         t.Fatal(len(chunk.Text), chunk.Offset, err)
     }
-    zero, err := readLog(dir, 0, nil)
+    zero, err := readLogFile(dir, 0, nil, req, nil)
     if err != nil || zero.Text != "" || zero.Offset != int64(len(huge)) {
         t.Fatal(zero, err)
     }
@@ -54,7 +54,7 @@ func TestBoundedLogTailsAndFinalStream(t *testing.T) {
     position := int64(0)
     var joined strings.Builder
     for position < int64(len(unicode)) {
-        part, err := readLog(dir, 0, &position)
+        part, err := readLogFile(dir, 0, &position, req, nil)
         if err != nil || !utf8.ValidString(part.Text) || part.Offset <= position {
             t.Fatal(part.Offset, err)
         }
@@ -66,7 +66,7 @@ func TestBoundedLogTailsAndFinalStream(t *testing.T) {
     }
     os.Remove(filepath.Join(dir, "output.log"))
     os.Symlink("/etc/passwd", filepath.Join(dir, "output.log"))
-    if _, err := readLog(dir, 100, nil); err == nil {
+    if _, err := readLogFile(dir, 100, nil, req, nil); err == nil {
         t.Fatal("followed log symlink")
     }
 }
@@ -115,7 +115,7 @@ func TestLogCursorResumesBytesAndRejectsChangedIdentityOrBoundary(t *testing.T) 
     if err := os.Mkdir(dir, 0700); err != nil {
         t.Fatal(err)
     }
-    if chunk, err := readLog(dir, 100, nil); err != nil || chunk.Text != "" || chunk.Offset != 0 {
+    if chunk, err := readLogFile(dir, 100, nil, req, nil); err != nil || chunk.Text != "" || chunk.Offset != 0 {
         t.Fatal(chunk, err)
     }
     path := filepath.Join(dir, "output.log")

@@ -19,7 +19,7 @@ import (
 func TestReadRetriesOnlyTransientFailuresAndHonorsCancellation(t *testing.T) {
     for _, detail := range []string{"Connection closed by fixture", "Permission denied", "Host key verification failed", "No such file or directory", "REMOTE HOST IDENTIFICATION HAS CHANGED"} {
         calls := 0
-        err := retryRead(context.Background(), func() error {
+        err := retryReadTrace(context.Background(), nil, func() error {
             calls++
             return fault.New("SSH_FAILED", "ssh_failed", map[string]any{"Detail": detail})
         })
@@ -34,7 +34,7 @@ func TestReadRetriesOnlyTransientFailuresAndHonorsCancellation(t *testing.T) {
     ctx, cancel := context.WithCancel(context.Background())
     calls := 0
     started := time.Now()
-    _ = retryRead(ctx, func() error {
+    _ = retryReadTrace(ctx, nil, func() error {
         calls++
         cancel()
         return fault.New("SSH_FAILED", "ssh_failed", map[string]any{"Detail": "Connection reset"})
@@ -46,7 +46,7 @@ func TestReadRetriesOnlyTransientFailuresAndHonorsCancellation(t *testing.T) {
 
 func TestReadRecoveryDoesNotIgnoreProviderRetryAfter(t *testing.T) {
     calls := 0
-    err := retryRead(context.Background(), func() error {
+    err := retryReadTrace(context.Background(), nil, func() error {
         calls++
         return cloud.Failure(&cloud.APIError{Code: "TRANSPORT", HTTPStatus: 503, RetryAfter: time.Minute})
     })
@@ -78,7 +78,7 @@ func TestSilentReadFailureRetriesOnlyAfterItsPrivateMasterExited(t *testing.T) {
                 session.masterDone = done
             }
             calls := 0
-            err := retryRead(context.Background(), func() error {
+            err := retryReadTrace(context.Background(), nil, func() error {
                 calls++
                 failure := fault.Wrap("SSH_FAILED", "ssh_failed", session.transportError(errors.New("exit status 255")))
                 failure.Params = map[string]any{"Detail": tc.detail}

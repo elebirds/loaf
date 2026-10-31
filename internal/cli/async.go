@@ -145,7 +145,11 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
         if !ok {
             return nil, asyncUnavailable("notify bind")
         }
-        return binder.BindCurrent(ctx, client.BindCurrentInput{Name: g.Notify.Bind.Name, Replace: g.Notify.Bind.Replace})
+        result, err := binder.BindCurrent(ctx, client.BindCurrentInput{Name: g.Notify.Bind.Name, Replace: g.Notify.Bind.Replace})
+        if err == nil {
+            err = c.notificationSetupActions()
+        }
+        return result, err
     case "notify channel":
         channel, ok := service.(client.ChannelService)
         if !ok {
@@ -160,7 +164,11 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
         if destination.Validate() != nil {
             return nil, fault.Invalid("--kind/--session/--endpoint", "invalid_value", "notify_destination_invalid")
         }
-        return service.PutDestination(ctx, client.DestinationInput{Name: v.Name, Destination: destination, Replace: v.Replace})
+        result, err := service.PutDestination(ctx, client.DestinationInput{Name: v.Name, Destination: destination, Replace: v.Replace})
+        if err == nil {
+            err = c.notificationSetupActions()
+        }
+        return result, err
     case "notify subscribe":
         v := g.Notify.Subscribe
         subject, err := parseSubject(v.Subject)
@@ -170,7 +178,11 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
         if (v.Source == "local" || v.Source == "resources") && g.Target != nil {
             return nil, fault.Invalid("--target", "conflicting_arguments", "event_local_target")
         }
-        return service.Subscribe(ctx, client.SubscribeInput{Subject: subject, Source: v.Source, Target: g.Target, Destinations: v.Destination, Replay: v.Replay, Policy: c.policy})
+        result, err := service.Subscribe(ctx, client.SubscribeInput{Subject: subject, Source: v.Source, Target: g.Target, Destinations: v.Destination, Replay: v.Replay, Policy: c.policy})
+        if err == nil {
+            err = c.notificationSetupActions()
+        }
+        return result, err
     case "notify subscriptions":
         if err := boundedAsyncLimit(g.Notify.Subscriptions.Limit); err != nil {
             return nil, err
@@ -208,6 +220,27 @@ func (c *invocation) async(ctx context.Context, path string) (any, error) {
     return nil, fault.New("BAD_CONFIG", "invalid_command", nil)
 }
 
+// Registration does not start a Bridge or prove that one is running. Suggest
+// the explicit lifetime and a finite receipt query without changing that contract.
+func (c *invocation) notificationSetupActions() error {
+    actions := []struct {
+        kind    string
+        command []string
+        confirm bool
+    }{
+        {"start_bridge", []string{"loaf", "notify", "serve", "--json"}, true},
+        {"deliveries", []string{"loaf", "notify", "deliveries", "--json"}, false},
+    }
+    for _, a := range actions {
+        next, err := uxJNextAction(a.kind, a.command, a.confirm)
+        if err != nil {
+            return err
+        }
+        c.output.nextActions = append(c.output.nextActions, next)
+    }
+    return nil
+}
+
 func (c *invocation) queue(ctx context.Context, path string) (any, error) {
     if c.app == nil || c.app.Queue == nil {
         return nil, asyncUnavailable("queue")
@@ -233,7 +266,16 @@ func (c *invocation) queue(ctx context.Context, path string) (any, error) {
         if len(v.Argv) > 0 && len(args) == 0 {
             return nil, fault.Invalid("command", "missing_argument", "run_command")
         }
-        return service.Submit(ctx, client.QueueSubmitInput{Target: g.Target, Args: args, Name: v.Name, Tags: v.Tag, Notify: v.Notify, DryRun: v.DryRun, Policy: c.policy}, c.progress)
+        result, err := service.Submit(ctx, client.QueueSubmitInput{Target: g.Target, Args: args, Name: v.Name, Tags: v.Tag, Notify: v.Notify, DryRun: v.DryRun, Policy: c.policy}, c.progress)
+        if result.Preview == nil && result.Request != nil && result.NextAction != "repair_local_state" {
+            next, actionErr := uxJNextAction("show_request", []string{"loaf", "queue", "show", result.Request.ID}, false)
+            if actionErr == nil {
+                c.output.nextActions = append(c.output.nextActions, next)
+            } else if err == nil {
+                err = actionErr
+            }
+        }
+        return result, err
     case "queue show":
         return service.Show(ctx, client.QueueIDInput{ID: g.Queue.Show.ID, Policy: c.policy})
     case "queue cancel":

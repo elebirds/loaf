@@ -38,6 +38,20 @@ The application resolves a plan, checks prerequisites, and saves the run identit
 
 SQL transactions cover short metadata updates only; they never span SSH, HTTP, file copying or process runtime. Existing OS locks still govern source receive/copy, lifecycle admission, process lifetime and payload access. Cleanup removes only the selected terminal run payload and private execution data, retaining its claim and public deletion summary so a delayed launch cannot resurrect it. Local cleanup availability is separate from execution outcome.
 
+### Formal release compatibility
+
+Starting with formal `v1.0.0`, new formal `1.x` clients manage earlier formal
+`1.x` work through supported wire, record and database formats. Validate those
+formats before applying the software compatibility predicate; preserve the
+origin version and frozen binding instead of rewriting them to the caller's
+version. Active Supervisors keep their original process and binary.
+
+Formal state uses `stable-v1/state.db`; development and RC state uses
+`state-v4/state.db`. Local/project schema 4 and queue schema 2 record their
+stable or development series. Moving a development database into the stable
+directory does not make it supported. Unknown formats fail without conversion;
+there is no historical development-state migration. See [upgrading](upgrading.md).
+
 ## Product boundaries
 
 Keep direct execution simple: run already prepares, synchronizes and submits.
@@ -55,9 +69,18 @@ bash scripts/check.sh        # Format, dependency, unit, static, race and vulner
 bash scripts/integration.sh  # SSH, Linux process and credential tests; requires Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 bash scripts/integration.sh -run TestLinuxCloudCredentialStores
+LOAF_V1_COMPAT=1 bash scripts/integration.sh  # Include formal v1 upgrade acceptance
 ```
 
 The shared check script runs the pinned standalone depguard tool after formatting checks. Its deny rules protect the CLI/use-case/remote boundaries without imposing an allowlist on every package.
+
+CI enables `LOAF_V1_COMPAT=1`: the same integration suite includes distinct formal
+`v1.0.0` and `v1.1.0` artifacts instead of skipping upgrade acceptance. Before
+the first formal tag, and when verifying that initial tag, it builds both
+candidates from the current source. Later CI checkouts fetch tags and use the
+actual published `v1.0.0` archive as the baseline; download failure stops the
+check. For a local frozen baseline, set `LOAF_COMPAT_OLD_BIN` to its executable.
+The candidate versions are test identities, not a claim that 1.1 has shipped.
 
 The integration fixture uses temporary keys and CPU scripts. It tests packaged macOS/host and Linux clients with native rsync, mirror boundaries, interrupted sync, concurrent starts, matching runner deployment, jump hosts, disconnected execution, saved exits, process-group stopping, bounded waits, log cancellation, and incremental downloads. Foreground operations cover live output, literal argv, PTY login, isolated tunnels, and cancellation. History and cleanup cases exercise saved target bindings, explicit deletion scope, transfer locks, retry, and retained terminal outcomes without touching research servers. Build targets are macOS/Linux clients, a Windows x64 ZIP client, and Linux amd64/arm64 runners; cross-build results and runtime tests are separate checks. Native Windows uses paired MSYS2 OpenSSH/rsync and independent connections. Linux and WSL2 retain private connection reuse. Local fault injection uses Go subprocess helpers; controlling-terminal tests use PTYs on Unix and owned ConPTYs on Windows. Windows unit tests exercise private ACLs, inherited WAL protection, cross-process locks, failed replacement, database recovery, secret-input cancellation and Job Object ownership. Set `LOAF_WINDOWS_TEST_VOLUME` to a second local NTFS drive to include cross-drive downloads. In WSL2, set `LOAF_WSL_PROJECT_BASE` to an existing test directory under `/mnt/c` to verify a mounted project with separate Linux private state. Windows 10 runtime acceptance remains pending until an independent test environment is available.
 

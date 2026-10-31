@@ -30,7 +30,7 @@ func Outputs(ctx context.Context, req wire.Request) (wire.OutputSelection, error
     if req.FormatVersion != wire.FormatVersion {
         return selection, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return selection, errors.New("VERSION_MISMATCH")
     }
     if len(req.Outputs) == 0 {

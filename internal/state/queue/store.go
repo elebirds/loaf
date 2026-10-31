@@ -20,18 +20,19 @@ import (
     "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/queue"
     "github.com/elebirds/loaf/internal/state/eventlog"
+    "github.com/elebirds/loaf/internal/wire"
     _ "modernc.org/sqlite"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 const applicationID = 0x4c514555
 const schema = `
-CREATE TABLE queue_owner(singleton INTEGER PRIMARY KEY CHECK(singleton=1),host_identity TEXT NOT NULL,host_binding TEXT NOT NULL,software_version TEXT NOT NULL,target_id TEXT NOT NULL UNIQUE,slots INTEGER NOT NULL CHECK(slots BETWEEN 1 AND 64),paused INTEGER NOT NULL CHECK(paused IN (0,1)));
+CREATE TABLE queue_owner(singleton INTEGER PRIMARY KEY CHECK(singleton=1),host_identity TEXT NOT NULL,host_binding TEXT NOT NULL,software_version TEXT NOT NULL,compatibility_series TEXT NOT NULL,target_id TEXT NOT NULL UNIQUE,slots INTEGER NOT NULL CHECK(slots BETWEEN 1 AND 64),paused INTEGER NOT NULL CHECK(paused IN (0,1)));
 CREATE TABLE queue_requests(id TEXT PRIMARY KEY,run_id TEXT NOT NULL UNIQUE,state TEXT NOT NULL,sequence INTEGER NOT NULL,public BLOB NOT NULL,execution BLOB NOT NULL,attempted INTEGER NOT NULL CHECK(attempted IN(0,1)));
 CREATE UNIQUE INDEX queue_sequence ON queue_requests(sequence) WHERE sequence>0;
 CREATE INDEX queue_state ON queue_requests(state,sequence);
 PRAGMA application_id=1280394581;
-PRAGMA user_version=1;
+PRAGMA user_version=2;
 `
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$`)
@@ -128,7 +129,7 @@ func Open(ctx context.Context, path string, identity Identity, write bool) (*Sto
                 _, err = tx.ExecContext(ctx, schema+eventlog.Schema)
             }
             if err == nil {
-                _, err = tx.ExecContext(ctx, "INSERT INTO queue_owner VALUES(1,?,?,?,'target_'||lower(hex(randomblob(12))),1,0)", identity.Host, identity.Binding, identity.Version)
+                _, err = tx.ExecContext(ctx, "INSERT INTO queue_owner VALUES(1,?,?,?,?,'target_'||lower(hex(randomblob(12))),1,0)", identity.Host, identity.Binding, identity.Version, wire.StateSeries(wire.Version))
             }
         }
         if err == nil {
@@ -149,14 +150,17 @@ func Open(ctx context.Context, path string, identity Identity, write bool) (*Sto
     if version != SchemaVersion || app != applicationID {
         return fail(errors.New("QUEUE_BAD_SCHEMA"))
     }
-    var savedHost, savedBinding, savedVersion string
-    if err = database.QueryRowContext(ctx, "SELECT host_identity,host_binding,software_version,target_id FROM queue_owner WHERE singleton=1").Scan(&savedHost, &savedBinding, &savedVersion, &s.TargetID); err != nil {
+    var savedHost, savedBinding, savedVersion, series string
+    if err = database.QueryRowContext(ctx, "SELECT host_identity,host_binding,software_version,compatibility_series,target_id FROM queue_owner WHERE singleton=1").Scan(&savedHost, &savedBinding, &savedVersion, &series, &s.TargetID); err != nil {
         return fail(err)
+    }
+    if series != wire.StateSeries(wire.Version) {
+        return fail(errors.New("QUEUE_BAD_SCHEMA"))
     }
     if identity.Host != "" && savedHost != identity.Host || identity.Binding != "" && savedBinding != "" && identity.Binding != savedBinding {
         return fail(errors.New("QUEUE_IDENTITY_MISMATCH"))
     }
-    if identity.Version != "" && savedVersion != identity.Version {
+    if identity.Version != "" && !wire.CompatibleVersion(identity.Version, savedVersion) {
         return fail(errors.New("VERSION_MISMATCH"))
     }
     if write && savedBinding == "" && identity.Binding != "" {

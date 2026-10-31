@@ -4,7 +4,7 @@
 
 Use `run --name "ablation-seed1" --tag ablation --tag seed1 -- ...` for navigation. Names/tags are local, immutable and not identities; keep the run ID. `status --name` matches exactly, repeated `--tag` requires all tags, and filters run before bounded remote observation.
 
-`status --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Dated `last_observation` and separate `last_query_failure` fields preserve public status/phase/exit summaries and failure stages, not log text/environments. Never treat their status as live. Local lists reject live status filters/nonzero wait. Preserve and explicitly use matching older CLIs for old tasks; do not edit locators or migrate records.
+`status --local --json` and `inspect <run-id> --json` need no connection or credential access. Inspect saved `version`, `client_version`, `compatible`, submission, original binding and outputs. `source: "local"` is not a live observation; unknown execution status is expected. Dated `last_observation` and separate `last_query_failure` fields preserve public status/phase/exit summaries and failure stages, not log text/environments. Never treat their status as live. Local lists reject live status filters/nonzero wait. A newer formal `1.x` CLI can manage earlier formal `1.x` work without changing its origin version or binding. Development/RC work needs its original tools and is not imported into formal history.
 
 ## Diagnose and continue the same operation
 
@@ -53,18 +53,27 @@ Loaf requests process-group cleanup and waits for a confirmed result. Do not loo
 
 `STOP_UNCONFIRMED` (operation exit 3) means query the same ID with `status`; do not report the task as stopped. Canceling the client does not withdraw an accepted stop request. Repeating stop does not reset or replace its first grace policy.
 
-Runner operations automatically deploy the helper matching the local CLI. `VERSION_MISMATCH` on a saved task requires its matching CLI; do not bypass the check, edit records, or replace a running supervisor to upgrade it.
+Runner operations automatically deploy and verify the exact helper packaged with the local CLI. Compatible formal `1.x` control helpers and older Supervisors/Coordinators can coexist; deployment does not replace an active Supervisor. `VERSION_MISMATCH` identifies an unsupported pairing, not every difference in software strings. Do not bypass format checks or edit saved origin versions to force access.
 
-## Development state changes
+## Formal compatibility and development state
+
+The supported baseline begins at formal `v1.0.0`. Newer formal `1.x` builds share
+`stable-v1/state.db`; development and RC builds use `state-v4/state.db` and do not
+inherit that promise. Local/project schemas are 4, machine queue schema is 2,
+and each database records its formal/development series. Moving a database does
+not change that series. Original stores and credentials are not deleted.
 
 Ordinary work reuses the intended local project and compatible remote root; do
-not create a new project directory for each experiment. This development build
-uses local schema 3 in `state-v3/state.db` under the platform state directory and
-does not import old stores. Rebind destinations only after such a state change;
-old files and credentials are not deleted.
+not create a new project directory for each experiment. The first formal use
+requires a fresh managed remote project root, not relocation of the local repo.
+Remote project control stays in `.loaf-control-v2`; the machine queue stays at
+its original single-ledger location and refuses a development ledger. Do not
+create a parallel ledger or remove a live Coordinator's files to bypass refusal.
 
-An incompatible schema-2 remote root needs its matching older CLI or a new owned
-remote project directory for this build, not a relocated local repository. Do not
-migrate records or hot-upgrade active Supervisors. Reconcile older uncertain paid
-requests before another authorized acquisition; an empty new local store is not
-proof of no prior allocation.
+Do not import `v0.x`, development or RC records, modify format metadata, or
+hot-upgrade active Supervisors. Keep original tools for unsupported historical
+work. Reconcile older uncertain paid requests before another authorized
+acquisition; an empty formal local store is not proof of no prior allocation.
+For an explicitly installed Bridge, stop the old process and restart the new
+binary with the same formal state directory. Resume saved cursors and preserve
+unconfirmed evidence rather than automatically resending it.

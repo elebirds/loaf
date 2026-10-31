@@ -51,7 +51,7 @@ func (c *Client) Outputs(ctx context.Context, target config.Target, runner strin
     if response.FormatVersion != wire.FormatVersion {
         return wire.OutputSelection{}, pullFailure("BAD_FORMAT", nil, "")
     }
-    if response.Version != wire.Version || req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, response.Version) || !wire.CompatibleVersion(wire.Version, req.Version) {
         return wire.OutputSelection{}, pullFailure("VERSION_MISMATCH", nil, "")
     }
     if !response.OK {

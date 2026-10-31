@@ -181,7 +181,7 @@ func (s *eventServices) read(ctx context.Context, sub notifications.Source, in e
         return s.localFacts(ctx, in)
     }
     ref := sub.Binding
-    if ref.Version != "" && ref.Version != wire.Version {
+    if ref.Version != "" && !wire.CompatibleVersion(wire.Version, ref.Version) {
         return event.Page{}, asyncError("VERSION_MISMATCH", nil)
     }
     d := s.dependencies
@@ -278,7 +278,7 @@ func (s *eventServices) freeze(ctx context.Context, in SubscribeInput, requireSu
 }
 
 func (s *eventServices) PutDestination(ctx context.Context, in DestinationInput) (DestinationRecord, error) {
-    if !config.ValidName(in.Name) || in.Destination.Validate() != nil || in.Destination.Kind == "claude-resume" || in.Destination.BearerRef != "" && !bearerEnvironment.MatchString(in.Destination.BearerRef) {
+    if !config.ValidName(in.Name) || in.Destination.Validate() != nil || in.Destination.BearerRef != "" && !bearerEnvironment.MatchString(in.Destination.BearerRef) {
         return DestinationRecord{}, asyncError("DESTINATION_INVALID", agentdelivery.ErrDestination)
     }
     destination := notifications.Destination{Name: in.Name, Address: savedAddress(in.Destination), CreatedAt: time.Now().UTC()}

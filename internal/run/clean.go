@@ -127,7 +127,7 @@ func (s CleanupService) Clean(ctx context.Context, preview CleanResult, batch bo
     ref.Cleanup = cleanup
     result = cleanResult(ref)
     result.Eligible = true
-    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID}
+    req := wire.Request{FormatVersion: wire.FormatVersion, Version: ref.Version, Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID}
     receipt, err := s.Remote.Clean(ctx, ref.Connection, runner, req, batch)
     if receipt != nil && !validCleanup(ref, receipt) {
         return result, cleanupFault("CLEAN_UNCONFIRMED", fault.New("BAD_RESPONSE", "clean_failed", nil))
@@ -165,7 +165,7 @@ func summaryView(v View) wire.RunSummary {
 }
 
 func validCleanup(ref task.RunRef, receipt *wire.CleanupReceipt) bool {
-    return receipt.FormatVersion == 1 && receipt.Version == wire.Version && receipt.Root == ref.RemoteDir && receipt.ProjectID == ref.ProjectID && receipt.RunID == ref.ID && receipt.Summary.Valid() && (receipt.CleanedAt == nil || !receipt.CleanedAt.IsZero())
+    return receipt.FormatVersion == 1 && receipt.Version == ref.Version && receipt.Root == ref.RemoteDir && receipt.ProjectID == ref.ProjectID && receipt.RunID == ref.ID && receipt.Summary.Valid() && (receipt.CleanedAt == nil || !receipt.CleanedAt.IsZero())
 }
 
 func definiteCleanRefusal(code string) bool {

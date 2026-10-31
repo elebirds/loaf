@@ -36,6 +36,17 @@ loaf-runner：短时控制请求 ← SSH / rsync
 
 数据库事务只覆盖短时元数据更新，不跨 SSH、HTTP、文件复制或任务运行。原有 OS 锁继续管理源码接收／复制、阶段准入、进程存活及 payload 访问。清理仅删除选定终态任务的 payload 和私有执行数据，持久保留 claim 与公开删除摘要，防止延迟启动重新执行；本地清理可用性与执行终态独立。
 
+### 正式版兼容边界
+
+从 `v1.0.0` 正式版起，新正式 `1.x` 客户端通过受支持的 wire、记录和数据库格式管理
+旧正式 `1.x` 工作。先验证所属格式，再使用软件兼容谓词；保留来源版本和冻结绑定，
+不把它们改写成调用者的版本。活跃 Supervisor 保持原进程和二进制。
+
+正式状态使用 `stable-v1/state.db`，开发版和 RC 使用 `state-v4/state.db`。
+本地／项目 schema 4 与队列 schema 2 分别记录正式或开发系列；把开发数据库移进
+稳定目录不会使它受支持。未知格式明确拒绝而不转换，不迁移历史开发状态。
+具体切换方式见[升级说明](upgrading.md)。
+
 ## 产品边界
 
 直接运行已经包含准备、同步和提交，不要求用户另走预检流程。GPU 表单与命令参数调用
@@ -51,9 +62,16 @@ bash scripts/check.sh        # 格式、依赖、单元、静态、竞态及漏�
 bash scripts/integration.sh  # SSH、Linux 进程与凭据测试，需要 Docker
 bash scripts/integration.sh -run TestProjectRunWaitSetupAndRecovery
 bash scripts/integration.sh -run TestLinuxCloudCredentialStores
+LOAF_V1_COMPAT=1 bash scripts/integration.sh  # 同时验收正式 v1 跨版本管理
 ```
 
 共享检查脚本在格式检查后运行固定版本的独立 depguard 工具，用少量禁止依赖规则保护 CLI、用例和远端边界，不为所有包维护依赖白名单。
+
+CI 启用 `LOAF_V1_COMPAT=1`，在同一集成套件中提供不同的正式 `v1.0.0`、`v1.1.0`
+产物，避免跳过升级验收。首个正式标签之前及校验该首次标签时，从当前源码构建两份
+候选；后续 CI 拉取标签，并使用实际发布的 `v1.0.0` 压缩包作为基线，下载失败即停止
+检查。本地也可通过 `LOAF_COMPAT_OLD_BIN` 指定冻结基线的可执行文件。
+这些候选版本仅用于验证合同，不表示 1.1 已发布。
 
 集成环境使用临时密钥和 CPU 脚本，验证发行包中的 macOS/宿主及 Linux 客户端原生 rsync、镜像边界、中断同步恢复、并发启动、同版本封装部署、跳板连接、断线执行、退出结果、进程组停止、有界等待、日志取消和增量下载。前台操作覆盖即时输出、字面 argv、PTY 登录、独立隧道和取消；历史及清理覆盖原目标绑定、明确删除范围、传输锁、重试和终态保留，不接触科研服务器。构建目标包括 macOS/Linux 客户端、Windows x64 ZIP 客户端及 Linux amd64、arm64 封装；交叉构建与实际运行分别验证。原生 Windows 固定使用配套的 MSYS2 OpenSSH/rsync 和独立连接，Linux 与 WSL2 保留私有连接复用。本地故障注入使用 Go 子进程 helper，控制台测试在 Unix 使用 PTY、在 Windows 使用测试独占的 ConPTY。Windows 单元测试覆盖私有 ACL、WAL 权限继承、跨进程锁、替换失败、数据库恢复、密码取消及 Job Object 进程归属。将 `LOAF_WINDOWS_TEST_VOLUME` 指向第二块本地 NTFS 盘可验证跨盘下载。在 WSL2 中，将 `LOAF_WSL_PROJECT_BASE` 指向 `/mnt/c` 下已有测试目录，可验证挂载项目与独立 Linux 私有状态目录。Windows 10 实际验收仍待独立测试环境。
 

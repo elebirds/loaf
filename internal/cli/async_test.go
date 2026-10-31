@@ -72,6 +72,38 @@ func TestNotifyBindCurrentGrammarAndRendering(t *testing.T) {
     }
 }
 
+func TestNotificationSetupReturnsExplicitBridgeAndReceiptActions(t *testing.T) {
+    for _, language := range []string{"en", "zh-Hans"} {
+        for _, args := range [][]string{
+            {"notify", "bind", "here", "--current"},
+            {"notify", "destination", "add", "research", "--kind", "codex", "--session", "thread_1", "--endpoint", "/private/tmp/loaf-private.sock"},
+            {"notify", "subscribe", "run:r_1", "--destination", "research"},
+        } {
+            o := fixture(t)
+            notify := &fakeNotify{}
+            o.Notify = notify
+            call := append([]string{"--lang", language}, args...)
+            code, out, stderr := run(t, o, append(call, "--json")...)
+            var result struct {
+                NextActions []nextAction `json:"next_actions"`
+            }
+            if code != 0 || stderr != "" || json.Unmarshal([]byte(out), &result) != nil || len(result.NextActions) != 2 || notify.serveCalls != 0 {
+                t.Fatal(args, code, out, stderr, notify.serveCalls)
+            }
+            if a := result.NextActions[0]; a.Kind != "start_bridge" || !a.RequiresConfirmation || !reflect.DeepEqual(a.Command, []string{"loaf", "notify", "serve", "--json"}) {
+                t.Fatal(a)
+            }
+            if a := result.NextActions[1]; a.Kind != "deliveries" || a.RequiresConfirmation || !reflect.DeepEqual(a.Command, []string{"loaf", "notify", "deliveries", "--json"}) {
+                t.Fatal(a)
+            }
+            code, out, stderr = run(t, o, call...)
+            if code != 0 || stderr != "" || !strings.Contains(out, "loaf notify serve --json") || !strings.Contains(out, "loaf notify deliveries --json") || notify.serveCalls != 0 || strings.Contains(out, "loaf-private.sock") {
+                t.Fatal(args, code, out, stderr, notify.serveCalls)
+            }
+        }
+    }
+}
+
 func (f *fakeNotify) PutDestination(_ context.Context, in client.DestinationInput) (client.DestinationRecord, error) {
     f.destination = in
     return client.DestinationRecord{Name: in.Name, Kind: in.Destination.Kind, SessionID: in.Destination.SessionID}, nil

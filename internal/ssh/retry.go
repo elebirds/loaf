@@ -13,12 +13,8 @@ import (
     "github.com/elebirds/loaf/internal/fault"
 )
 
-// retryRead allows one bounded recovery of a transient read failure. Callers
+// retryReadTrace allows one bounded recovery of a transient read failure. Callers
 // must not use it around launch, stop, cleanup, uploads, or foreground commands.
-func retryRead(ctx context.Context, read func() error) error {
-    return retryReadTrace(ctx, nil, read)
-}
-
 func retryReadTrace(ctx context.Context, trace *Trace, read func() error) error {
     err := read()
     if ctx.Err() != nil || !transientReadFailure(err) {

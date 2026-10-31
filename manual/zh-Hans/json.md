@@ -33,6 +33,11 @@ GPU 表单与就地确认使用显式 `-i / --interactive`；登录也接受自�
 查询或保存失败、观察时间和清理信息按情况提供。
 软件 `version`、JSON `schema_version` 与远端记录格式分别管理。
 
+已保存工作的 `version` 保留其来源软件身份，不改成当前 CLI 版本。从 `v1.0.0`
+正式版开始，新正式 `1.x` 客户端可以读取受支持的旧正式 `1.x` 格式，不要求软件
+版本字符串相等。开发版、`0.x` 与 RC 历史不导入；所属格式和冻结身份仍须验证，
+具体见[升级说明](upgrading.md)。
+
 - `status`：`starting`、`running`、`succeeded`、`failed`、`stopped`、`unknown`。
 - `submission`：可用时为 `preparing`、`uncertain`、`submitted`。
   后续观察失败不能推翻已经确认的接管。
@@ -121,7 +126,8 @@ loaf help run --json
 配置错误可提供 `error.location` 的文件、字段及已知的一基行列；未知行列省略。
 原因区分未知命令/选项、缺参、类型或值错误、越界、冲突、配置错误和旧命令迁移。
 不输出原始 argv、配置片段或秘密值。
-版本不匹配另带 `expected_version` 与 `actual_version`。
+版本不匹配另带 `expected_version` 与 `actual_version`，表示被比较的软件身份；
+对于兼容的正式 `1.x` 工作，字符串不同本身不是错误。
 
 出现 `error.issues[]` 时，其中的 `argument`/`reason` 一次列出已知的本地语义问题。
 修正所列问题后再调用；这不表示已执行远端检查。语法错误仍保留解析器的单项诊断。
@@ -144,6 +150,12 @@ loaf help run --json
 持续读取运行中任务的日志，或取回成功任务的输出。人类输出使用相同命令。
 已回收或正在删除的数据不会建议日志／下载操作。例如成功任务可返回
 `{"kind":"pull","command":["loaf","pull","r_ID"],"requires_confirmation":false}`。
+
+成功绑定通知、登记目的地或订阅后，可以提供 `start_bridge` 与 `deliveries` 建议。
+`start_bridge` 需要确认；这些建议不会启动 Bridge，也不证明已有 Bridge 在线。
+
+队列提交可以建议以原请求 ID 执行 `show_request`。普通 Run 等待前先检查请求：
+队列接纳不等于 Run 已被接管。本地预览或本地身份保存失败时，不建议此已保存请求查询。
 
 ## 不解析提示文字也能跟进云操作
 

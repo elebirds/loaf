@@ -246,7 +246,7 @@ func TestReceiptUnknownFormatIsPreserved(t *testing.T) {
     _ = json.Unmarshal(data, &raw)
     raw["format_version"] = 999
     changed, _ := json.Marshal(raw)
-    if err := s.Receipts.store().Save(context.Background(), r.ID, r.CreatedAt.Format(time.RFC3339Nano), changed); err != nil {
+    if err := s.Receipts.store().SaveEvent(context.Background(), r.ID, r.CreatedAt.Format(time.RFC3339Nano), changed, "", nil); err != nil {
         t.Fatal(err)
     }
     if _, err := s.Receipts.Load(r.ID); err == nil {

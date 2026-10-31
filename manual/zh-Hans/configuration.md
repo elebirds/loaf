@@ -26,13 +26,26 @@ paths = ["outputs", "checkpoints"]
 `--target` 只为本次调用选机；保存项目默认机器使用 `machine use`。
 一次性目标选择和 GPU 核对都不会修改项目 TOML。
 
-用户配置位于 `~/.config/loaf/config.toml`。项目标识、个人选择、任务位置、标签、观察、清理摘要及云操作收据统一保存在 `~/.local/state/loaf/state-v3/state.db`。`XDG_CONFIG_HOME`、`XDG_STATE_HOME` 分别覆盖配置和状态根目录。凭据仍保存在选定的 keyring 或独立私有 `credentials/` 目录。
+用户配置位于 `~/.config/loaf/config.toml`。项目标识、个人选择、任务位置、标签、观察、
+清理摘要、云操作收据及通知共用一个本地数据库。正式 `1.x` 构建使用
+`~/.local/state/loaf/stable-v1/state.db`，本代开发构建使用
+`~/.local/state/loaf/state-v4/state.db`。`XDG_CONFIG_HOME`、`XDG_STATE_HOME` 分别覆盖
+配置和状态根目录。凭据仍保存在选定的 keyring 或独立私有 `credentials/` 目录。
 
-原生 Windows 默认使用 `%APPDATA%\loaf\config.toml` 和 `%LOCALAPPDATA%\loaf\state-v3\state.db`。XDG 覆盖仍优先，并在指定根目录下追加 `loaf`。配置、状态、凭据及锁使用私有 Windows ACL，现有权限不安全时明确拒绝。WSL 状态与凭据保存在独立的 Linux 主目录，不与 Windows 共用。`LOAF_MSYS2_ROOT` 选择配套原生传输工具，见[安装说明](installation.md)。
+原生 Windows 默认使用 `%APPDATA%\loaf\config.toml`，数据库保存在
+`%LOCALAPPDATA%\loaf` 下，同样按系列选择 `stable-v1` 或 `state-v4` 子目录。
+XDG 覆盖仍优先，并在指定根目录下追加 `loaf`。配置、状态、凭据及锁使用私有
+Windows ACL，现有权限不安全时明确拒绝。WSL 状态与凭据保存在独立的 Linux
+主目录，不与 Windows 共用。`LOAF_MSYS2_ROOT` 选择配套原生传输工具，见[安装说明](installation.md)。
 
-v0.6 状态边界及匹配旧 CLI 的用法见[升级说明](upgrading.md)。
+兼容承诺从 `v1.0.0` 正式版开始，不导入开发版、`0.x` 与 RC 历史；切换系列前请阅读[升级说明](upgrading.md)。
 
-每个新远端项目在 `<远端项目>/.loaf-control-v2/state.sqlite3` 保存 schema 3 控制库；源码、逐任务工作副本、日志和产物仍是普通文件。保留原命名空间，使旧 handler 明确拒绝新 schema，而不能绕开放弃准备的收据。两端数据库使用私有权限、WAL、FULL 同步和有界锁等待，未知 schema 明确失败。软件、CLI schema、wire record 和数据库 schema 分别管理版本。
+每个新远端项目在 `<远端项目>/.loaf-control-v2/state.sqlite3` 保存 schema 4 控制库；
+源码、逐任务工作副本、日志和产物仍是普通文件。保留原命名空间，使旧 handler 明确
+拒绝新 schema，而不能绕开放弃准备的收据。机器队列在 SSH 用户的
+`~/.local/share/loaf/queue-v1/state.sqlite3` 使用 schema 2，目录名不表示 schema 版本。
+存储会记录正式／开发系列，遇到其他系列时拒绝而不转换。SQLite 文件使用私有权限、
+WAL、FULL 同步和有界锁等待；软件、JSON、wire 与数据库分别管理版本。
 
 在用户配置中增加 `[sync]` 可设置个人同步默认值，保留已有 `format_version` 和机器配置：
 

@@ -7,8 +7,10 @@ Download the archive for your platform and its checksums file from [Releases](ht
 Use the manuals inside that archive for its available commands. The repository's
 `main` branch can contain features newer than the latest published download;
 `VERSION` records a target, not proof of a published release. To try `main`, use
-the source build below. Before replacing a CLI used by existing tasks, follow
-[the upgrade steps](upgrading.md) and keep its matching binary.
+the source build below. Formal `1.x` updates preserve access to supported earlier
+formal `1.x` work. Development, `0.x` and RC state is not imported; before replacing
+a development CLI used by existing work, keep its matching binary and follow
+[the upgrade steps](upgrading.md).
 
 Archives contain one executable, both READMEs, the Skill, examples, `BUILD.json`, and third-party license texts. From an extracted archive directory:
 
@@ -20,7 +22,12 @@ install -m 755 loaf "$HOME/.local/bin/loaf"
 
 Add that directory to PATH if needed. Running an archive needs OpenSSH and rsync locally, not Go. The remote machine needs Linux and rsync; prepare the experiment's Python environment separately.
 
-Clients target macOS/Linux amd64 and arm64, plus native Windows x64. WSL2 Ubuntu x64 uses the Linux amd64 archive. Runners remain Linux amd64/arm64. Native Windows ARM64, Windows remote execution and UNC network shares are outside this release's scope. Windows 10 runtime acceptance is still pending; a cross-build alone is not runtime validation.
+Archives target macOS/Linux amd64 and arm64, plus native Windows x64. WSL2 Ubuntu
+x64 uses the Linux amd64 archive. Runners remain Linux amd64/arm64. Native Windows
+x64 is a preview target: its full packaged SSH/sync/Run/Pull workflow still needs
+runtime acceptance before v1.0 stable support is declared. Windows 10 acceptance
+is also pending. Native Windows ARM64, Windows remote execution and UNC network
+shares are outside this release's scope; a cross-build alone is not runtime validation.
 
 `BUILD.json` records the source revision, modified-tree state, Go version, target, and dependency notice inventory. `loaf version --json` exposes the corresponding build identity; missing source metadata is reported as unknown, not clean. Set `archive` to the exact archive filename and `version` to the software version in that filename. Then run the check from the directory containing the archive and its checksums file:
 
@@ -30,6 +37,15 @@ grep -F "  $archive" "loaf_${version}_checksums.txt" | shasum -a 256 -c -
 ```
 
 Published release archives carry GitHub build-provenance attestations, verifiable with `gh attestation verify "$archive" --repo elebirds/loaf`. See [GitHub's verification guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations#verifying-artifact-attestations-with-the-github-cli). Local builds include metadata and download checksums, not a GitHub-signed attestation.
+
+### Release and development state
+
+Formal `1.x` builds use `stable-v1/state.db` under the platform's Loaf state
+directory; development and RC builds use `state-v4/state.db`. Configuration and
+credentials remain separate. Neither layout imports old stores. Formal `1.x`
+updates keep the same stable state directory, rather than starting with an empty
+store for every software or schema change. See [upgrading](upgrading.md) for
+remote project and queue boundaries.
 
 ### Native Windows
 

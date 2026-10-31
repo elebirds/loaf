@@ -3,7 +3,7 @@ package agentdelivery
 import "testing"
 
 func TestExplicitDestinationAndBoundedMessage(t *testing.T) {
-    for _, d := range []Destination{{Kind: "codex"}, {Kind: "claude-channel", SessionID: "../other"}, {Kind: "unknown", SessionID: "session"}} {
+    for _, d := range []Destination{{Kind: "codex"}, {Kind: "claude-channel", SessionID: "../other"}, {Kind: "unknown", SessionID: "session"}, {Kind: "claude-resume", SessionID: "session"}} {
         if d.Validate() == nil {
             t.Fatalf("accepted ambiguous destination: %#v", d)
         }

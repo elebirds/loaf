@@ -33,7 +33,7 @@ func (s Service) Inspect(project config.Project, id string) (LocalDetails, error
     if err != nil {
         return LocalDetails{}, err
     }
-    details := LocalDetails{View: local, Source: "local", ProjectID: ref.ProjectID, ProjectRoot: project.Root, AttemptedAt: ref.AttemptedAt, Outputs: append([]string(nil), ref.Outputs...), ClientVersion: wire.Version, Compatible: ref.Version == wire.Version, Destination: ref.Connection.Destination}
+    details := LocalDetails{View: local, Source: "local", ProjectID: ref.ProjectID, ProjectRoot: project.Root, AttemptedAt: ref.AttemptedAt, Outputs: append([]string(nil), ref.Outputs...), ClientVersion: wire.Version, Compatible: wire.CompatibleVersion(wire.Version, ref.Version), Destination: ref.Connection.Destination}
     if ref.Connection.Cloud != nil {
         instance := ref.Connection.Cloud.Ref
         details.Instance = &instance

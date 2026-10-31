@@ -2,7 +2,6 @@ package ssh
 
 import (
     "context"
-    "errors"
     "io"
     "os"
     "path/filepath"
@@ -47,20 +46,13 @@ func TestExecConnectionClassificationIsBoundedPrivateAndNeverReplayed(t *testing
     }
 }
 
-func TestNativeHostTrustDisablesAuthenticationAndRejectsOtherCommands(t *testing.T) {
+func TestForegroundExecPreservesExplicitNativeHostTrust(t *testing.T) {
     output := filepath.Join(t.TempDir(), "args")
     file := fixtureProcess(t, processFixture{Arguments: output})
     client := &Client{Binary: file}
-    _, err := client.Exec(context.Background(), config.Target{Destination: "fixture"}, ExecInput{Args: []string{"/bin/true"}, TrustOnly: true}, nil, io.Discard, io.Discard)
+    _, err := client.Exec(context.Background(), config.Target{Destination: "fixture", Args: []string{"-o", "StrictHostKeyChecking=ask"}}, ExecInput{Args: []string{"/bin/true"}}, nil, io.Discard, io.Discard)
     args, _ := os.ReadFile(output)
-    for _, required := range []string{"StrictHostKeyChecking=ask", "PreferredAuthentications=none", "PasswordAuthentication=no", "PubkeyAuthentication=no"} {
-        if err != nil || !strings.Contains(string(args), required) {
-            t.Fatal(err, string(args))
-        }
-    }
-    _, err = client.Exec(context.Background(), config.Target{Destination: "fixture"}, ExecInput{Args: []string{"rm", "file"}, TrustOnly: true}, nil, io.Discard, io.Discard)
-    var f *fault.Error
-    if !errors.As(err, &f) || f.Code != "BAD_CONFIG" {
-        t.Fatal(err)
+    if err != nil || !strings.Contains(string(args), "StrictHostKeyChecking=ask") || strings.Contains(string(args), "PreferredAuthentications=none") {
+        t.Fatal(err, string(args))
     }
 }

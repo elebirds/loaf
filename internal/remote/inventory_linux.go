@@ -22,7 +22,7 @@ func Inventory(ctx context.Context, req wire.Request) (wire.OutputInventory, err
     if req.FormatVersion != wire.FormatVersion {
         return result, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return result, errors.New("VERSION_MISMATCH")
     }
     if req.Depth < 0 || req.Depth > 20 || req.Limit < 1 || req.Limit > 1000 || len(req.Outputs) == 0 || len(req.Outputs) > 1000 {

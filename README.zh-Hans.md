@@ -26,8 +26,9 @@ Loaf 把机器接入、代码同步、后台执行和结果回收串成一个命
 
 ## 开始使用
 
-在 macOS、Linux、原生 Windows x64 或 WSL2 上[安装 Loaf](manual/zh-Hans/installation.md)，
-准备一台可通过 SSH 访问的 Linux 机器。Loaf 沿用你已有的 SSH 配置。
+在 macOS、Linux 或 WSL2 上[安装 Loaf](manual/zh-Hans/installation.md)；
+原生 Windows x64 目前为预览目标。准备一台可通过 SSH 访问的 Linux 机器，
+Loaf 沿用你已有的 SSH 配置。
 
 发行包和源码都包含一个小型 CPU 示例。在其中任一目录下，
 将 `lab-gpu` 换成你的 SSH Host 别名，然后执行：
@@ -79,6 +80,12 @@ loaf run --wait 10s --json -- python3 train.py
 
 保存 `data.run_id`，用于后续查询。Agent 可以通过 `loaf help run --json`
 读取参数信息；[JSON 参考](manual/zh-Hans/json.md)介绍结果字段、流式事件与恢复方式。
+
+## 兼容性
+
+兼容承诺从 `v1.0.0` 正式版开始：新正式 `1.x` 客户端继续管理受支持的旧正式 `1.x` 工作。
+开发版、`0.x` 与 RC 状态不导入、不迁移。替换仍用于管理活跃工作的开发版前，
+请先阅读[升级说明](manual/zh-Hans/upgrading.md)。
 
 ## 文档
 

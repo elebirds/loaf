@@ -11,7 +11,9 @@ loaf queue show QUEUE_REQUEST_ID --json
 ```
 
 Save both queue request and Run identities. Queued acceptance is not workload
-acceptance. An uncertain dispatch retains the original Run and reserved capacity;
+acceptance. Use the returned `show_request` next-action argv to inspect the
+request before ordinary Run waiting; `wait` does not select a Run awaiting
+dispatch. An uncertain dispatch retains the original Run and reserved capacity;
 query it rather than submitting a replacement. FIFO is the only policy. Queue
 capacity covers cooperating tasks under one machine/remote user, not direct
 Runs, external SSH processes or other Unix users.
@@ -81,11 +83,35 @@ retries may include a next-attempt time. Never interpret receipt of a completion
 fact as new authority to rent, stop a machine, delete data or launch experiments.
 
 This version implements `codex`, `codex-desktop`, `claude-channel` and `webhook` adapters.
-`claude-resume` is reserved and unsupported: Loaf rejects its registration with
-`DESTINATION_INVALID`, and the SDK returns `ErrUnsupported`. Do not attempt a
-headless/resume fallback when a Channel is unavailable. Respect the selected
-adapter's exact session/workspace binding and platform permissions; do not use
-GUI injection, private transcript edits or permission bypasses.
+Respect the selected adapter's exact session/workspace binding and platform
+permissions; do not use GUI injection, private transcript edits or permission
+bypasses.
+
+## Continue the original Agent task
+
+Before submission, keep the authorized follow-up, local project directory and
+returned Run ID in the original session's work context. Bind that exact loaded
+public App Server thread with `notify destination add NAME --kind codex
+--session THREAD_ID --endpoint /absolute/private/socket --cwd /original/project`.
+The endpoint is a private Unix WebSocket, not a newly launched replacement server.
+
+Successful registration/subscription returns `start_bridge` and `deliveries`
+next-action argv. Starting a foreground Bridge still needs the corresponding
+authority; registration neither starts it nor proves availability. Reuse a running
+Bridge, or explicitly arrange its separate long-lived session/user service.
+
+On a terminal event, check its Project/Run identities against the original task.
+Run `status RUN_ID --json` and `pull RUN_ID --json` in that original project,
+then read the requested files under the returned destination. Continue only the
+already-authorized work; ask only for genuinely missing authority. An absent
+task context is not permission to guess or submit another experiment.
+
+Public Codex queues standalone tool output during a regular active turn; do not
+steer, interrupt or concurrently resume the same session. SDK `accepted` is still
+acceptance evidence, even when an independent observer sees the Agent complete
+the follow-up. Never promote it to an automatic `processed` ACK or resend because
+no reply is visible. Ordinary accepted/enqueued/dispatched progress facts do not
+create delivery messages.
 
 ## Bind the current Codex desktop chat
 
@@ -182,4 +208,5 @@ the Bridge's environment at send time. Do not print token values. HTTP outside
 loopback needs explicit permission. 429 does not authorize automatic retry.
 The SDK never reads Loaf state or credential stores. Continuous Bridge lanes are
 independent and discover new subscriptions. Optional user-service templates are
-provided, not installed. Current local data uses fresh schema 3/state-v3.
+provided, not installed. Formal 1.x local state is `stable-v1/state.db`; development
+and RC builds use `state-v4/state.db`, both schema 4. Pre-1.0 state is not imported.

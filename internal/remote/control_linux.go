@@ -124,7 +124,7 @@ func Handle(req wire.Request) (*wire.RunRecord, error) {
     if req.FormatVersion != wire.FormatVersion {
         return nil, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return nil, errors.New("VERSION_MISMATCH")
     }
     if req.Action == "version" {
@@ -322,6 +322,9 @@ func launch(req wire.Request, dir string) (*wire.RunRecord, error) {
     if r.Phase != "prepared" {
         return existingStart(req, dir)
     }
+    if r.Request.Version != req.Version {
+        return r, errors.New("RUN_EXISTS")
+    }
     if err := QueueRunGuard(req, true); err != nil {
         return r, err
     }
@@ -376,7 +379,7 @@ func existingStart(req wire.Request, dir string) (*wire.RunRecord, error) {
 }
 
 func sameExecution(a, b wire.Request) bool {
-    return a.Root == b.Root && a.ProjectID == b.ProjectID && a.RunID == b.RunID &&
+    return a.Version == b.Version && a.Root == b.Root && a.ProjectID == b.ProjectID && a.RunID == b.RunID &&
         a.Setup == b.Setup && slices.Equal(a.Args, b.Args) && slices.Equal(a.Outputs, b.Outputs) && maps.Equal(a.Env, b.Env)
 }
 

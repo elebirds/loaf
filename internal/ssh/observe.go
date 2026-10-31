@@ -23,7 +23,7 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
     finish := c.Trace.stage("observe")
     defer func() { finish(err) }()
     defer func() { err = fault.At(err, "observe") }()
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return wire.Observation{}, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     req.Action = "observe"
@@ -46,7 +46,7 @@ func (c *Client) Observe(ctx context.Context, target config.Target, runner strin
     if response.FormatVersion != wire.FormatVersion {
         return result, &RemoteError{Code: "BAD_FORMAT"}
     }
-    if response.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, response.Version) {
         return result, &RemoteError{Code: "VERSION_MISMATCH"}
     }
     if !response.OK {
@@ -69,7 +69,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
     finish := c.Trace.stage("log_follow")
     defer func() { finish(err) }()
     defer func() { err = fault.At(err, "log_follow") }()
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return &RemoteError{Code: "VERSION_MISMATCH"}
     }
     session, err := c.prepare(ctx, target, batch)
@@ -116,7 +116,7 @@ func (c *Client) Follow(ctx context.Context, target config.Target, runner string
             decodeFailure = true
             break
         }
-        if event.Record != nil && event.Record.Request.Version != wire.Version {
+        if event.Record != nil && !wire.CompatibleVersion(wire.Version, event.Record.Request.Version) {
             streamErr = &RemoteError{Code: "VERSION_MISMATCH"}
             break
         }

@@ -39,10 +39,6 @@ inside that environment; a Windows desktop session is not implicitly accessible.
 | `claude-channel` | An explicitly installed MCP Channel helper receives a private Unix-socket message and pushes a channel notification | `written`; `processed` only after the Agent calls `ack_event` |
 | `webhook` | One JSON POST to the configured HTTP/HTTPS endpoint, without redirects | HTTP destination `accepted`, not Agent processing |
 
-`claude-resume` is a reserved kind with no adapter in this release. Selecting it
-returns `ErrUnsupported`; headless/resume delivery is unavailable and is never
-an automatic fallback.
-
 ### Codex
 
 The adapter reuses `github.com/pmenglund/codex-sdk-go/rpc` at `v0.164.0` for

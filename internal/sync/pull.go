@@ -74,7 +74,7 @@ func OutputPaths(paths []string) ([]string, error) {
 // partial failure. It never waits for training or mutates its records/locator.
 func (s PullService) Pull(ctx context.Context, ref task.RunRef, destination string, paths []string, policy config.PullPolicy, batch bool) (result PullResult, err error) {
     result = PullResult{RunID: ref.ID, Target: ref.Target, Destination: destination, Paths: []string{}, DownloadedPaths: []string{}, MissingPaths: []string{}, Policy: policy}
-    if ref.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, ref.Version) {
         f := fault.New("VERSION_MISMATCH", "runner_version_mismatch", map[string]any{"Expected": wire.Version, "Actual": ref.Version})
         f.Hint = "runner_version_hint"
         return result, f
@@ -115,7 +115,7 @@ func (s PullService) Pull(ctx context.Context, ref task.RunRef, destination stri
     if err != nil {
         return result, err
     }
-    req := wire.Request{FormatVersion: wire.FormatVersion, Version: wire.Version, Action: "outputs", Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Outputs: result.Paths, DestinationFS: filesystem}
+    req := wire.Request{FormatVersion: wire.FormatVersion, Version: ref.Version, Action: "outputs", Root: ref.RemoteDir, ProjectID: ref.ProjectID, RunID: ref.ID, Outputs: result.Paths, DestinationFS: filesystem}
     selected, err := s.Remote.Outputs(ctx, ref.Connection, runner, req, batch)
     if err != nil {
         return result, err

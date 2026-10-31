@@ -15,13 +15,15 @@ import (
     "github.com/elebirds/loaf/internal/localpath"
     "github.com/elebirds/loaf/internal/privatefs"
     "github.com/elebirds/loaf/internal/state/eventlog"
+    "github.com/elebirds/loaf/internal/wire"
     "modernc.org/sqlite"
 )
 
 const applicationID = 0x4c4f4146
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 const localSchema = `
+CREATE TABLE compatibility (singleton INTEGER PRIMARY KEY CHECK(singleton=1), series TEXT NOT NULL);
 CREATE TABLE projects (root TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE, target TEXT NOT NULL);
 CREATE TABLE runs (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, attempted_at TEXT, submission TEXT NOT NULL, data BLOB NOT NULL);
 CREATE INDEX runs_project ON runs(project_id, attempted_at DESC, id);
@@ -42,7 +44,7 @@ CREATE TABLE notify_dedup (subscription_id TEXT NOT NULL, destination TEXT NOT N
 CREATE TABLE notify_attempts (delivery_id TEXT NOT NULL REFERENCES notify_deliveries(id) ON DELETE CASCADE, number INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(delivery_id,number));
 ` + eventlog.Schema + `
 PRAGMA application_id=1280262470;
-PRAGMA user_version=3;
+PRAGMA user_version=4;
 `
 
 // Open opens an existing database read-only, or initializes the current schema
@@ -140,6 +142,9 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
             if err == nil {
                 _, err = tx.ExecContext(ctx, localSchema)
             }
+            if err == nil {
+                _, err = tx.ExecContext(ctx, "INSERT INTO compatibility VALUES(1,?)", wire.StateSeries(wire.Version))
+            }
         }
         if err == nil {
             err = tx.Commit()
@@ -155,6 +160,13 @@ func Open(ctx context.Context, path string, write bool) (*sql.DB, error) {
     }
     if version != SchemaVersion || app != applicationID {
         return fail(fmt.Errorf("unsupported state schema: %d", version))
+    }
+    var series string
+    if err = database.QueryRowContext(ctx, "SELECT series FROM compatibility WHERE singleton=1").Scan(&series); err != nil {
+        return fail(errors.New("invalid state compatibility series"))
+    }
+    if series != wire.StateSeries(wire.Version) {
+        return fail(errors.New("unsupported state compatibility series: " + series))
     }
     if write {
         var journal string

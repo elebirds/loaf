@@ -19,7 +19,7 @@ func Events(ctx context.Context, req wire.Request) (event.Page, error) {
     if req.FormatVersion != wire.FormatVersion {
         return result, errors.New("BAD_FORMAT")
     }
-    if req.Version != wire.Version {
+    if !wire.CompatibleVersion(wire.Version, req.Version) {
         return result, errors.New("VERSION_MISMATCH")
     }
     if req.Events == nil || req.Events.Source != "" && req.Events.Source != "project" || !identifier.MatchString(req.ProjectID) || !filepath.IsAbs(req.Root) {

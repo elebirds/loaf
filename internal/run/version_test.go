@@ -55,3 +55,53 @@ func TestCurrentObservationPreparesHelperWithoutChangingRunBinding(t *testing.T)
         t.Fatal(saved, err)
     }
 }
+
+func TestFormalUpgradeRetainsRunOriginAndCleanup(t *testing.T) {
+    original := wire.Version
+    defer func() { wire.Version = original }()
+    wire.Version = "v1.0.0"
+    service, ref, remote, store := cleanupFixture(t)
+    wire.Version = "v1.1.0"
+    service.Runs.Remote = confirmedObservation{status: "failed"}
+    result, err := service.Runs.Observe(context.Background(), ref, 0, 0, true)
+    if err != nil || result.Version != "v1.0.0" || result.ID != ref.ID {
+        t.Fatal("new CLI lost the original Run", result, err)
+    }
+    details, err := service.Runs.Inspect(config.Project{ID: ref.ProjectID}, ref.ID)
+    if err != nil || !details.Compatible || details.ClientVersion != "v1.1.0" || details.Version != "v1.0.0" {
+        t.Fatal(details, err)
+    }
+    service.Runs.Remote = remote
+    preview, err := service.Preview(context.Background(), ref, true, false)
+    if err != nil {
+        t.Fatal(err)
+    }
+    cleaned, err := service.Clean(context.Background(), preview, true)
+    if err != nil || !cleaned.Cleaned || cleaned.Run.Version != "v1.0.0" {
+        t.Fatal(cleaned, err)
+    }
+    saved, err := store.Run(ref.ProjectID, ref.ID)
+    if err != nil || saved.Version != ref.Version || saved.Runner != ref.Runner || saved.Cleanup == nil {
+        t.Fatal("cleanup changed the frozen binding", saved, err)
+    }
+}
+
+func TestFormalUpgradeCanAbandonOriginalPreparation(t *testing.T) {
+    original := wire.Version
+    defer func() { wire.Version = original }()
+    wire.Version = "v1.0.0"
+    service, ref, remote, store := abandonmentFixture(t)
+    wire.Version = "v1.1.0"
+    preview, err := service.Preview(context.Background(), ref, true, false)
+    if err != nil {
+        t.Fatal(err)
+    }
+    result, err := service.Abandon(context.Background(), preview, true)
+    if err != nil || result.CleanedAt == nil || result.NoStartAt == nil || result.Run.Version != "v1.0.0" || remote.mutations != 1 {
+        t.Fatal(result, err)
+    }
+    saved, err := store.Run(ref.ProjectID, ref.ID)
+    if err != nil || saved.Version != ref.Version || saved.Runner != ref.Runner || saved.Abandonment == nil {
+        t.Fatal(saved, err)
+    }
+}

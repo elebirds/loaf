@@ -59,10 +59,10 @@ download() {
 }
 version=${LOAF_VERSION:-}
 if [ -z "$version" ]; then
-    download "${LOAF_RELEASES_URL:-https://api.github.com/repos/elebirds/loaf/releases}?per_page=1" "$temporary/release.json"
-    # The public list includes prereleases; /releases/latest excludes them.
-    # Split fields so compact and pretty-printed API responses work alike.
-    version=$(tr ',' '\n' <"$temporary/release.json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')
+    download "${LOAF_RELEASES_URL:-https://github.com/elebirds/loaf/releases.atom}" "$temporary/releases.atom"
+    # The public feed includes RCs and needs no REST API quota or credentials.
+    # Splitting XML tags handles both compact and pretty-printed responses.
+    version=$(tr '<' '\n' <"$temporary/releases.atom" | sed -n 's|^id>tag:github.com,2008:Repository/[0-9][0-9]*/\([^[:space:]]*\)[[:space:]]*$|\1|p' | sed -n '1p')
 fi
 printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || fail 'No valid published release found. Set LOAF_VERSION to an existing release tag to select one.'
 archive="loaf_${version}_${os}_${arch}.tar.gz"

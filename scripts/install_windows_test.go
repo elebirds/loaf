@@ -31,7 +31,7 @@ func TestWindowsInstaller(t *testing.T) {
         t.Fatal(err)
     }
     for _, tc := range []struct {
-        name, version, architecture                              string
+        name, version, architecture, feed                        string
         badChecksum, missingChecksum, locked, repeat, defaultDir bool
         errorText                                                string
     }{
@@ -41,6 +41,8 @@ func TestWindowsInstaller(t *testing.T) {
         {name: "missing-checksum-preserves-executable", missingChecksum: true, errorText: "Missing or duplicate checksum"},
         {name: "locked-executable-is-not-deleted", locked: true, errorText: "close Loaf or Bridge processes"},
         {name: "native-arm64-is-rejected", architecture: "ARM64", errorText: "Windows x64 only"},
+        {name: "empty-release-feed", feed: `<feed xmlns="http://www.w3.org/2005/Atom"><id>tag:github.com,2008:https://github.com/elebirds/loaf/releases</id></feed>`, errorText: "No published Loaf release was found"},
+        {name: "invalid-feed-tag", feed: `<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>tag:github.com,2008:Repository/1426692274/latest</id></entry></feed>`, errorText: "Invalid Loaf release version"},
     } {
         t.Run(tc.name, func(t *testing.T) {
             root := filepath.Join(t.TempDir(), "Windows 中文 installer")
@@ -102,11 +104,20 @@ func TestWindowsInstaller(t *testing.T) {
                 switch r.URL.Path {
                 case "/releases":
                     releaseCalls.Add(1)
-                    if r.URL.Query().Get("per_page") != "1" {
-                        t.Error("latest selection must request the newest release including prereleases")
+                    if r.URL.RawQuery != "" {
+                        t.Error("release discovery must use the Atom feed without API query parameters")
                     }
-                    w.Header().Set("Content-Type", "application/json")
-                    fmt.Fprint(w, `[{"tag_name":"v1.0.0-rc.9","draft":false,"prerelease":true}]`)
+                    w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
+                    feed := tc.feed
+                    if feed == "" {
+                        feed = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>tag:github.com,2008:https://github.com/elebirds/loaf/releases</id>
+  <entry><id>tag:github.com,2008:Repository/1426692274/v1.0.0-rc.9</id><title>Release candidate</title></entry>
+  <entry><id>tag:github.com,2008:Repository/1426692274/v0.9.0</id><title>Older stable release</title></entry>
+</feed>`
+                    }
+                    fmt.Fprint(w, feed)
                 case "/downloads/" + version + "/" + archiveName:
                     _, _ = w.Write(archive.Bytes())
                 case "/downloads/" + version + "/loaf_" + version + "_checksums.txt":

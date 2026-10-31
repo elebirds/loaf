@@ -80,9 +80,11 @@ func newUnixInstallerFixture(t *testing.T, system, arch string, badChecksum bool
         f.requests = append(f.requests, r.URL.RequestURI())
         f.mu.Unlock()
         switch {
-        case r.URL.Path == "/releases" && r.URL.Query().Get("per_page") == "1":
-            // Compact JSON, with an older formal release after the default RC.
-            fmt.Fprintf(w, `[{"tag_name":%q,"prerelease":true},{"tag_name":"v1.1.0","prerelease":false}]`, installerVersion)
+        case r.URL.Path == "/releases.atom":
+            // The feed id must not be mistaken for its first release entry.
+            // An older formal release follows the default RC in compact XML.
+            w.Header().Set("Content-Type", "application/atom+xml")
+            fmt.Fprintf(w, `<feed xmlns="http://www.w3.org/2005/Atom"><id>tag:github.com,2008:https://github.com/elebirds/loaf/releases</id><entry><id>tag:github.com,2008:Repository/1426692274/%s</id></entry><entry><id>tag:github.com,2008:Repository/1426692274/v1.1.0</id></entry></feed>`, installerVersion)
         case strings.HasPrefix(r.URL.Path, "/download/"+installerVersion+"/") && strings.HasSuffix(r.URL.Path, ".tar.gz"):
             w.Write(archive.Bytes())
         case r.URL.Path == "/download/"+installerVersion+"/loaf_"+installerVersion+"_checksums.txt":
@@ -129,7 +131,7 @@ func (f *unixInstallerFixture) env(shell string, extra ...string) []string {
             env = append(env, value)
         }
     }
-    return append(env, append([]string{"HOME=" + f.home, "PATH=" + f.mockBin + ":" + os.Getenv("PATH"), "TMPDIR=" + f.temp, "SHELL=" + shell, "LOAF_RELEASES_URL=" + f.url + "/releases", "LOAF_DOWNLOAD_URL=" + f.url + "/download"}, extra...)...)
+    return append(env, append([]string{"HOME=" + f.home, "PATH=" + f.mockBin + ":" + os.Getenv("PATH"), "TMPDIR=" + f.temp, "SHELL=" + shell, "LOAF_RELEASES_URL=" + f.url + "/releases.atom", "LOAF_DOWNLOAD_URL=" + f.url + "/download"}, extra...)...)
 }
 
 func (f *unixInstallerFixture) run(shell string, extra ...string) (string, error) {

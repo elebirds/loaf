@@ -3,6 +3,7 @@
 # Install the newest public Loaf release, including release candidates.
 # Set LOAF_VERSION to choose an exact release, or LOAF_INSTALL_DIR to change
 # the complete package directory. LOAF_NO_MODIFY_PATH=1 leaves PATH untouched.
+# LOAF_RELEASES_URL overrides the Atom feed used to discover the newest release.
 
 function Get-LoafUserPath {
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
@@ -82,7 +83,7 @@ function Add-LoafPath {
     if (-not $installDir) { $installDir = Join-Path $env:LOCALAPPDATA 'Loaf\bin' }
     $installDir = [IO.Path]::GetFullPath($installDir)
     $releasesUrl = $env:LOAF_RELEASES_URL
-    if (-not $releasesUrl) { $releasesUrl = 'https://api.github.com/repos/elebirds/loaf/releases' }
+    if (-not $releasesUrl) { $releasesUrl = 'https://github.com/elebirds/loaf/releases.atom' }
     $downloadUrl = $env:LOAF_DOWNLOAD_URL
     if (-not $downloadUrl) { $downloadUrl = 'https://github.com/elebirds/loaf/releases/download' }
 
@@ -93,11 +94,15 @@ function Add-LoafPath {
         [Net.ServicePointManager]::SecurityProtocol = $previousTls -bor [Net.SecurityProtocolType]::Tls12
         $version = $env:LOAF_VERSION
         if (-not $version) {
-            $releases = Invoke-RestMethod -Uri ($releasesUrl.TrimEnd('/') + '?per_page=1') `
-                -Headers @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'loaf-installer' } -TimeoutSec 30
-            $release = @($releases | Where-Object { -not $_.draft } | Select-Object -First 1)
-            if ($release.Count -eq 0) { throw 'No published Loaf release was found.' }
-            $version = [string] $release[0].tag_name
+            [xml] $feed = (Invoke-WebRequest -UseBasicParsing -Uri $releasesUrl -TimeoutSec 30).Content
+            $namespaces = [Xml.XmlNamespaceManager]::new($feed.NameTable)
+            $namespaces.AddNamespace('atom', 'http://www.w3.org/2005/Atom')
+            $entry = $feed.SelectSingleNode('/atom:feed/atom:entry[1]/atom:id', $namespaces)
+            if ($null -eq $entry) { throw 'No published Loaf release was found.' }
+            if ($entry.InnerText -notmatch '^tag:github\.com,2008:Repository/[0-9]+/(.+)$') {
+                throw 'The Loaf release feed contains an invalid release ID.'
+            }
+            $version = $Matches[1]
         }
         if ($version -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
             throw "Invalid Loaf release version: $version"
